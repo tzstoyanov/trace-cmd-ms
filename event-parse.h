@@ -26,6 +26,10 @@
 #include <regex.h>
 #include <string.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef __maybe_unused
 #define __maybe_unused __attribute__((unused))
 #endif
@@ -988,5 +992,9 @@ int pevent_update_trivial(struct event_filter *dest, struct event_filter *source
 			  enum filter_trivial_type type);
 
 int pevent_filter_compare(struct event_filter *filter1, struct event_filter *filter2);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _PARSE_EVENTS_H */

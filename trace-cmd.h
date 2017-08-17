@@ -22,6 +22,11 @@
 
 #include "event-parse.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 #define TRACECMD_ERR_MSK	((unsigned long)(-1) & ~((1UL << 14) - 1))
 #define TRACECMD_ISERR(ptr)	((unsigned long)(ptr) > TRACECMD_ERR_MSK)
 #define TRACECMD_ERROR(ret)	((void *)((unsigned long)(ret) | TRACECMD_ERR_MSK))
@@ -362,5 +367,9 @@ void *tracecmd_record_page(struct tracecmd_input *handle,
 			   struct pevent_record *record);
 void *tracecmd_record_offset(struct tracecmd_input *handle,
 			     struct pevent_record *record);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _TRACE_CMD_H */
