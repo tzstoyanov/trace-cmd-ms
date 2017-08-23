@@ -28,12 +28,6 @@ void usage(char **argv)
 	printf("  -i	input_file, default is %s\n", default_input_file);
 }
 
-// static struct plugin_list {
-// 	struct plugin_list		*next;
-// 	const char			*file;
-// } *plugins;
-// static struct plugin_list **plugin_next = &plugins;
-
 static void add_plugin(const char *file)
 {
 	// TODO
@@ -63,9 +57,9 @@ int main(int argc, char **argv)
 			usage(argv);
 			return 0;
 		case 'v':
-			printf("%s - %s\n",
-			       basename(argv[0]),
-			       KS_VERSION_STRING);
+			printf(	"%s - %s\n",
+					basename(argv[0]),
+					KS_VERSION_STRING);
 			return 0;
 		case 'i':
 			input_file = optarg;
@@ -74,7 +68,6 @@ int main(int argc, char **argv)
 			add_plugin(optarg);
 			break;
 		default:
-			/* assume the other options are for gtk */
 			break;
 		}
 	}

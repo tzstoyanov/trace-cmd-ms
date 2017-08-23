@@ -1,6 +1,6 @@
 MESSAGE(" src ...")
 
-add_library(trace-store SHARED trace-view-store.c)
+add_library(trace-store SHARED trace-view-store.c ks-view.c)
 target_link_libraries(trace-store ${TRACECMD_LIBRARY})
 set_target_properties(trace-store	PROPERTIES SUFFIX	".so.${KS_VERSION_STRING}")
 
@@ -14,6 +14,7 @@ qt5_wrap_cpp(ks-guiLib_hdr_moc ${ks-guiLib_hdr})
 add_library(kshark	SHARED	KsMainWindow.cpp
 							${ks-guiLib_hdr_moc}
 							KsTraceViewer.cpp
+							KsModel.cpp
 							KsCheckBoxDialog.cpp)
 
 target_link_libraries(kshark	Qt5::Widgets
@@ -28,10 +29,8 @@ add_executable (kernelshark			kernelshark.cpp)
 target_link_libraries(kernelshark	kshark)
 
 
-# add_library(parstest SHARED mytest.cpp)
-# MESSAGE(STATUS "parsetest ")
-# add_executable(ptest			parsetest.cpp)
-# target_link_libraries(ptest		parstest)
+add_executable(dload			dataload.c)
+target_link_libraries(dload		trace-store)
 
 MESSAGE("")
 

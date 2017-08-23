@@ -21,9 +21,10 @@
 
 // Qt
 #include <QtWidgets>
-#include <QTableWidget>
+#include <QTableView>
+// #include <QTreeView>
 
-#include "trace-cmd.h"
+#include "KsModel.h"
 
 typedef bool (*condition_func)(QString, QString);
 
@@ -36,7 +37,6 @@ public:
 	virtual ~KsTraceViewer();
 
 	void loadData(struct tracecmd_input *handle);
-	void loadData_dev(struct tracecmd_input *handle);
 	void loadData(const QString& file);
 
 private slots:
@@ -48,20 +48,20 @@ private slots:
 	void search();
 
 private:
+	void viewerInit();
+	size_t select(int c, const QString &text, condition_func cond);
+	void resizeToContents();
+
 	struct tracecmd_input 	*_handle;
 
 	QVBoxLayout 			_layout;
 	QToolBar 				_toolbar;
-	QStackedWidget 			_table;
 
-	QStringList 			 _tableHeader;
+	QStringList 			_tableHeader;
 
-	QVector<QTableWidget*>	 _pages;
-	QTableWidget 			*_currentPage;
-
-// 	QVector<QStringListModel*>	 _pages;
-// 	QVector<QAbstractListModel*>	 _pages;
-// 	QTableView 				*_currentPage;
+	QTableView 			_view;
+// 	QTreeView 			_view;
+	KsModel				_model;
 
 	QLabel 			_label1, _label2, _label3;
 	QSpinBox 		_pageSpinBox;
@@ -70,26 +70,16 @@ private:
 	QLineEdit 		_searchLineEdit;
 	QCheckBox 		_checkBox;
 
-	void getValue(	struct tracecmd_input	*handle,
-					struct pevent			*pevent,
-					struct pevent_record 	*record,
-					int						 column,
-					QTableWidgetItem		*item);
+	bool		_searchDone;
 
-	QTableWidget* addNewPage(int rows);
-
-	bool    _searchDone;
+	QList<size_t>           _matchList;
+	QList<size_t>::iterator _it;
 
 	enum {
 		CONTAINS,
 		MATCH,
 		NOT_HAVE
 	};
-
-	QList<QTableWidgetItem*>           _matchList;
-	QList<QTableWidgetItem*>::iterator _it;
-
-	size_t select(int c, const QString &text, condition_func cond);
 };
 
 #endif

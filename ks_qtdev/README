@@ -1,0 +1,13 @@
+
+This directory contains experimental code, aimed towards
+development of a Qt-based version of the KernelShark GUI.
+
+BUILDING:
+
+1. Follow the instructions given in trace-cmd/README and build
+the original libraries.
+
+2. Do:
+cd ks_qtdev/build
+cmake ../
+make

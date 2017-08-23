@@ -19,12 +19,6 @@
 #include <iostream>
 #include <chrono>
 
-// #include "event-parse.h"
-// #include "trace-cmd.h"
-#include "trace-view-store.h"
-// #include "cpu.h"
-
-
 #include "KsTraceViewer.h"
 
 #define GET_TIME std::chrono::high_resolution_clock::now()
@@ -34,14 +28,15 @@ std::chrono::high_resolution_clock::now()-t0).count()
 
 typedef std::chrono::high_resolution_clock::time_point  hd_time;
 
-#define VIEWER_PAGE_SIZE 100000
+#define VIEWER_PAGE_SIZE 1000000
 
 KsTraceViewer::KsTraceViewer(QWidget *parent)
 : QWidget(parent),
   _handle(nullptr),
   _toolbar(this),
-  _table(this),
-  _currentPage(nullptr),
+  _tableHeader({"#", "CPU", "Time Stamp", "Task", "PID", "Latency", "Event", "Info"}),
+  _view(this),
+  _model(_tableHeader, this),
   _label1("Page", this),
   _label2("Search: Column", this),
   _label3("Graph follows", this),
@@ -51,10 +46,9 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
   _searchLineEdit(this),
   _checkBox(this)
 {
-	_tableHeader << "#" << "CPU" << "Time Stamp" << "Task" << "PID" << "Latency" << "Event" << "Info";
+	_view.setModel(&_model);
+	viewerInit();
 
-// 	_currentPage = new QTableView(this);
-	
 	_toolbar.setOrientation(Qt::Horizontal);
 
 	_toolbar.addWidget(&_label1);
@@ -89,11 +83,8 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	_toolbar.addWidget(&_label3);
 
 	_layout.addWidget(&_toolbar);
-	QTableWidget *p = addNewPage(1);
-	p->setRowCount(1);
-	_table.addWidget(p);
 
-	_layout.addWidget(&_table);
+	_layout.addWidget(&_view);
 	this->setLayout(&_layout);
 }
 
@@ -102,8 +93,7 @@ KsTraceViewer::~KsTraceViewer() {}
 void KsTraceViewer::pageChanged(int p)
 {
 	std::cout << "page: " << p << "\n";
-	_currentPage = _pages[p-1];
-	_table.setCurrentIndex(p-1);
+	
 	_searchDone = false;
 }
 
@@ -143,20 +133,13 @@ bool matchCond(QString searchText, QString itemText) {
 	return false;
 }
 
-size_t KsTraceViewer::select(int column, const QString &searchText, condition_func cond) {
-	for (int r=0; r<_currentPage->rowCount(); ++r) {
-		QTableWidgetItem *item = _currentPage->item(r, column);
-		if ( cond( searchText, item->text() ) )
-		{
-// 			_it->setFlags(Qt::NoItemFlags);
-			_matchList.append(item);
-		}
-	}
-
-    std::cout << column << "  nh found: " << _matchList.count() << "\n";
+size_t KsTraceViewer::select(	int column, const QString &searchText, condition_func cond) {
+	int count = _model.select(column, searchText, cond, &_matchList);
+	std::cout << column << "   found: " << count << "\n";
 	_searchDone = true;
+	_view.clearSelection();
 	_it = _matchList.begin();
-	return _matchList.count();
+	return count;
 }
 
 void KsTraceViewer::search() {
@@ -165,7 +148,6 @@ void KsTraceViewer::search() {
 		std::cout << "<_| search: " << _searchLineEdit.text().toStdString() << "\n";
 		_matchList.clear();
 		QString xText = _searchLineEdit.text();
-		QString notHave("");
 		int xColumn = _columnComboBox.currentIndex();
 		int xSelect = _selectComboBox.currentIndex();
 		std::cerr << xColumn << " " << xSelect << std::endl;
@@ -189,42 +171,30 @@ void KsTraceViewer::search() {
 
 	if (!_matchList.empty()) {
 		if (_it != _matchList.end() ){
-			_currentPage->selectRow( (*_it)->row());
+			_view.selectRow(*_it);
 			_it++;
 		} else {
+			_view.selectRow(*_it);
 			_it = _matchList.begin();
-			_currentPage->selectRow( (*_it)->row());
 		}
 	}
 
 	_searchLineEdit.setReadOnly(false);
 }
 
-
-QTableWidget* KsTraceViewer::addNewPage(int rows)
+void KsTraceViewer::viewerInit()
 {
-	QTableWidget *page = new QTableWidget(0, 8, this);
-	page->setHorizontalHeaderLabels(_tableHeader);
-	_pages.push_back(page);
+	_view.horizontalHeader()->setStretchLastSection(true);
+	_view.verticalHeader()->setVisible(false);
+	_view.setEditTriggers(QAbstractItemView::NoEditTriggers);
+	_view.setSelectionBehavior(QAbstractItemView::SelectRows);
+	_view.setSelectionMode(QAbstractItemView::SingleSelection);
+// 	_view.setShowGrid(false);
+	_view.setStyleSheet("QTableView {selection-background-color: orange;}");
+	_view.setGeometry(QApplication::desktop()->screenGeometry());
 
-// 	QStringListModel *page = new QStringListModel(_tableHeader);
-// 	_currentPage.push_back(page);
-
-	page->horizontalHeader()->setStretchLastSection(true);
-	page->verticalHeader()->setVisible(false);
-	page->setEditTriggers(QAbstractItemView::NoEditTriggers);
-	page->setSelectionBehavior(QAbstractItemView::SelectRows);
-	page->setSelectionMode(QAbstractItemView::SingleSelection);
-// 	page->setShowGrid(false);
-	page->setStyleSheet("QTableView {selection-background-color: orange;}");
-	page->setGeometry(QApplication::desktop()->screenGeometry());
-
-	page->verticalHeader()->resizeSections(QHeaderView::ResizeToContents);
-// 	page->verticalHeader()->setDefaultSectionSize(20);
-	
-	page->setRowCount(rows);
-
-	return page;
+	_view.verticalHeader()->resizeSections(QHeaderView::ResizeToContents);
+	_view.verticalHeader()->setDefaultSectionSize(20);
 }
 
 
@@ -246,216 +216,33 @@ void KsTraceViewer::loadData(const QString& file)
 	/* Also, show the function name in the tail for function graph */
 	trace_util_add_option("fgraph:tailprint", "1");
 
+	
+	_model.reset();
 	loadData(_handle);
-// 	loadData_dev(_handle);
 }
 
 
 void KsTraceViewer::loadData(struct tracecmd_input *handle)
 {
-	int cpu;
 	hd_time t0 = GET_TIME;
 
-	for (auto const &t:  _pages)
-		_table.removeWidget(t);
+	struct ks_entry **rows = nullptr;
+	size_t nRows;
+	nRows = ks_load_data(handle, &rows);
 
-	_pages.resize(0);
+	_model.fill(rows, nRows);
+	free(rows);
 
-	struct pevent_record *pevt_rec;
-	struct pevent *pevt;
-	int count, total=0;
-	bool done=false;
-
-	while(!done) {
-		addNewPage(VIEWER_PAGE_SIZE);
-		_currentPage = _pages.back();
-
-		for (count = 0; count < VIEWER_PAGE_SIZE; ++count) {
-			pevt_rec = tracecmd_read_next_data(handle, &cpu);
-			if (!pevt_rec) {
-				_currentPage->setRowCount(count);
-				done = true;
-				break;
-			}
-
-			pevt = tracecmd_get_pevent(handle);
-
-			QTableWidgetItem *item = new QTableWidgetItem();
-			item->setData(Qt::EditRole, total);
-			_currentPage->setItem(count, 0, item);
-			for (int column=1; column<8; ++column) {
-				item = new QTableWidgetItem();
-				getValue(handle, pevt, pevt_rec, column, item);
-				_currentPage->setItem(count, column, item);
-			}
-
-			free_record(pevt_rec);
-			++total;
-		}
-
-
-		_currentPage->setVisible(false);
-// 		_currentPage->resizeRowsToContents();
-		_currentPage->resizeColumnsToContents();
-		_currentPage->setVisible(true);
-	}
-
-	size_t pages = _pages.size();
-	_pageSpinBox.setMaximum(pages);
-	_currentPage = _pages[0];
-
-	for (size_t p=0; p<pages; ++p)
-		_table.addWidget(_pages[p]);
+	resizeToContents();
 
 	double time2 = GET_DURATION(t0);
 	std::cout << "time: " << 1e3*time2 << " ms.\n";
 }
 
-void KsTraceViewer::loadData_dev(struct tracecmd_input *handle)
+void KsTraceViewer::resizeToContents()
 {
-	for (auto const &t:  _pages)
-		_table.removeWidget(t);
-
-	_pages.resize(0);
-
-	hd_time t0 = GET_TIME;
-
-	TraceViewStore *store;
-	store = trace_view_store_new(handle);
-	int nRows = store->actual_rows;
-
-	struct pevent_record *pevt_rec;
-	struct pevent *pevt;
-
-	unsigned int r, count=0;
-	int cpu;
-	unsigned int nPages = nRows/VIEWER_PAGE_SIZE + 1;
-	unsigned int pageSize = VIEWER_PAGE_SIZE;
-	for (unsigned int p=0; p < nPages; ++p) {
-		if (p == nPages-1)
-			pageSize = nRows%VIEWER_PAGE_SIZE;
-
-// 		addNewPage(pageSize);
-// 		_currentPage = _pages.back();
-		
-		for (r=0; r<pageSize; ++r) {
-			count = p*VIEWER_PAGE_SIZE + r;
-			pevt_rec = tracecmd_read_at(handle, store->rows[count]->offset, &cpu);
-			if (pevt_rec) {
-				pevt = tracecmd_get_pevent(handle);
-// 				QTableWidgetItem *item = new QTableWidgetItem();
-// 				item->setData(Qt::EditRole, count);
-// 				_currentPage->setItem(r, 0, item);
-// 					for (int column=1; column<8; ++column) {
-// 					item = new QTableWidgetItem();
-// 					getValue(handle, pevt, pevt_rec, column, item);
-// 					_currentPage->setItem(r, column, item);
-// 				}
-
-				free_record(pevt_rec);
-			}
-		}
-// 		_currentPage->setVisible(false);
-// // 		_currentPage->resizeRowsToContents();
-// 		_currentPage->resizeColumnsToContents();
-// 		_currentPage->setVisible(true);
-	}
-
-	trace_view_store_finalize(store);
-
-	double time2 = GET_DURATION(t0);
-	std::cout << "time: " << 1e3*time2 << " ms.\n";
-
-	size_t pages = _pages.size();
-	_pageSpinBox.setMaximum(pages);
-	_currentPage = _pages[0];
-
-	for (size_t p=0; p<pages; ++p)
-		_table.addWidget(_pages[p]);
-
+	_view.setVisible(false);
+// 	_view.resizeRowsToContents();
+	_view.resizeColumnsToContents();
+	_view.setVisible(true);
 }
-
-void KsTraceViewer::getValue(	struct tracecmd_input	*handle,
-								struct pevent			*pevent,
-								struct pevent_record	*record,
-								int						 column,
-								QTableWidgetItem		*item) {
-
-	struct trace_seq s;
-
-	struct event_format *event;
-	const char *comm;
-	char time[32];
-	uint64_t secs, usecs;
-	int val;
-
-	switch(column)
-	{
-	case TRACE_VIEW_STORE_COL_INDEX:
-		item->setData(Qt::EditRole, -1);
-		break;
-
-	case TRACE_VIEW_STORE_COL_CPU:
-		item->setData(Qt::EditRole, record->cpu);
-		break;
-
-	case TRACE_VIEW_STORE_COL_TS:
-		usecs = record->ts;
-		usecs /= 1000;
-		secs = usecs / 1000000ULL;
-		usecs -= secs * 1000000ULL;
-		sprintf(time, "%llu.%06llu", (long long)secs, (long long)usecs);
-		item->setText( QString(time) );
-		break;
-
-	case TRACE_VIEW_STORE_COL_COMM:
-	case TRACE_VIEW_STORE_COL_PID:
-	case TRACE_VIEW_STORE_COL_LAT:
-	case TRACE_VIEW_STORE_COL_EVENT:
-	case TRACE_VIEW_STORE_COL_INFO:
-
-		switch (column) {
-		case TRACE_VIEW_STORE_COL_COMM:
-		case TRACE_VIEW_STORE_COL_PID:
-			val = pevent_data_pid(pevent, record);
-			if (column == TRACE_VIEW_STORE_COL_PID) {
-				item->setData(Qt::EditRole, val);
-			} else {
-				comm = pevent_data_comm_from_pid(pevent, val);
-				item->setText( QString(std::string(comm).c_str()) );
-			}
-			break;
-
-		case TRACE_VIEW_STORE_COL_LAT:
-			trace_seq_init(&s);
-			pevent_data_lat_fmt(pevent, &s, record);
-			item->setText( QString(s.buffer) );
-			trace_seq_destroy(&s);
-			break;
-
-		case TRACE_VIEW_STORE_COL_EVENT:
-		case TRACE_VIEW_STORE_COL_INFO:
-			val = pevent_data_type(pevent, record);
-			event = pevent_data_event_from_type(pevent, val);
-			if (!event) {
-				if (column == TRACE_VIEW_STORE_COL_EVENT)
-					item->setText("[UNKNOWN EVENT]");
-				break;
-			}
-
-			if (column == TRACE_VIEW_STORE_COL_EVENT) {
-				item->setText( QString(event->name) );
-				break;
-			}
-
-			trace_seq_init(&s);
-			pevent_event_info(&s, event, record);
-// 			cerr << val << "  " << s.buffer << endl;
-			item->setText( QString(s.buffer) );
-			trace_seq_destroy(&s);
-			break;
-		}
-	}
-}
-
-
