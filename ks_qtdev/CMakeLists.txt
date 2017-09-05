@@ -17,8 +17,10 @@ include(ProcessorCount)
 ProcessorCount(N_CPUS)
 # MESSAGE("\n CPUs: ${N_CPUS} \n")
 
-find_package (Qt5Widgets REQUIRED)
-find_package(GTK2 REQUIRED)
+find_package(Qt5Widgets 5.9.1 REQUIRED)
+#MESSAGE(STATUS "Found Qt \n   version: " ${Qt5Widgets_VERSION} "\n")
+
+find_package(Qt5Charts REQUIRED)
 find_package(PythonLibs REQUIRED)
 
 

@@ -17,26 +17,17 @@
  */
 
 #include <iostream>
-#include <chrono>
 
 #include "KsTraceViewer.h"
-
-#define GET_TIME std::chrono::high_resolution_clock::now()
-
-#define GET_DURATION(t0) std::chrono::duration_cast<std::chrono::duration<double>>( \
-std::chrono::high_resolution_clock::now()-t0).count()
-
-typedef std::chrono::high_resolution_clock::time_point  hd_time;
 
 #define VIEWER_PAGE_SIZE 1000000
 
 KsTraceViewer::KsTraceViewer(QWidget *parent)
 : QWidget(parent),
-  _handle(nullptr),
-  _toolbar(this),
-  _tableHeader({"#", "CPU", "Time Stamp", "Task", "PID", "Latency", "Event", "Info"}),
   _view(this),
-  _model(_tableHeader, this),
+  _model(this),
+  _tableHeader(_model.header()),
+  _toolbar(this),
   _label1("Page", this),
   _label2("Search: Column", this),
   _label3("Graph follows", this),
@@ -46,8 +37,8 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
   _searchLineEdit(this),
   _checkBox(this)
 {
+	init();
 	_view.setModel(&_model);
-	viewerInit();
 
 	_toolbar.setOrientation(Qt::Horizontal);
 
@@ -83,12 +74,43 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	_toolbar.addWidget(&_label3);
 
 	_layout.addWidget(&_toolbar);
-
 	_layout.addWidget(&_view);
+
 	this->setLayout(&_layout);
 }
 
 KsTraceViewer::~KsTraceViewer() {}
+
+void KsTraceViewer::loadData(KsDataStore *data)
+{
+	_model.reset();
+	_model.fill(data->_pevt, data->_rows, data->size());
+	resizeToContents();
+}
+
+void KsTraceViewer::init()
+{
+	_view.horizontalHeader()->setStretchLastSection(true);
+	_view.verticalHeader()->setVisible(false);
+	//_view.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+	_view.setEditTriggers(QAbstractItemView::NoEditTriggers);
+	_view.setSelectionBehavior(QAbstractItemView::SelectRows);
+	_view.setSelectionMode(QAbstractItemView::SingleSelection);
+// 	_view.setShowGrid(false);
+	_view.setStyleSheet("QTableView {selection-background-color: orange;}");
+	_view.setGeometry(QApplication::desktop()->screenGeometry());
+
+	_view.verticalHeader()->resizeSections(QHeaderView::ResizeToContents);
+	_view.verticalHeader()->setDefaultSectionSize(20);
+}
+
+void KsTraceViewer::resizeToContents()
+{
+	_view.setVisible(false);
+// 	_view.resizeRowsToContents();
+	_view.resizeColumnsToContents();
+	_view.setVisible(true);
+}
 
 void KsTraceViewer::pageChanged(int p)
 {
@@ -134,7 +156,7 @@ bool matchCond(QString searchText, QString itemText) {
 }
 
 size_t KsTraceViewer::select(	int column, const QString &searchText, condition_func cond) {
-	int count = _model.select(column, searchText, cond, &_matchList);
+	int count = _model.search(column, searchText, cond, &_matchList);
 	std::cout << column << "   found: " << count << "\n";
 	_searchDone = true;
 	_view.clearSelection();
@@ -182,67 +204,4 @@ void KsTraceViewer::search() {
 	_searchLineEdit.setReadOnly(false);
 }
 
-void KsTraceViewer::viewerInit()
-{
-	_view.horizontalHeader()->setStretchLastSection(true);
-	_view.verticalHeader()->setVisible(false);
-	_view.setEditTriggers(QAbstractItemView::NoEditTriggers);
-	_view.setSelectionBehavior(QAbstractItemView::SelectRows);
-	_view.setSelectionMode(QAbstractItemView::SingleSelection);
-// 	_view.setShowGrid(false);
-	_view.setStyleSheet("QTableView {selection-background-color: orange;}");
-	_view.setGeometry(QApplication::desktop()->screenGeometry());
 
-	_view.verticalHeader()->resizeSections(QHeaderView::ResizeToContents);
-	_view.verticalHeader()->setDefaultSectionSize(20);
-}
-
-
-void KsTraceViewer::loadData(const QString& file)
-{
-	if(_handle)
-		tracecmd_close(_handle);
-
-	_pageSpinBox.setMinimum(1);
-	_handle = tracecmd_open( file.toStdString().c_str() );
-
-	/* The handle should have loaded the file by now.
-	 * Try to turn off function trace indent and turn on show parent
-	 * if possible.
-	 */
-	trace_util_add_option("ftrace:parent", "1");
-	trace_util_add_option("ftrace:indent", "0");
-
-	/* Also, show the function name in the tail for function graph */
-	trace_util_add_option("fgraph:tailprint", "1");
-
-	
-	_model.reset();
-	loadData(_handle);
-}
-
-
-void KsTraceViewer::loadData(struct tracecmd_input *handle)
-{
-	hd_time t0 = GET_TIME;
-
-	struct ks_entry **rows = nullptr;
-	size_t nRows;
-	nRows = ks_load_data(handle, &rows);
-
-	_model.fill(rows, nRows);
-	free(rows);
-
-	resizeToContents();
-
-	double time2 = GET_DURATION(t0);
-	std::cout << "time: " << 1e3*time2 << " ms.\n";
-}
-
-void KsTraceViewer::resizeToContents()
-{
-	_view.setVisible(false);
-// 	_view.resizeRowsToContents();
-	_view.resizeColumnsToContents();
-	_view.setVisible(true);
-}

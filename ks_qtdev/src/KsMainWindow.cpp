@@ -18,6 +18,7 @@
 
 #include <sys/stat.h>
 #include <iostream>
+#include <thread>
 
 // Qt
 #include <QMenu>
@@ -34,6 +35,7 @@ using namespace std;
 KsMainWindow::KsMainWindow(QWidget *parent)
 : QMainWindow(parent),
   _view(this),
+  _graph(this),
   _openAction(tr("&Open"), parent),
   _importFilterAction(tr("&Import Filter"), parent),
   _saveFilterAction(tr("&Save Filter"), parent),
@@ -51,16 +53,25 @@ KsMainWindow::KsMainWindow(QWidget *parent)
 	this->createActions();
 	this->createMenus();
 
-	QWidget *window = new QWidget(this);
-	QVBoxLayout *layout = new QVBoxLayout();
+// 	QWidget *window = new QWidget(this);
+// 	QVBoxLayout *layout = new QVBoxLayout();
+// 	layout->addWidget(&_graph);
+// 	layout->addWidget(&_view);
+// 	window->setLayout(layout);
+// 	setCentralWidget(window);
 
-	layout->addWidget(&_view);
-
-	window->setLayout(layout);
-	setCentralWidget(window);
+	QSplitter *splitter = new QSplitter(Qt::Vertical);
+	splitter->addWidget(&_graph);
+	splitter->setHandleWidth(2);
+	splitter->addWidget(&_view);
+// 	splitter->setStretchFactor(0, 1);
+// 	splitter->setStretchFactor(1, 1);
+	setCentralWidget(splitter);
 }
 
-KsMainWindow::~KsMainWindow() {}
+KsMainWindow::~KsMainWindow() {
+	_data.clear();
+}
 
 void KsMainWindow::createActions()
 {
@@ -179,15 +190,36 @@ void KsMainWindow::loadFile(const QString& fileName) {
 	cerr << "Loading " << fileName.toStdString() << endl;
 	int ret = stat(fileName.toStdString().c_str(), &st);
 	if (ret != 0) {
-		cerr << "ERROR Loading " << fileName.toStdString() << endl;
+		_view.reset();
+		_graph.reset();
 		QString text("Unable to find file \n");
 		text.append(fileName);
 		text.append("\n");
 		KsMessageDialog *message = new KsMessageDialog(text);
 		message->show();
+		cerr << "ERROR Opening file " << fileName.toStdString() << endl;
 		return;
 	}
 
-	_view.loadData(fileName);
+	_data.loadData(fileName);
+	if (!_data.size())
+	{
+		_view.reset();
+		_graph.reset();
+		QString text("File \n");
+		text.append(fileName);
+		text.append("\ncontains no data.\n");
+		KsMessageDialog *message = new KsMessageDialog(text);
+		message->show();
+		return;
+	}
+
+	_view.loadData(&_data);
+	//auto job = [&] {_view.loadData(&_data);};
+	//std::thread t1(job);
+
+	_graph.loadData(&_data);
+
+	//t1.join();
 }
 

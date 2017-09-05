@@ -25,6 +25,7 @@
 // #include <QTreeView>
 
 #include "KsModel.h"
+#include "KsDataStore.h"
 
 typedef bool (*condition_func)(QString, QString);
 
@@ -36,8 +37,8 @@ public:
 	KsTraceViewer(QWidget *parent = 0);
 	virtual ~KsTraceViewer();
 
-	void loadData(struct tracecmd_input *handle);
-	void loadData(const QString& file);
+	void loadData(KsDataStore *data);
+	void reset() {_model.reset();}
 
 private slots:
 	void pageChanged(int);
@@ -48,21 +49,18 @@ private slots:
 	void search();
 
 private:
-	void viewerInit();
+	void init();
 	size_t select(int c, const QString &text, condition_func cond);
 	void resizeToContents();
 
-	struct tracecmd_input 	*_handle;
-
 	QVBoxLayout 			_layout;
-	QToolBar 				_toolbar;
-
-	QStringList 			_tableHeader;
 
 	QTableView 			_view;
 // 	QTreeView 			_view;
-	KsModel				_model;
+	KsViewModel				_model;
 
+	QStringList 	_tableHeader;
+	QToolBar 		_toolbar;
 	QLabel 			_label1, _label2, _label3;
 	QSpinBox 		_pageSpinBox;
 	QComboBox 		_columnComboBox;
@@ -70,8 +68,7 @@ private:
 	QLineEdit 		_searchLineEdit;
 	QCheckBox 		_checkBox;
 
-	bool		_searchDone;
-
+	bool							_searchDone;
 	QList<size_t>           _matchList;
 	QList<size_t>::iterator _it;
 

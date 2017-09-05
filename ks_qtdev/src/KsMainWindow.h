@@ -29,6 +29,7 @@
 
 // Kernelshark
 #include "KsTraceViewer.h"
+#include "KsTraceGraph.h"
 #include "KsCheckBoxDialog.h"
 
 class KsMainWindow : public QMainWindow {
@@ -55,7 +56,9 @@ private slots:
 	void aboutInfo();
 
 private:
-	KsTraceViewer _view;
+	KsDataStore		_data;
+	KsTraceViewer	_view;
+	KsTraceGraph	_graph;
 
 	// File menu
 	QAction _openAction;

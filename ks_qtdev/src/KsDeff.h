@@ -5,7 +5,7 @@
 
 #define KS_VERSION_STRING "0.3.0"
 
-#define KS_DIR "/home/yordan/Workspace/trace-cmd/ks_qtdev"
+#define KS_DIR "/home/yordan/Workspace/test/trace-cmd_qtdev/ks_qtdev"
 
 #define N_CPUS 8
 

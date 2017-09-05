@@ -62,13 +62,19 @@ void ks_set_entry_values(	struct pevent			*pevent,
 							struct pevent_record	*record,
 							struct ks_entry			*entry);
 
+struct ks_entry* ks_get_entry(	struct pevent			*pevent,
+							struct pevent_record	*record);
 
-size_t ks_load_data(	struct tracecmd_input *handle,
+size_t ks_load_data_old(	struct tracecmd_input *handle,
 						struct ks_entry ***data_rows);
 
+void ks_clear_entry(struct ks_entry	*entry);
 
 void ks_free_entry(struct ks_entry	*entry);
 
+
+size_t ks_load_data(	struct tracecmd_input *handle,
+						struct pevent_record ***data_rows);
 
 #ifdef __cplusplus
 }
