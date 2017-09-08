@@ -31,6 +31,8 @@
 #include <QLabel>
 
 
+#include "event-parse.h"
+
 class KsMessageDialog : public QDialog {
 
 	Q_OBJECT
@@ -73,15 +75,15 @@ private:
 };
 
 struct KSCpuCheckBoxDialog : public KsCheckBoxDialog {
-	KSCpuCheckBoxDialog(QWidget *parent = 0);
+	KSCpuCheckBoxDialog(struct pevent *pe, QWidget *parent = 0);
 };
 
 struct KSTasksCheckBoxDialog : public KsCheckBoxDialog {
-	KSTasksCheckBoxDialog(QWidget *parent = 0);
+	KSTasksCheckBoxDialog(struct pevent *pe, QWidget *parent = 0);
 };
 
 struct KSEventsCheckBoxDialog : public KsCheckBoxDialog {
-	KSEventsCheckBoxDialog(QWidget *parent = 0);
+	KSEventsCheckBoxDialog(struct pevent *pe, QWidget *parent = 0);
 };
 
 #endif

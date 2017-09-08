@@ -56,6 +56,9 @@ private slots:
 	void aboutInfo();
 
 private:
+
+	void resizeEvent(QResizeEvent* event);
+
 	KsDataStore		_data;
 	KsTraceViewer	_view;
 	KsTraceGraph	_graph;

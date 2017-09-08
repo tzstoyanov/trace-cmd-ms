@@ -71,13 +71,17 @@ private slots:
 	void rangeChanged(size_t, size_t);
 
 private:
-	void init(int nCpus);
+	//void init(int nCpus);
 	void addSeries(const QString &name, int colX, int colY);
+	void addCpu(int cpu);
+	void drawGraphs(int nCpus, uint32_t cpuMask=0xffffffff);
 	void setAxisX();
 
+	KsGraphModel		_model;
+	QVector<KsChartView*>	_chartView;
+	QVBoxLayout			_layout;
+
 	KsDataStore 		*_data;
-	KsGraphModel		*_model;
-	KsChartView 		*_chartView;
 	QChart 				*_chart;
 	QCategoryAxis 		*_axisX;
 	QVXYModelMapper 	*_mapper;

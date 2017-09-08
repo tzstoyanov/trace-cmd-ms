@@ -48,29 +48,47 @@ KsMainWindow::KsMainWindow(QWidget *parent)
   _aboutAction(tr("About"),parent)
 {
 	this->setWindowTitle("KernelShark");
-	this->resize(1200, 750);
+	this->resize(1200, 800);
 
 	this->createActions();
 	this->createMenus();
 
-// 	QWidget *window = new QWidget(this);
-// 	QVBoxLayout *layout = new QVBoxLayout();
-// 	layout->addWidget(&_graph);
-// 	layout->addWidget(&_view);
-// 	window->setLayout(layout);
-// 	setCentralWidget(window);
+	//_graph.setGeometry(QApplication::desktop()->screenGeometry());
+
+	QScrollArea *scrollArea = new QScrollArea(this);
+	//scrollArea->setWidgetResizable(true);
+	//scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	scrollArea->setMinimumHeight(400);
+ 	scrollArea->setWidget(&_graph);
+ 
+ 	//QWidget *window = new QWidget(this);
+ 	//QVBoxLayout *layout = new QVBoxLayout();
+ 	////layout->addWidget(&_graph);
+ 	//layout->addWidget(scrollArea);
+ 	////layout->addWidget(&_view);
+ 	//window->setLayout(layout);
+ 	//setCentralWidget(window);
 
 	QSplitter *splitter = new QSplitter(Qt::Vertical);
-	splitter->addWidget(&_graph);
+	splitter->addWidget(scrollArea);
+	//splitter->addWidget(&_graph);
 	splitter->setHandleWidth(2);
 	splitter->addWidget(&_view);
-// 	splitter->setStretchFactor(0, 1);
-// 	splitter->setStretchFactor(1, 1);
+
+ 	//splitter->setStretchFactor(0, 1);
+ 	splitter->setStretchFactor(1, 1);
 	setCentralWidget(splitter);
 }
 
 KsMainWindow::~KsMainWindow() {
 	_data.clear();
+}
+
+void KsMainWindow::resizeEvent(QResizeEvent* event)
+{
+   QMainWindow::resizeEvent(event);
+   _graph.resize(this->width(), _graph.height());
+   std::cout << "@@@ RWESUZE\n";
 }
 
 void KsMainWindow::createActions()
@@ -164,15 +182,15 @@ void KsMainWindow::reload()
 
 void KsMainWindow::eventSelect()
 {
-	/*KSEventsCheckBoxDialog *_events_cb =*/ new KSEventsCheckBoxDialog(this);
+	/*KSEventsCheckBoxDialog *_events_cb =*/ new KSEventsCheckBoxDialog(_data._pevt, this);
 }
 
 void KsMainWindow::cpuSelect() {
-    /*KsCheckBoxDialog *_cpus_cb =*/ new KSCpuCheckBoxDialog(this);
+    /*KsCheckBoxDialog *_cpus_cb =*/ new KSCpuCheckBoxDialog(_data._pevt, this);
 }
 
 void KsMainWindow::taskSelect() {
-    /*KSTasksCheckBoxDialog *_tasks_cb =*/ new KSTasksCheckBoxDialog(this);
+    /*KSTasksCheckBoxDialog *_tasks_cb =*/ new KSTasksCheckBoxDialog(_data._pevt, this);
 }
 
 void KsMainWindow::aboutInfo() {
@@ -217,7 +235,7 @@ void KsMainWindow::loadFile(const QString& fileName) {
 	_view.loadData(&_data);
 	//auto job = [&] {_view.loadData(&_data);};
 	//std::thread t1(job);
-
+	
 	_graph.loadData(&_data);
 
 	//t1.join();

@@ -15,6 +15,7 @@
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
+ 
 #include <chrono>
 #include <iostream>
 #include <iomanip>
@@ -26,81 +27,140 @@ std::chrono::high_resolution_clock::now()-t0).count()
 
 typedef std::chrono::high_resolution_clock::time_point  hd_time;
 
+
 #include "KsTraceGraph.h"
 
 KsTraceGraph::KsTraceGraph(QWidget *parent)
 : QWidget(parent),
+  _model(this),
   _data(nullptr),
-  _model(nullptr),
-  _chartView(nullptr),
+  //_chartView(nullptr),
   _chart(nullptr),
   _axisX(nullptr),
   _mapper(nullptr)
 {
-
-	_chartView = new KsChartView(this);
-	//_chartView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
-	//_chartView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
-	_chartView->setRubberBand(QChartView::HorizontalRubberBand);
-	_chartView->setRenderHint(QPainter::Antialiasing);
-	_chartView->setMinimumSize(640, 400);
-
-	connect(_chartView, SIGNAL(rangeChanged(size_t, size_t)),
-			this, SLOT(rangeChanged(size_t, size_t)));
+	//scrollarea = QScrollArea(parent.widget())
+	//QScrollArea *scrollArea = new QScrollArea(this);
+	//scrollArea->setWidget(&_layout);
+	//layout->setContentsMargins(0, 0, 0, 0);
+	_layout.setSpacing(0);
+	//_layout.setSizeConstraint(QLayout::SetMinAndMaxSize);
 	
-	//_axisX = new QCategoryAxis(this);
-	//_axisX->setGridLineVisible(false);
+	this->setLayout(&_layout);
 
-	QVBoxLayout *layout = new QVBoxLayout();
-	layout->addWidget(_chartView);
-	this->setLayout(layout);
+	setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred );
+	//setMinimumHeight(400);
+	setMinimumWidth(800);
+
+	//QVBoxLayout *layout = new QVBoxLayout();
+
+	//for (auto const &c: _chartView)
+		//layout->addWidget(c);
+
+	//this->setLayout(layout);
 }
 
 KsTraceGraph::~KsTraceGraph() {}
 
-void KsTraceGraph::init(int nCpus)
-{
-	//if (_model)
-		//delete _model;
+//void KsTraceGraph::init(int nCpus)
+//{
+	//if (!_chart)
+		//_chart = new QChart();
+	//else
+		//_chart->removeAllSeries();
 
-	_model = new KsGraphModel(nCpus, this);
-
-	if (!_chart)
-		_chart = new QChart();
-	else
-		_chart->removeAllSeries();
-
-	//_chart->setAnimationOptions(QChart::AllAnimations);
+	////_chart->setAnimationOptions(QChart::AllAnimations);
 
 	//addSeries("CPU 0", 0, 2);
-	//addSeries("CPU 1", 0, 3);
+	////addSeries("CPU 1", 0, 3);
 
-	for (int cpu = 0; cpu <nCpus ; ++cpu) {
-		addSeries(QString("CPU %1").arg(cpu), 0, cpu + 2);
-	}
+	////for (int cpu = 0; cpu <nCpus ; ++cpu) {
+		////addSeries(QString("CPU %1").arg(cpu), 0, cpu + 2);
+	////}
 
-	_chartView->setChart(_chart);
-}
+	//_chart->createDefaultAxes();
+	//setAxisX();
+
+	//for (auto const &s: _chart->series())
+		//_chart->setAxisX(_axisX, s);
+
+	////_chart->axisY()->setRange(- nCpus +1 , 1);
+	//_chart->axisY()->setRange(0 , 1);
+
+	//_chartView[0]->setChart(_chart);
+//}
+
+//void KsTraceGraph::init()
+//{
+	//QVBoxLayout *layout = new QVBoxLayout();
+
+	////layout->setContentsMargins(0, 0, 0, 0);
+	//layout->setSpacing(0);
+	//layout->setSizeConstraint(QLayout::SetMinAndMaxSize);
+	//this->setLayout(layout);
+//}
 
 void KsTraceGraph::reset()
 {
-	_model->reset(); 
-	_chart->removeAllSeries();
+	_model.reset(); 
+	//_chart->removeAllSeries();
+}
+
+//void KsTraceGraph::resetTimeAxis()
+//{
+	//QChart *chart = new QChart();
+	
+//}
+
+void KsTraceGraph::addCpu(int cpu)
+{
+	KsChartView *view = new KsChartView(this);
+
+	connect(view, SIGNAL(rangeChanged(size_t, size_t)),
+			this, SLOT(rangeChanged(size_t, size_t)));
+
+	QChart *chart = new QChart();
+	QLineSeries *series = new QLineSeries();
+	series->setName(QString("CPU %1").arg(cpu));
+	series->setUseOpenGL(true);
+
+	QVXYModelMapper *mapper = new QVXYModelMapper(this);
+	mapper->setXColumn(0);
+	mapper->setYColumn(cpu + 2);
+	mapper->setSeries(series);
+	mapper->setModel(&_model);
+
+	chart->addSeries(series);
+	chart->legend()->hide();
+	chart->layout()->setContentsMargins(0, 0, 0, 0);
+	chart->setBackgroundRoundness(0);
+	//chart->createDefaultAxes();
+
+	QCategoryAxis *axisY = new QCategoryAxis(this);
+	axisY->setRange(0 , 1);
+	axisY->setTitleText(series->name());
+	axisY->setTitleVisible(true);
+	chart->setAxisY(axisY, series);
+
+	view->setChart(chart);
+	_layout.addWidget(view);
+	_chartView.append(view);
 }
 
 void KsTraceGraph::addSeries(const QString &name, int colX, int colY)
 {
-	QLineSeries *series = new QLineSeries();
-	series->setName(name);
-	series->setUseOpenGL(true);
-	_mapper = new QVXYModelMapper(this);
-	_mapper->setXColumn(colX);
-	_mapper->setYColumn(colY);
-	_mapper->setSeries(series);
-	_mapper->setModel(_model);
+	//QLineSeries *series = new QLineSeries();
+	//series->setName(name);
+	//series->setUseOpenGL(true);
 
-	_chart->addSeries(series);
-	_series.append(series);
+	//_mapper = new QVXYModelMapper(this);
+	//_mapper->setXColumn(colX);
+	//_mapper->setYColumn(colY);
+	//_mapper->setSeries(series);
+	//_mapper->setModel(&_model);
+
+	//_chart->addSeries(series);
+	//_series.append(series);
 }
 
 void KsTraceGraph::loadData(KsDataStore *data)
@@ -108,56 +168,72 @@ void KsTraceGraph::loadData(KsDataStore *data)
 	hd_time t0 = GET_TIME;
 
 	int nCpus = data->_pevt->cpus;
-	init(nCpus);
+	_model.setNCpus(nCpus);
+ 	_model.fill(data->_pevt, data->_rows, data->size());
 
- 	_model->fill(data->_pevt, data->_rows, data->size());
-	//_model->fill(data->_pevt, data->_rows, 1024*8);
+	//drawGraphs(nCpus, 0xf);
+	drawGraphs(nCpus);
 
-	_chart->createDefaultAxes();
-	setAxisX();
-	for (auto const &s: _chart->series())
-		_chart->setAxisX(_axisX, s);
-	
-	//_chart->axisX()->setRange( (double)_model->_map->_min*1e-8, (double) _model->_map->_max*1e-8);
-	_chart->axisY()->setRange(- nCpus +1 , 1);
-
+	setMinimumHeight(70*_chartView.count());
 	_data = data;
+
 	double time2 = GET_DURATION(t0);
 	std::cout <<"time: " << 1e3*time2 << " ms.\n";
+}
+
+void KsTraceGraph::drawGraphs(int nCpus, uint32_t cpuMask)
+{
+	QLayoutItem *child;
+	while ((child = _layout.takeAt(0)) != 0) {
+		//child->hide();
+		delete child;
+	}
+	
+	_chartView.clear();
+	
+	//nCpus = 1;
+	for (int cpu = 0; cpu <nCpus ; ++cpu) {
+		if (0x1 & cpuMask >> cpu)
+			addCpu(cpu);
+	}
 }
 
 void KsTraceGraph::setAxisX()
 {
 	_axisX = new QCategoryAxis(this);
 	_axisX->setGridLineVisible(false);
-	_axisX->setRange(0, (int)_model->_map->size()-1);
+	_axisX->setRange(0, (int)_model._map->size()-1);
 
 	QString l1, l2, l3;
 
-	l1 = QString::number(_model->_map->binTime(0), 'f', 6);
+	l1 = QString::number(_model._map->binTime(0), 'f', 6);
 	_axisX->append(l1, 250);
 
-	l2 = QString::number(_model->_map->binTime(_model->_map->size()/2), 'f', 6);
-	_axisX->append(l2, _model->_map->size()-250);
+	l2 = QString::number(_model._map->binTime(_model._map->size()/2), 'f', 6);
+	_axisX->append(l2, _model._map->size()-250);
 
-	l3 = QString::number(_model->_map->binTime(_model->_map->size()-1), 'f', 6);
-	_axisX->append(l3, _model->_map->size());
-	
+	l3 = QString::number(_model._map->binTime(_model._map->size()-1), 'f', 6);
+	_axisX->append(l3, _model._map->size());
 }
 
 void KsTraceGraph::rangeChanged(size_t p0, size_t p1)
 {
 	uint64_t min, max;
-	min = _model->_map->ts(p0);
-	max = _model->_map->ts(p1);
-	std::cout << "rangeChanged (" << min << ", " << max << ")\n";
-	_model->_map->setBining(1024*2, min, max);
-	_model->fill(_data->_pevt, _data->_rows, _data->size(), false);
-	setAxisX();
-	for (auto const &s: _chart->series())
-		_chart->setAxisX(_axisX, s);
-}
+	min = _model._map->ts(p0);
+	max = _model._map->ts(p1);
+	
+	if (max - min < KS_GRAPH_N_BINS)
+		return;
 
+	std::cout << "rangeChanged (" << min << ", " << max << ")\n";
+
+	_model._map->setBining(KS_GRAPH_N_BINS, min, max);
+	_model.fill(_data->_pevt, _data->_rows, _data->size(), false);
+
+	setAxisX();
+	//for (auto const &s: _chartView[0]->chart()->series())
+		//_chartView[0]->chart()->setAxisX(_axisX, s);
+}
 
 KsChartView::KsChartView(QWidget *parent) :
     QChartView(parent),
@@ -175,10 +251,15 @@ KsChartView::KsChartView(QChart *chart, QWidget *parent) :
 
 void KsChartView::init()
 {
-	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
-	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
-	setRubberBand(QChartView::HorizontalRubberBand);
+	//setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+	//setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+	setSizePolicy( QSizePolicy::Preferred, QSizePolicy::Maximum );
+	//setRubberBand(QChartView::HorizontalRubberBand);
+	setRenderHint(QPainter::Antialiasing);
+	setMaximumHeight(70);
+	//setMinimumWidth(600);
 }
+
 bool KsChartView::viewportEvent(QEvent *event)
 {
     if (event->type() == QEvent::TouchBegin) {

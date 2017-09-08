@@ -28,6 +28,9 @@
 
 typedef bool (*condition_func)(QString, QString);
 
+
+#define KS_GRAPH_N_BINS  2048
+
 class KsViewModel : public QAbstractTableModel
 {
 	QList<pevent_record*>	_data;
@@ -55,6 +58,7 @@ public:
 
 	QStringList header() const {return _header;}
 	QVariant getValue(const QModelIndex &index) const;
+	QVariant getValue(int column, int row) const;
 
 	size_t search(	int				 column,
 					const QString	&searchText,
@@ -94,7 +98,6 @@ public:
 class KsGraphModel : public QAbstractTableModel
 {
 	QList<pevent_record*>	_data;
-	QStringList 		_header;
 	struct pevent		*_pevt;
 	int _cpus;
 
@@ -102,24 +105,20 @@ public:
 
 	KsTimeMap	*_map;
 
+	KsGraphModel(QObject *parent = nullptr);
 	KsGraphModel(int cpus, QObject *parent = nullptr);
 	virtual ~KsGraphModel();
 
-	//int rowCount(const QModelIndex &) const override {return _data.count();}
+	void setNCpus(int n) {_cpus = n;}
 	int rowCount(const QModelIndex &) const override {return _map->size();}
-	//int rowCount(const QModelIndex &) const override {return 1024;}
-
 	int columnCount(const QModelIndex &) const override {return _cpus+2;}
-
-	QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
 	QVariant data(const QModelIndex &index, int role) const override;
 
 	void fill(pevent *pevt, pevent_record **entries, size_t n, bool defaultMap = true);
 	void reset();
 
-	QStringList header() const {return _header;}
 	QVariant getValue(const QModelIndex &index) const;
-	QVariant getValue(size_t column, size_t row) const;
+	QVariant getValue(int column, int row) const;
 };
 
 #endif

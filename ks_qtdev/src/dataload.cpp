@@ -1,4 +1,5 @@
 #include <iostream>
+#include <string>
 
 #include "ks-view.h"
 #include "KsDataStore.h"
@@ -31,6 +32,7 @@ int main(int argc, char **argv)
 	//size_t i = model._map->size() -1;
 	//std::cout 	<< i << "  map: " << (*model._map)[i] << "  " << model._map->binCount(i) << std::endl;
 
+	std::cout << data._pevt->nr_events << "  event 0: " << std::string(data._pevt->events[15]->name) << std::endl;
 	return 0;
 }
 

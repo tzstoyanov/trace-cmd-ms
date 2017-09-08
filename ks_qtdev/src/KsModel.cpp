@@ -44,7 +44,7 @@ QVariant KsViewModel::data(const QModelIndex &index, int role) const
 	if (role != Qt::DisplayRole)
 		return {};
 
-	QVariant val = this->getValue(index);
+	QVariant val = this->getValue(index.column(), index.row());
 	return val;
 }
 
@@ -55,11 +55,18 @@ int KsViewModel::rowCount(const QModelIndex &) const {
 
 QVariant KsViewModel::getValue(const QModelIndex &index) const
 {
-	int row = index.row();
+	size_t row = index.row();
+	size_t column = index.column();
+	return getValue(column, row);
+}
+
+QVariant KsViewModel::getValue(int column, int row) const
+{
+	//int row = index.row();
 	if (row >= _data.count())
 		return {};
 
-	int column = index.column();
+	//int column = index.column();
 
 	switch (column) {
 		case TRACE_VIEW_STORE_COL_INDEX :
@@ -173,9 +180,16 @@ size_t KsViewModel::search(	int				 column,
 
 //////////////////////////////////////////////////////////////////////////////////////
 
+KsGraphModel::KsGraphModel(QObject *parent)
+: QAbstractTableModel(parent),
+  _pevt(nullptr),
+  _cpus(1)
+{
+	_map = new KsTimeMap;
+}
+
 KsGraphModel::KsGraphModel(int cpus, QObject *parent)
 : QAbstractTableModel(parent),
-  _header({"CPU", "Time Stamp", "Task"}),
   _pevt(nullptr),
   _cpus(cpus)
 {
@@ -188,28 +202,12 @@ KsGraphModel::~KsGraphModel()
 	//reset();
 }
 
-QVariant KsGraphModel::headerData(	int section,
-								Qt::Orientation orientation,
-								int role) const
+QVariant KsGraphModel::getValue(int column, int row) const
 {
-	if (orientation != Qt::Vertical || role != Qt::DisplayRole)
-		return {};
-
-	if (section < _header.count())
-		return _header.at(section);
-	
-	return {};
-}
-
-QVariant KsGraphModel::getValue(size_t column, size_t row) const
-{
-	if (row >= _map->size())
-		return {};
-
 	switch (column) {
 		case 0 :
 		{
-			return (int)row;
+			return row;
 		}
 		case 1 :
 		{
@@ -221,9 +219,10 @@ QVariant KsGraphModel::getValue(size_t column, size_t row) const
 			break;
 	}
 
-	double val = 2 - (int)column;
+	//double val = 2. - (int)column;
+	double val = 0.;
 	if (_map->binCount(row, column - 2))
-		val += .4;
+		val += .9;
 
 	return val;
 }
@@ -240,7 +239,7 @@ QVariant KsGraphModel::data(const QModelIndex &index, int role) const
 	if (role != Qt::DisplayRole)
 		return {};
 
-	QVariant val = this->getValue(index);
+	QVariant val = this->getValue(index.column(), index.row());
 	return val;
 }
 
@@ -252,7 +251,7 @@ void KsGraphModel::fill(pevent *pevt, pevent_record **entries, size_t n, bool de
 	beginResetModel();
 	
 	if (defaultMap)
-		_map->setBining(1024*2, entries[0]->ts, entries[n-1]->ts);
+		_map->setBining(KS_GRAPH_N_BINS, entries[0]->ts, entries[n-1]->ts);
 
 	_map->fill(entries, n);
 
@@ -367,12 +366,12 @@ size_t KsTimeMap::binCount(size_t bin) const
 
 size_t KsTimeMap::binCount(size_t bin, int cpu) const
 {
-	int64_t pos = _map[bin];
-	if (pos < 0)
+	size_t n = binCount(bin);
+	if (!n)
 		return 0;
 
-	size_t n = binCount(bin);
 	size_t count = 0;
+	int64_t pos = _map[bin];
 
 	for (size_t i = pos; i < pos + n; ++i) {
 		if (_data[i]->cpu == cpu)

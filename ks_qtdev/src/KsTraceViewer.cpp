@@ -90,6 +90,8 @@ void KsTraceViewer::loadData(KsDataStore *data)
 
 void KsTraceViewer::init()
 {
+	setMinimumHeight(300);
+	setMinimumWidth(500);
 	_view.horizontalHeader()->setStretchLastSection(true);
 	_view.verticalHeader()->setVisible(false);
 	//_view.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);

@@ -19,7 +19,6 @@
 
 // C++
 #include <iostream>
-#include <sstream>
 
 //Qt
 #include <QFrame>
@@ -94,30 +93,41 @@ void KsCheckBoxDialog::chechAll(int st)
 	}
 }
 
-KSCpuCheckBoxDialog::KSCpuCheckBoxDialog(QWidget *parent)
+KSCpuCheckBoxDialog::KSCpuCheckBoxDialog(struct pevent *pe, QWidget *parent)
 : KsCheckBoxDialog("Filter CPUs", parent)
 {
 	int i=0;
-	_cb.resize(N_CPUS);
+	_cb.resize(pe->cpus);
 
 	for (auto &c: _cb) {
-		std::stringstream ss;
-		ss << "CPU " << i++;
-		c = new QCheckBox(QString(ss.str().c_str()), this);
+		c = new QCheckBox(QString("CPU %1").arg(i++), this);
 		_cb_layout.addWidget(c);
 	}
 }
 
-KSTasksCheckBoxDialog::KSTasksCheckBoxDialog(QWidget *parent)
+KSTasksCheckBoxDialog::KSTasksCheckBoxDialog(struct pevent *pe, QWidget *parent)
 : KsCheckBoxDialog("Tasks", parent)
 {
-	// TODO
 }
 
-KSEventsCheckBoxDialog::KSEventsCheckBoxDialog(QWidget *parent)
+KSEventsCheckBoxDialog::KSEventsCheckBoxDialog(struct pevent *pe, QWidget *parent)
 : KsCheckBoxDialog("Tasks", parent)
 {
-	// TODO
+	int i=0;
+	_cb.resize(pe->nr_events);
+
+	struct event_format **events;
+	
+	events = pevent_list_events(pe, EVENT_SORT_NAME);
+	if (!events)
+		return;
+
+	for (auto &c: _cb) {
+		std::cout << pe->sort_events[i]->name << std::endl;
+		c = new QCheckBox(QString(pe->events[i]->name), this);
+		_cb_layout.addWidget(c);
+		++i;
+	}
 }
 
 
