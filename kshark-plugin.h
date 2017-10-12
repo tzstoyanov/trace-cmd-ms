@@ -28,8 +28,13 @@
 #define KSHARK_PLUGIN_LOADER_NAME MAKE_STR(KSHARK_PLUGIN_LOADER)
 #define KSHARK_PLUGIN_UNLOADER_NAME MAKE_STR(KSHARK_PLUGIN_UNLOADER)
 
-typedef int (*kshark_plugin_load_func)(void *info);
-typedef int (*kshark_plugin_unload_func)(void *info);
+typedef int (*kshark_plugin_load_func)(void *info, void *store);
+typedef int (*kshark_plugin_unload_func)(void *info, void *store);
 
+typedef int (*kshark_plugin_event_handler_func)(	struct pevent_record *record,
+													int event_id, int task_id,
+													void *val);
+
+typedef int (*kshark_plugin_context_update_func)(struct pevent *pevent, int val);
 
 #endif

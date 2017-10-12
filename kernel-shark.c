@@ -1816,7 +1816,7 @@ static void add_plugin(const char *file)
 	struct stat st;
 	int ret;
 
-	ret = stat(default_input_file, &st);
+	ret = stat(file, &st);
 	if (ret < 0) {
 		warning("plugin %s not found", file);
 		return;
@@ -1830,7 +1830,7 @@ static void add_plugin(const char *file)
 	plugin_next = &(*plugin_next)->next;
 }
 
-static void handle_plugins(struct shark_info *info)
+static void handle_plugins(struct shark_info *info, struct trace_view_store *store)
 {
 	kshark_plugin_load_func func;
 	struct plugin_list *plugin;
@@ -1852,7 +1852,7 @@ static void handle_plugins(struct shark_info *info)
 				KSHARK_PLUGIN_LOADER_NAME, plugin->file, dlerror());
 			continue;
 		}
-		func(info);
+		func(info, store);
 	}
 }
 
@@ -2495,7 +2495,8 @@ void kernel_shark(int argc, char **argv)
 
 	gtk_widget_set_size_request(window, TRACE_WIDTH, TRACE_HEIGHT);
 
-	handle_plugins(info);
+	GtkTreeModel *model = gtk_tree_view_get_model(GTK_TREE_VIEW(info->treeview));
+	handle_plugins(info, TRACE_VIEW_STORE(model));
 
 	gdk_threads_enter();
 

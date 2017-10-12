@@ -24,6 +24,7 @@
 #include "trace-cmd.h"
 #include "trace-filter-hash.h"
 #include "trace-xml.h"
+#include "kshark-plugin.h"
 
 struct graph_info;
 
@@ -258,7 +259,16 @@ struct graph_info {
 	gint			plot_data_y;
 	gint			plot_data_w;
 	gint			plot_data_h;
+
+	kshark_plugin_event_handler_func plugin_switch_handler;
+	kshark_plugin_event_handler_func plugin_wakeup_handler;
+	kshark_plugin_context_update_func plugin_context_update_handler;
 };
+
+int trace_graph_register_plugin_handlers(	struct graph_info *ginfo,
+									kshark_plugin_event_handler_func switch_func,
+									kshark_plugin_event_handler_func wakeup_func,
+									kshark_plugin_context_update_func update_funk);
 
 
 struct graph_info *

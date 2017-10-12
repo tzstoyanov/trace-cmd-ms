@@ -70,6 +70,18 @@ static gboolean		trace_view_store_iter_parent	(GtkTreeModel	*tree_model,
 static GObjectClass *parent_class = NULL;	/* GObject stuff - nothing to worry about */
 
 
+int trace_view_store_register_plugin_handlers(	struct trace_view_store *store,
+									kshark_plugin_event_handler_func switch_func,
+									kshark_plugin_event_handler_func wakeup_func,
+									kshark_plugin_context_update_func update_func)
+{
+	store->plugin_switch_handler = switch_func;
+	store->plugin_wakeup_handler = wakeup_func;
+	store->plugin_context_update_handler = update_func;
+	return 0;
+}
+
+
 /*****************************************************************************
  *
  *	trace_view_store_get_type: here we register our new type and its interfaces
@@ -864,6 +876,10 @@ trace_view_store_new (struct tracecmd_input *handle)
 
 	newstore = (TraceViewStore*) g_object_new (TRACE_VIEW_STORE_TYPE, NULL);
 
+	newstore->plugin_switch_handler = NULL;
+	newstore->plugin_wakeup_handler = NULL;
+	newstore->plugin_context_update_handler = NULL;
+
 	g_assert( newstore != NULL );
 
 	newstore->handle = handle;
@@ -1180,7 +1196,7 @@ gint get_wakeup_new_pid(TraceViewStore *store, struct pevent *pevent, struct pev
 	return val;
 }
 
-static gboolean view_task(TraceViewStore *store, gint pid)
+gboolean view_task(TraceViewStore *store, gint pid)
 {
 	return (!store->task_filter ||
 		!filter_task_count(store->task_filter) ||
@@ -1224,6 +1240,21 @@ static gboolean show_task(TraceViewStore *store, struct pevent *pevent,
 			return TRUE;
 	}
 
+	if (store->plugin_switch_handler) {
+		int status = store->plugin_switch_handler(record, event_id, 0, &pid);
+		if (status && view_task(store, pid)) {
+			return TRUE;
+		}
+	}
+
+	if (store->plugin_wakeup_handler) {
+		int status = store->plugin_wakeup_handler(record, event_id, 0, &pid);
+		fprintf(stderr, "wakeup pid: %i \n", pid);
+		if (status && view_task(store, pid)) {
+			return TRUE;
+		}
+	}
+
 	return FALSE;
 }
 
@@ -1260,6 +1291,9 @@ static void update_filter_tasks(TraceViewStore *store)
 				pevent_find_any_field(store->sched_wakeup_new_event,
 						      "pid");
 	}
+
+	if (store->plugin_context_update_handler)
+		store->plugin_context_update_handler(pevent, 3);
 
 	for (cpu = 0; cpu < store->cpus; cpu++) {
 		record = tracecmd_read_cpu_first(handle, cpu);

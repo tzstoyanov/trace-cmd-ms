@@ -79,6 +79,17 @@ struct task_list {
 	gint			pid;
 };
 
+int trace_graph_register_plugin_handlers(	struct graph_info *ginfo,
+									kshark_plugin_event_handler_func switch_func,
+									kshark_plugin_event_handler_func wakeup_func,
+									kshark_plugin_context_update_func update_func)
+{
+	ginfo->plugin_switch_handler = switch_func;
+	ginfo->plugin_wakeup_handler = wakeup_func;
+	ginfo->plugin_context_update_handler = update_func;
+	return 0;
+}
+
 static guint get_task_hash_key(gint pid)
 {
 	return trace_hash(pid) % TASK_HASH_SIZE;
@@ -1047,6 +1058,11 @@ int trace_graph_check_sched_wakeup(struct graph_info *ginfo,
 			ginfo->wakeup_new_pid_field = pevent_find_field(event, "pid");
 			ginfo->wakeup_new_success_field = pevent_find_field(event, "success");
 		}
+
+		if (ginfo->plugin_context_update_handler)
+			if ( ginfo->plugin_context_update_handler(ginfo->pevent, 3) )
+				found = TRUE;
+
 		if (!found)
 			return 0;
 	}
@@ -1077,6 +1093,12 @@ int trace_graph_check_sched_wakeup(struct graph_info *ginfo,
 		if (pid)
 			*pid = val;
 		return 1;
+	}
+
+	if (ginfo->plugin_wakeup_handler) {
+		int status = ginfo->plugin_wakeup_handler(record, id, 0, pid);
+		if (status)
+			return 1;
 	}
 
 	return 0;
@@ -1118,6 +1140,9 @@ int trace_graph_check_sched_switch(struct graph_info *ginfo,
 		}
 	}
 
+	if (ginfo->plugin_context_update_handler)
+		ginfo->plugin_context_update_handler(ginfo->pevent, 4);
+
 	id = pevent_data_type(ginfo->pevent, record);
 	if (id == ginfo->event_sched_switch_id) {
 		pevent_read_number_field(ginfo->event_pid_field, record->data, &val);
@@ -1137,6 +1162,16 @@ int trace_graph_check_sched_switch(struct graph_info *ginfo,
 		if (pid)
 			*pid = val;
 		goto out;
+	}
+
+	if (ginfo->plugin_switch_handler) {
+		int status = ginfo->plugin_switch_handler(record, id, 0, pid);
+		if (status) {
+			if (comm) {
+				ginfo->plugin_switch_handler(record, id, 2, comm);
+			}
+			goto out;
+		}
 	}
 
 	ret = 0;

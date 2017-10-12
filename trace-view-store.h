@@ -23,6 +23,7 @@
 #include <gtk/gtk.h>
 #include "trace-cmd.h"
 #include "trace-filter-hash.h"
+#include "kshark-plugin.h"
 
 /* Some boilerplate GObject defines. 'klass' is used
  *   instead of 'class', because 'class' is a C++ keyword */
@@ -69,7 +70,6 @@ struct trace_view_record
 	gint		visible;
 	guint		pos;	/* pos within the array */
 };
-
 
 
 /* TraceViewStore: this structure contains everything we need for our
@@ -125,7 +125,18 @@ struct trace_view_store
 	guint64			*cpu_mask;  /* cpus that are enabled */
 
 	gint		stamp;	/* Random integer to check whether an iter belongs to our model */
+
+	kshark_plugin_event_handler_func plugin_switch_handler;
+	kshark_plugin_event_handler_func plugin_wakeup_handler;
+	kshark_plugin_context_update_func plugin_context_update_handler;
 };
+
+int trace_view_store_register_plugin_handlers(	struct trace_view_store *store,
+									kshark_plugin_event_handler_func switch_func,
+									kshark_plugin_event_handler_func wakeup_func,
+									kshark_plugin_context_update_func update_funk);
+
+gboolean view_task(TraceViewStore *store, gint pid);
 
 gboolean trace_view_store_cpu_isset(TraceViewStore *store, gint cpu);
 

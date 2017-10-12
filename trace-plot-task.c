@@ -68,11 +68,15 @@ static gboolean is_running(struct graph_info *ginfo, struct pevent_record *recor
 	int id;
 
 	id = pevent_data_type(ginfo->pevent, record);
-	if (id != ginfo->event_sched_switch_id)
-		return FALSE;
-
-	pevent_read_number_field(ginfo->event_prev_state, record->data, &val);
-	return val & ((1 << 11) - 1)? FALSE : TRUE;
+	if (id == ginfo->event_sched_switch_id) {
+		pevent_read_number_field(ginfo->event_prev_state, record->data, &val);
+		return val & ((1 << 11) - 1)? FALSE : TRUE;
+	}
+	
+	if (ginfo->plugin_switch_handler)
+		return ginfo->plugin_switch_handler(record, id, 1, NULL);
+	
+	return FALSE;
 }
 
 static gboolean record_matches_pid(struct graph_info *ginfo,
