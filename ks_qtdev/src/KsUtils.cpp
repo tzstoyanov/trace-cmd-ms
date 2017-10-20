@@ -24,7 +24,7 @@
 #include <QFrame>
 
 // KS
-#include "KsCheckBoxDialog.h"
+#include "KsUtils.h"
 #include "KsDeff.h"
 
 KsMessageDialog::KsMessageDialog(QString message, QWidget *parent)
@@ -129,13 +129,4 @@ KSEventsCheckBoxDialog::KSEventsCheckBoxDialog(struct pevent *pe, QWidget *paren
 		++i;
 	}
 }
-
-
-
-
-
-
-
-
-
 

@@ -30,8 +30,25 @@
 #include <QBoxLayout>
 #include <QLabel>
 
-
 #include "event-parse.h"
+
+#define SCREEN_HEIGHT  QApplication::desktop()->screenGeometry().height()
+#define SCREEN_WIDTH   QApplication::desktop()->screenGeometry().width()
+
+auto fontHeight = []() {QFont font; QFontMetrics fm(font); return fm.height();};
+auto stringWidth  = [](QString s) {QFont font; QFontMetrics fm(font); return fm.width(s);};
+
+#define FONT_HEIGHT fontHeight()
+#define FONT_WIDTH  stringWidth("4")
+#define STRING_WIDTH(s)  stringWidth(s)
+
+#define GET_TIME std::chrono::high_resolution_clock::now()
+
+#define GET_DURATION(t0) std::chrono::duration_cast<std::chrono::duration<double>>( \
+std::chrono::high_resolution_clock::now()-t0).count()
+
+typedef std::chrono::high_resolution_clock::time_point  hd_time;
+
 
 class KsMessageDialog : public QDialog {
 

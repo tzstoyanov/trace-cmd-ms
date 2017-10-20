@@ -17,6 +17,7 @@
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
+ 
 #ifndef _ks_view_h_included_
 #define _ks_view_h_included_
 
@@ -26,11 +27,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-
+	
 /** The data columns that we export via the tree model interface */
-enum
-{
+enum {
 	TRACE_VIEW_STORE_COL_INDEX,
 	TRACE_VIEW_STORE_COL_CPU,
 	TRACE_VIEW_STORE_COL_TS,
@@ -45,7 +44,6 @@ enum
 
 struct ks_entry {
 	uint32_t	pos;
-// 	uint32_t	cpu_pos;
 	uint8_t		cpu;
 	uint64_t	timestamp;
 	char* 		task;
@@ -54,27 +52,32 @@ struct ks_entry {
 	char* 		event;
 	char* 		info;
 
-	struct ks_entry		*next;
-// 	int visible;
+	struct ks_entry *next;
+	// int visible;
 };
 
-void ks_set_entry_values(	struct pevent			*pevent,
-							struct pevent_record	*record,
-							struct ks_entry			*entry);
+void ks_set_entry_values(	struct pevent *pevent,
+				struct pevent_record *record,
+				struct ks_entry *entry);
 
-struct ks_entry* ks_get_entry(	struct pevent			*pevent,
-							struct pevent_record	*record);
+const char* ks_dump_entry(struct ks_entry *entry, int *size);
 
-size_t ks_load_data_old(	struct tracecmd_input *handle,
-						struct ks_entry ***data_rows);
+struct ks_entry* ks_get_entry(	struct pevent *pevent,
+				struct pevent_record *record);
 
-void ks_clear_entry(struct ks_entry	*entry);
+size_t ks_load_data_old(struct tracecmd_input *handle,
+			struct ks_entry ***data_rows);
 
-void ks_free_entry(struct ks_entry	*entry);
+void ks_clear_entry(struct ks_entry *entry);
 
+void ks_free_entry(struct ks_entry *entry);
 
 size_t ks_load_data(	struct tracecmd_input *handle,
-						struct pevent_record ***data_rows);
+			struct pevent_record ***data_rows);
+
+uint32_t ks_find_row(	uint64_t time,
+			struct pevent_record **data_rows,
+			uint32_t l, uint32_t h);
 
 #ifdef __cplusplus
 }

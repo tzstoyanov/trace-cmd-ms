@@ -21,15 +21,8 @@
 #include <chrono>
 
 #include "KsDataStore.h"
-
+#include "KsUtils.h"
 #include "ks-view.h"
-
-#define GET_TIME std::chrono::high_resolution_clock::now()
-
-#define GET_DURATION(t0) std::chrono::duration_cast<std::chrono::duration<double>>( \
-std::chrono::high_resolution_clock::now()-t0).count()
-
-typedef std::chrono::high_resolution_clock::time_point  hd_time;
 
 KsDataStore::~KsDataStore()
 {
@@ -67,8 +60,13 @@ void KsDataStore::loadData(const QString& file)
 
 void KsDataStore::loadData(struct tracecmd_input *handle)
 {
+	hd_time t0 = GET_TIME;
+
 	_data_size = ks_load_data(handle, &_rows);
 	_pevt = tracecmd_get_pevent(handle);
+
+	double time2 = GET_DURATION(t0);
+	std::cout << "KsDataStore::loadData  time: " << 1e3*time2 << " ms.\n";
 }
 
 void KsDataStore::clear()

@@ -30,7 +30,7 @@
 // Kernelshark
 #include "KsTraceViewer.h"
 #include "KsTraceGraph.h"
-#include "KsCheckBoxDialog.h"
+#include "KsUtils.h"
 
 class KsMainWindow : public QMainWindow {
 
@@ -62,7 +62,7 @@ private:
 	KsDataStore		_data;
 	KsTraceViewer	_view;
 	KsTraceGraph	_graph;
-
+	
 	// File menu
 	QAction _openAction;
 	QAction _importFilterAction;

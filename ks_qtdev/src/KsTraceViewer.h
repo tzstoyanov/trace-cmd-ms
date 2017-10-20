@@ -22,7 +22,8 @@
 // Qt
 #include <QtWidgets>
 #include <QTableView>
-// #include <QTreeView>
+
+#include <iostream>
 
 #include "KsModel.h"
 #include "KsDataStore.h"
@@ -40,24 +41,28 @@ public:
 	void loadData(KsDataStore *data);
 	void reset() {_model.reset();}
 
+signals:
+	void select(size_t);
+
 private slots:
 	void pageChanged(int);
 	void searchEditText(const QString &);
 	void searchEditColumn(int);
 	void searchEditSelect(int);
-	void searchEditGraph(int);
+	void graphFollowsChanged(int);
 	void search();
-
+	void clicked(const QModelIndex& i);
+	void showRow(int r, bool mark);
+	
 private:
+	bool event(QEvent *event);
 	void init();
-	size_t select(int c, const QString &text, condition_func cond);
+	size_t searchItem(int c, const QString &text, condition_func cond);
 	void resizeToContents();
 
-	QVBoxLayout 			_layout;
-
-	QTableView 			_view;
-// 	QTreeView 			_view;
-	KsViewModel				_model;
+	QVBoxLayout 	_layout;
+	QTableView 		_view;
+	KsViewModel		_model;
 
 	QStringList 	_tableHeader;
 	QToolBar 		_toolbar;
@@ -66,10 +71,11 @@ private:
 	QComboBox 		_columnComboBox;
 	QComboBox 		_selectComboBox;
 	QLineEdit 		_searchLineEdit;
-	QCheckBox 		_checkBox;
+	QCheckBox 		_graphFollowsCheckBox;
 
-	bool							_searchDone;
-	QList<size_t>           _matchList;
+	bool					_searchDone;
+	bool 					_graphFollows;
+	QList<size_t>			_matchList;
 	QList<size_t>::iterator _it;
 
 	enum {

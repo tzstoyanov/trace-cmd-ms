@@ -1,5 +1,9 @@
+
+#define _GNU_SOURCE  
 #include <stdlib.h>
+#include <stdio.h>
 #include <assert.h>
+#include <sys/time.h>    
 
 #include "ks-view.h"
 
@@ -51,6 +55,22 @@ void ks_set_entry_values(	struct pevent			*pevent,
 	trace_seq_destroy(&s);
 }
 
+const char* ks_dump_entry(struct ks_entry *entry, int *size)
+{
+	char* entry_str;
+	*size = asprintf(&entry_str, "%s-%i;  cpu %i;  %s;  %s;  %s", 
+									entry->task,
+									entry->pid,
+									entry->cpu,
+									entry->event,
+									entry->latency,
+									entry->info
+									);
+	if (size > 0)
+		return entry_str;
+
+	return NULL;
+}
 
 struct ks_entry* ks_get_entry(	struct pevent			*pevent,
 							struct pevent_record	*record)
@@ -147,6 +167,10 @@ size_t ks_load_data_old(struct tracecmd_input *handle, struct ks_entry ***data_r
 
 size_t ks_load_data(struct tracecmd_input *handle, struct pevent_record ***data_rows)
 {
+	struct timeval t1, t2, t3;
+	double elapsedTime;
+	gettimeofday(&t1, NULL);
+	
 	int cpus = tracecmd_cpus(handle), cpu;
 	size_t count, total=0;
 
@@ -168,7 +192,7 @@ size_t ks_load_data(struct tracecmd_input *handle, struct pevent_record ***data_
 		data = tracecmd_read_cpu_first(handle, cpu);
 // 		pevt = tracecmd_get_pevent(handle);
 		while (data) {
-			*temp_next = temp_rec = malloc( sizeof(struct pevent_record) );
+			*temp_next = temp_rec = malloc( sizeof(*temp_rec) );
 			assert(temp_rec != NULL);
 
 // 			ks_set_entry_values(pevt, data, rec);
@@ -177,14 +201,33 @@ size_t ks_load_data(struct tracecmd_input *handle, struct pevent_record ***data_
 			temp_rec->rec = data;
 			temp_rec->next = NULL;
 			temp_next = &(temp_rec->next);
-// 			free_record(data);
+ 			//free_record(data);
 
 			++count;
 			data = tracecmd_read_data(handle, cpu);
 		}
+		
+		//data = tracecmd_read_cpu_first(handle, cpu);
+		//while (data) {
+			//*next = rec = g_malloc(sizeof(*rec));
+			//g_assert(rec != NULL);
+			//rec->offset = data->offset;
+			//rec->ts = data->ts;
+			//rec->next = NULL;
+			//next = &rec->next;
+			//free_record(data);
+			//count++;
+			//data = tracecmd_read_data(handle, cpu);
+		//}
+		
 		total += count;
 	}
 
+	gettimeofday(&t2, NULL);
+	elapsedTime = (t2.tv_sec - t1.tv_sec) * 1000.0;      // sec to ms
+	elapsedTime += (t2.tv_usec - t1.tv_usec) / 1000.0;
+	fprintf(stderr, "load time1 %f  ms, \n", elapsedTime);
+	
 	struct pevent_record **rows;
 	rows = calloc (total, sizeof(struct pevent_record *));
 
@@ -215,6 +258,31 @@ size_t ks_load_data(struct tracecmd_input *handle, struct pevent_record ***data_
 
 	free(cpu_list);
 	*data_rows = rows;
+
+	gettimeofday(&t3, NULL);
+	elapsedTime = (t3.tv_sec - t2.tv_sec) * 1000.0;      // sec to ms
+	elapsedTime += (t3.tv_usec - t2.tv_usec) / 1000.0;
+	fprintf(stderr, "load time2 %f  ms, \n", elapsedTime);
+    
 	return total;
+}
+
+uint32_t ks_find_row(uint64_t time, struct pevent_record **data_rows, uint32_t l, uint32_t h) {
+	if (data_rows[l]->ts >= time)
+		return l;
+
+	if (data_rows[h]->ts < time)
+		return h;
+
+	uint32_t mid;
+	while (h - l > 1) {
+		mid = (l + h) / 2;
+		if (time > data_rows[mid]->ts)
+			l = mid;
+		else
+			h = mid;
+	}
+
+	return h;
 }
 

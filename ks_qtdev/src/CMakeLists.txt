@@ -1,13 +1,13 @@
 MESSAGE(" src ...")
 
 add_library(trace-store SHARED trace-view-store.c ks-view.c)
-target_link_libraries(trace-store ${TRACECMD_LIBRARY})
+target_link_libraries(trace-store ${CMAKE_DL_LIBS} ${TRACECMD_LIBRARY})
 set_target_properties(trace-store	PROPERTIES SUFFIX	".so.${KS_VERSION_STRING}")
 
 set (ks-guiLib_hdr	KsMainWindow.h
 					KsTraceViewer.h
 					KsTraceGraph.h
-					KsCheckBoxDialog.h)
+					KsUtils.h)
 
 qt5_wrap_cpp(ks-guiLib_hdr_moc ${ks-guiLib_hdr})
 # qt5_wrap_ui (ks-guiLib_ui_moc  ${ks-guiLib_ui})
@@ -18,11 +18,12 @@ add_library(kshark	SHARED	${ks-guiLib_hdr_moc}
 							KsTraceGraph.cpp
 							KsModel.cpp
 							KsDataStore.cpp
-							KsCheckBoxDialog.cpp)
+							KsUtils.cpp)
 
-target_link_libraries(kshark	Qt5::Widgets
-										Qt5::Charts
-										trace-store)
+target_link_libraries(kshark	${TRACECMD_LIBRARY}
+								trace-store
+								Qt5::Widgets
+								Qt5::Charts)
 
 set_target_properties(kshark	PROPERTIES SUFFIX	".so.${KS_VERSION_STRING}")
 
@@ -31,10 +32,10 @@ MESSAGE(STATUS "kernelshark")
 add_executable (kernelshark			kernelshark.cpp)
 target_link_libraries(kernelshark	kshark)
 
-# add_executable(dload			dataload.c)
-# target_link_libraries(dload		trace-store)
+ add_executable(draw			draw.cpp)
+ target_link_libraries(draw		kshark)
 
-add_executable(dload			dataload.cpp)
+add_executable(dload			dataload.c)
 target_link_libraries(dload		kshark)
 
 MESSAGE("")

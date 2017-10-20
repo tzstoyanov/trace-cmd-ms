@@ -18,10 +18,11 @@ ProcessorCount(N_CPUS)
 # MESSAGE("\n CPUs: ${N_CPUS} \n")
 
 find_package(Qt5Widgets 5.9.1 REQUIRED)
-#MESSAGE(STATUS "Found Qt \n   version: " ${Qt5Widgets_VERSION} "\n")
+MESSAGE(STATUS "Found Qt5Widgets:   (found version " ${Qt5Widgets_VERSION} ")")
 
 find_package(Qt5Charts REQUIRED)
 find_package(PythonLibs REQUIRED)
+find_package(GTest)
 
 
 include(${KS_DIR}/build/FindTraceCmd.cmake)
@@ -35,13 +36,12 @@ set(EXECUTABLE_OUTPUT_PATH "${KS_DIR}/bin")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3 -std=c++11 -pthread")
 set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -Wall -O3")
-set(CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE} -ldl")
-set(CMAKE_C_LINK_EXECUTABLE "${CMAKE_C_LINK_EXECUTABLE} -ldl")
+#set(CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE} -ldl")
+#set(CMAKE_C_LINK_EXECUTABLE "${CMAKE_C_LINK_EXECUTABLE} -ldl")
 
 include_directories( ${KS_DIR}/src/
                      ${KS_DIR}/build/src/
-                     ${TRACECMD_INCLUDE_DIR}
-                     ${GTK2_INCLUDE_DIRS})
+                     ${TRACECMD_INCLUDE_DIR})
 
 message(STATUS "C flags      : " ${CMAKE_C_FLAGS})
 message(STATUS "CXX flags    : " ${CMAKE_CXX_FLAGS})
@@ -49,3 +49,6 @@ message(STATUS "Linker flags : " ${CMAKE_EXE_LINKER_FLAGS}\n)
 
 add_subdirectory(${KS_DIR}/src)
 
+IF (GTEST_FOUND)
+	add_subdirectory(${KS_DIR}/tests)
+ENDIF (GTEST_FOUND)

@@ -19,6 +19,7 @@
 #include <iostream>
 
 #include "KsTraceViewer.h"
+#include "KsUtils.h"
 
 #define VIEWER_PAGE_SIZE 1000000
 
@@ -35,13 +36,15 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
   _columnComboBox(this),
   _selectComboBox(this),
   _searchLineEdit(this),
-  _checkBox(this)
+  _graphFollowsCheckBox(this),
+  _searchDone(false),
+  _graphFollows(true)
 {
 	init();
 	_view.setModel(&_model);
+	connect(&_view, SIGNAL(clicked(const QModelIndex&)), this, SLOT(clicked(const QModelIndex&)));
 
 	_toolbar.setOrientation(Qt::Horizontal);
-
 	_toolbar.addWidget(&_label1);
 
 	_pageSpinBox.setMaximum(0);
@@ -63,14 +66,15 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	connect(&_selectComboBox, SIGNAL( currentIndexChanged(int) ), this, SLOT( searchEditSelect(int) ));
 	_toolbar.addWidget(&_selectComboBox);
 
-	_searchLineEdit.setMaximumWidth(200);
-	_searchLineEdit.setFixedWidth(240);
+	_searchLineEdit.setMaximumWidth(FONT_WIDTH*30);
 	connect(&_searchLineEdit, SIGNAL(returnPressed()), this, SLOT(search()));
 	connect(&_searchLineEdit, SIGNAL(textEdited(const QString &)), this, SLOT(searchEditText(const QString &)));
 	_toolbar.addWidget(&_searchLineEdit);
 
 	_toolbar.addSeparator();
-	_toolbar.addWidget(&_checkBox);
+	connect(&_graphFollowsCheckBox, SIGNAL(stateChanged(int)), this, SLOT(graphFollowsChanged(int)));
+	_graphFollowsCheckBox.setCheckState(Qt::Checked);
+	_toolbar.addWidget(&_graphFollowsCheckBox);
 	_toolbar.addWidget(&_label3);
 
 	_layout.addWidget(&_toolbar);
@@ -90,8 +94,9 @@ void KsTraceViewer::loadData(KsDataStore *data)
 
 void KsTraceViewer::init()
 {
-	setMinimumHeight(300);
-	setMinimumWidth(500);
+	setMinimumHeight(SCREEN_HEIGHT/4);
+
+	setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
 	_view.horizontalHeader()->setStretchLastSection(true);
 	_view.verticalHeader()->setVisible(false);
 	//_view.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
@@ -99,11 +104,11 @@ void KsTraceViewer::init()
 	_view.setSelectionBehavior(QAbstractItemView::SelectRows);
 	_view.setSelectionMode(QAbstractItemView::SingleSelection);
 // 	_view.setShowGrid(false);
-	_view.setStyleSheet("QTableView {selection-background-color: orange;}");
+	_view.setStyleSheet("QTableView {selection-background-color: green;}");
 	_view.setGeometry(QApplication::desktop()->screenGeometry());
 
 	_view.verticalHeader()->resizeSections(QHeaderView::ResizeToContents);
-	_view.verticalHeader()->setDefaultSectionSize(20);
+	_view.verticalHeader()->setDefaultSectionSize(FONT_HEIGHT*1.25);
 }
 
 void KsTraceViewer::resizeToContents()
@@ -123,22 +128,21 @@ void KsTraceViewer::pageChanged(int p)
 
 void KsTraceViewer::searchEditText(const QString &text)
 {
-	std::cout << "search: " << text.toStdString() << "\n";
 	_searchDone = false;
 }
 
 void KsTraceViewer::searchEditColumn(int index)
 {
-	std::cout << "search  col: " << _tableHeader.at(index).toStdString() << "  " << index << "\n";
 	_searchDone = false;
 }
 
-void KsTraceViewer::searchEditGraph(int state) {
-	_searchDone = false;
+void KsTraceViewer::graphFollowsChanged(int state) {
+	_graphFollows = (bool) state;
+	if (_searchDone)
+		emit select(*_it);
 }
 
 void KsTraceViewer::searchEditSelect(int index) {
-	std::cout << "search  sel: " << index << "\n";
 	_searchDone = false;
 }
 
@@ -157,7 +161,9 @@ bool matchCond(QString searchText, QString itemText) {
 	return false;
 }
 
-size_t KsTraceViewer::select(	int column, const QString &searchText, condition_func cond) {
+size_t KsTraceViewer::searchItem(	int column,
+									const QString &searchText,
+									condition_func cond) {
 	int count = _model.search(column, searchText, cond, &_matchList);
 	std::cout << column << "   found: " << count << "\n";
 	_searchDone = true;
@@ -169,23 +175,21 @@ size_t KsTraceViewer::select(	int column, const QString &searchText, condition_f
 void KsTraceViewer::search() {
 	_searchLineEdit.setReadOnly(true);
 	if (!_searchDone) {
-		std::cout << "<_| search: " << _searchLineEdit.text().toStdString() << "\n";
 		_matchList.clear();
 		QString xText = _searchLineEdit.text();
 		int xColumn = _columnComboBox.currentIndex();
 		int xSelect = _selectComboBox.currentIndex();
-		std::cerr << xColumn << " " << xSelect << std::endl;
 		switch (xSelect) {
 			case CONTAINS:
-				select(xColumn, xText, &containsCond);
+				searchItem(xColumn, xText, &containsCond);
 				break;
 
 			case MATCH:
-				select(xColumn, xText, &matchCond);
+				searchItem(xColumn, xText, &matchCond);
 				break;
 
 			case NOT_HAVE:
-				select(xColumn, xText, &notHaveCond);
+				searchItem(xColumn, xText, &notHaveCond);
 				break;
 
 			default:
@@ -196,14 +200,49 @@ void KsTraceViewer::search() {
 	if (!_matchList.empty()) {
 		if (_it != _matchList.end() ){
 			_view.selectRow(*_it);
+			if (_graphFollows)
+				emit select(*_it);
 			_it++;
 		} else {
 			_view.selectRow(*_it);
 			_it = _matchList.begin();
+			if (_graphFollows)
+				emit select(*_it);
 		}
 	}
 
 	_searchLineEdit.setReadOnly(false);
 }
 
+void KsTraceViewer::clicked(const QModelIndex& i) {
+	emit select(i.row());
+}
 
+bool KsTraceViewer::event(QEvent *event)
+{
+    if (event->type() == QEvent::KeyRelease) {
+        QKeyEvent *ke = static_cast<QKeyEvent *>(event);
+        if (ke->key() == Qt::Key_Up || ke->key() == Qt::Key_Down) {
+			QItemSelectionModel *s = _view.selectionModel();
+			if (s->hasSelection()) {
+				int row =  s->selectedRows()[0].row();
+				emit select(row);
+			}
+            return true;
+        }
+    }
+
+    return QWidget::event(event);
+}
+
+void KsTraceViewer::showRow(int r, bool mark) {
+	if (mark) {
+		int visiTot = _view.indexAt(_view.rect().topLeft()).row();
+		int visiBottom = _view.indexAt(_view.rect().bottomLeft()).row() - 2;
+		if (r < visiTot || r > visiBottom)
+			_view.scrollTo(	_model.index(r, 1), QAbstractItemView::PositionAtCenter);
+
+		_view.selectRow(r);
+	} else
+		_view.scrollTo(	_model.index(r, 1), QAbstractItemView::PositionAtTop);
+}

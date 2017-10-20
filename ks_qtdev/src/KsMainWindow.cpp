@@ -48,47 +48,34 @@ KsMainWindow::KsMainWindow(QWidget *parent)
   _aboutAction(tr("About"),parent)
 {
 	this->setWindowTitle("KernelShark");
-	this->resize(1200, 800);
+
+	int height = SCREEN_HEIGHT*.8;
+	int width = SCREEN_WIDTH*.8;	
+	this->resize(width, height);
 
 	this->createActions();
 	this->createMenus();
 
-	//_graph.setGeometry(QApplication::desktop()->screenGeometry());
-
-	QScrollArea *scrollArea = new QScrollArea(this);
-	//scrollArea->setWidgetResizable(true);
-	//scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	scrollArea->setMinimumHeight(400);
- 	scrollArea->setWidget(&_graph);
- 
- 	//QWidget *window = new QWidget(this);
- 	//QVBoxLayout *layout = new QVBoxLayout();
- 	////layout->addWidget(&_graph);
- 	//layout->addWidget(scrollArea);
- 	////layout->addWidget(&_view);
- 	//window->setLayout(layout);
- 	//setCentralWidget(window);
-
 	QSplitter *splitter = new QSplitter(Qt::Vertical);
-	splitter->addWidget(scrollArea);
-	//splitter->addWidget(&_graph);
-	splitter->setHandleWidth(2);
+	splitter->addWidget(&_graph);
+	//splitter->setHandleWidth(1);
 	splitter->addWidget(&_view);
 
- 	//splitter->setStretchFactor(0, 1);
- 	splitter->setStretchFactor(1, 1);
 	setCentralWidget(splitter);
 }
 
-KsMainWindow::~KsMainWindow() {
+KsMainWindow::~KsMainWindow()
+{
 	_data.clear();
 }
 
 void KsMainWindow::resizeEvent(QResizeEvent* event)
 {
    QMainWindow::resizeEvent(event);
-   _graph.resize(this->width(), _graph.height());
-   std::cout << "@@@ RWESUZE\n";
+   _graph.resize(	this->width()/* -
+					centralWidget()->contentsMargins().left() -
+					centralWidget()->contentsMargins().right()*/,
+					_graph.height());
 }
 
 void KsMainWindow::createActions()
@@ -133,6 +120,10 @@ void KsMainWindow::createActions()
 	connect(&_taskSelectAction, SIGNAL(triggered()), this, SLOT(taskSelect()));
 
 	connect(&_aboutAction, SIGNAL(triggered()), this, SLOT(aboutInfo()));
+
+	connect(&_view, SIGNAL(select(size_t)), &_graph, SLOT(markEntry(size_t)));
+
+	connect(&_graph, SIGNAL(select(int, bool)), &_view, SLOT(showRow(int, bool)));
 }
 
 void KsMainWindow::createMenus()
@@ -160,7 +151,7 @@ void KsMainWindow::createMenus()
 
 void KsMainWindow::open()
 {
-	QString selfilter = tr("dat)");
+	QString selfilter = tr("dat");
 	QString fileName =
 	QFileDialog::getOpenFileName(	this,
 									tr("Open File"),
@@ -214,6 +205,7 @@ void KsMainWindow::loadFile(const QString& fileName) {
 		text.append(fileName);
 		text.append("\n");
 		KsMessageDialog *message = new KsMessageDialog(text);
+		message->setWindowFlags(Qt::WindowStaysOnTopHint);
 		message->show();
 		cerr << "ERROR Opening file " << fileName.toStdString() << endl;
 		return;
@@ -228,6 +220,7 @@ void KsMainWindow::loadFile(const QString& fileName) {
 		text.append(fileName);
 		text.append("\ncontains no data.\n");
 		KsMessageDialog *message = new KsMessageDialog(text);
+		message->setWindowFlags(Qt::WindowStaysOnTopHint);
 		message->show();
 		return;
 	}
