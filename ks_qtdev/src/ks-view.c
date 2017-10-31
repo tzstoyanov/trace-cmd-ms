@@ -7,9 +7,9 @@
 
 #include "ks-view.h"
 
-void ks_set_entry_values(	struct pevent			*pevent,
-							struct pevent_record	*record,
-							struct ks_entry			*entry)
+void ks_set_entry_values(struct pevent *pevent,
+			 struct pevent_record *record,
+			 struct ks_entry *entry)
 {
 	// Position
 	entry->pos = -1;
@@ -55,32 +55,31 @@ void ks_set_entry_values(	struct pevent			*pevent,
 	trace_seq_destroy(&s);
 }
 
-const char* ks_dump_entry(struct ks_entry *entry, int *size)
+char* ks_dump_entry(struct ks_entry *entry, int *size)
 {
 	char* entry_str;
-	*size = asprintf(&entry_str, "%s-%i;  cpu %i;  %s;  %s;  %s", 
-									entry->task,
-									entry->pid,
-									entry->cpu,
-									entry->event,
-									entry->latency,
-									entry->info
-									);
+	*size = asprintf(&entry_str, "%s-%i;  CPU %i;  %s;  %s;  %s;", 
+			 entry->task,
+			 entry->pid,
+			 entry->cpu,
+			 entry->latency,
+			 entry->event,
+			 entry->info);
 	if (size > 0)
 		return entry_str;
 
 	return NULL;
 }
 
-struct ks_entry* ks_get_entry(	struct pevent			*pevent,
-							struct pevent_record	*record)
+struct ks_entry* ks_get_entry(struct pevent *pevent,
+			      struct pevent_record *record)
 {
 	struct ks_entry *e = malloc(sizeof(struct ks_entry));
 	ks_set_entry_values(pevent, record, e);
 	return e;
 }
 
-void ks_clear_entry(struct ks_entry	*entry)
+void ks_clear_entry(struct ks_entry *entry)
 {
 	free(entry->task);
 	free(entry->latency);
@@ -88,12 +87,9 @@ void ks_clear_entry(struct ks_entry	*entry)
 	free(entry->info);
 }
 
-void ks_free_entry(struct ks_entry	*entry)
+void ks_free_entry(struct ks_entry *entry)
 {
-	free(entry->task);
-	free(entry->latency);
-	free(entry->event);
-	free(entry->info);
+	ks_clear_entry(entry);
 	free(entry);
 	entry = NULL;
 }
@@ -267,7 +263,10 @@ size_t ks_load_data(struct tracecmd_input *handle, struct pevent_record ***data_
 	return total;
 }
 
-uint32_t ks_find_row(uint64_t time, struct pevent_record **data_rows, uint32_t l, uint32_t h) {
+uint32_t ks_find_row(uint64_t time,
+		     struct pevent_record **data_rows,
+		     uint32_t l, uint32_t h)
+{
 	if (data_rows[l]->ts >= time)
 		return l;
 

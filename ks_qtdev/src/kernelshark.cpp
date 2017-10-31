@@ -1,27 +1,46 @@
+/*
+ * Copyright (C) 2017 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
+ *
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation;
+ * version 2.1 of the License (not later!)
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this program; if not,  see <http://www.gnu.org/licenses>
+ *
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ */
 
-
+// C
 #include <sys/stat.h>
 #include <getopt.h>
+
+// C++
 #include <iostream>
+
+// Qt
 #include <QApplication>
 
+// trace-cmf
 #include "trace-cmd.h"
-// #include "event-utils.h"
-// #include "trace-local.h"
 
+// Kernel Shark 2
 #include "KsMainWindow.h"
 #include "KsDeff.h"
 
-using namespace std;
-
 #define default_input_file (char*)"trace.dat"
-
 static char *input_file;
 
 void usage(char **argv)
 {
 	char *prog = basename(argv[0]);
-
 	printf("Usage: %s\n", prog);
 	printf("  -h	Display this help message\n");
 	printf("  -v	Display version and exit\n");
@@ -34,7 +53,7 @@ static void add_plugin(const char *file)
 // 	struct stat st;
 // 	int ret;
 // 
-// 	ret = stat(default_input_file, &st);
+// 	ret = stat(file, &st);
 // 	if (ret < 0) {
 // 		warning("plugin %s not found", file);
 // 		return;
@@ -57,9 +76,7 @@ int main(int argc, char **argv)
 			usage(argv);
 			return 0;
 		case 'v':
-			printf(	"%s - %s\n",
-					basename(argv[0]),
-					KS_VERSION_STRING);
+			printf("%s - %s\n", basename(argv[0]), KS_VERSION_STRING);
 			return 0;
 		case 'i':
 			input_file = optarg;
@@ -82,12 +99,12 @@ int main(int argc, char **argv)
 		input_file = default_input_file;
 
 	QApplication a(argc, argv);
-	KsMainWindow w;
+	KsMainWindow ks;
 
 	if (input_file)
-		w.loadFile(QString(input_file));
+		ks.loadFile(QString(input_file));
 
-	w.show();
+	ks.show();
 	return a.exec();
 }
 

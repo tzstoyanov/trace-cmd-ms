@@ -1,4 +1,6 @@
 /*
+ *  Copyright (C) 2017 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
+ *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -15,11 +17,12 @@
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
- 
-#include <chrono>
+
+
 #include <iostream>
 #include <iomanip>
 
+// Kernel Shark 2
 #include "KsTraceGraph.h"
 #include "KsUtils.h"
 
@@ -27,21 +30,26 @@
 
 KsTraceGraph::KsTraceGraph(QWidget *parent)
 : QWidget(parent),
-  _toolbar(this),
+  _pointerBar(this),
   _navigationBar(this),
   _scrollLeftButton("<", this),
   _zoomInButton("+", this),
   _zoomOutButton("-", this),
   _scrollRightButton(">", this),
+  _mState(this),
   _labelP1("Pointer: ", this),
-  _labelP2(" ", this),
-  _labelI("", this),
-  _labelA1("    Marker A: ", this),
-  _labelA2(" ", this),
-  _labelB1("    Marker B: ", this),
-  _labelB2(" ", this),
+  _labelP2("", this),
+  _labelI1("", this),
+  _labelI2("", this),
+  _labelI3("", this),
+  _labelI4("", this),
+  _labelI5("", this),
+  _labelA1("    ", this),
+  _labelA2("", this),
+  _labelB1("    ", this),
+  _labelB2("", this),
   _labelD1("    A,B Delta: ", this),
-  _labelD2(" ", this),
+  _labelD2("", this),
   _scrollArea(this),
   _drawWindow(this),
   _model(this),
@@ -49,10 +57,16 @@ KsTraceGraph::KsTraceGraph(QWidget *parent)
   _axisChart(nullptr),
   _axisX(nullptr),
   _mapper(nullptr),
-  _rubberBand(QRubberBand::Rectangle, this)
+  _rubberBand(QRubberBand::Rectangle, this),
+  _markA(Qt::darkGreen),
+  _markB(Qt::darkCyan)
 {
-	_toolbar.setOrientation(Qt::Horizontal);
+	auto makeNavButton = [&](QPushButton *b) {
+		b->setMaximumWidth(FONT_WIDTH*5);
 
+		connect(b, SIGNAL(released()), this, SLOT(stopUpdating()));
+		_navigationBar.addWidget(b);
+	};
 	auto makeLabel = [&](QLabel *l1, QLabel *l2, QToolBar *tb) {
 		tb->addWidget(l1);
 		l2->setFrameStyle(QFrame::Panel | QFrame::Sunken);
@@ -61,27 +75,39 @@ KsTraceGraph::KsTraceGraph(QWidget *parent)
 		tb->addWidget(l2);
 		tb->addSeparator();
 	};
-	
-	makeLabel(&_labelP1, &_labelP2, &_toolbar);
-	_toolbar.addWidget(&_labelI);
-	
+	auto makeMarkLabel = [&](QPushButton *b, QLabel *l, QToolBar *tb) {
+		tb->addWidget(b);
+		l->setFrameStyle(QFrame::Panel | QFrame::Sunken);
+		l->setStyleSheet("QLabel { background-color : white;}");
+		l->setFixedWidth(FONT_WIDTH*15);
+		tb->addWidget(l);
+		tb->addSeparator();
+	};
 
-	_layout.addWidget(&_toolbar);
+	_pointerBar.setOrientation(Qt::Horizontal);
+	makeLabel(&_labelP1, &_labelP2, &_pointerBar);
+
+	_labelI1.setStyleSheet("QLabel {color : blue;}");
+	_labelI2.setStyleSheet("QLabel {color : green;}");
+	_labelI3.setStyleSheet("QLabel {color : red;}");
+	_labelI4.setStyleSheet("QLabel {color : blue;}");
+	_labelI5.setStyleSheet("QLabel {color : green;}");
+
+	_pointerBar.addWidget(&_labelI1);
+	_pointerBar.addSeparator();
+	_pointerBar.addWidget(&_labelI2);
+	_pointerBar.addSeparator();
+	_pointerBar.addWidget(&_labelI3);
+	_pointerBar.addSeparator();
+	_pointerBar.addWidget(&_labelI4);
+	_pointerBar.addSeparator();
+	_pointerBar.addWidget(&_labelI5);
 
 	_scrollArea.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	_scrollArea.setWidget(&_drawWindow);
 
-	_layout.addWidget(&_scrollArea);
-
-	//_scrollLeftButton.resize(20,20);
 	_navigationBar.setMaximumHeight(FONT_HEIGHT*1.75);
-
-	auto makeNavButton = [&](QPushButton *b) {
-		b->setMaximumWidth(FONT_WIDTH*5);
-
-		connect(b, SIGNAL(released()), this, SLOT(stopUpdating()));
-		_navigationBar.addWidget(b);
-	};
+	_navigationBar.setOrientation(Qt::Horizontal);
 
 	connect(&_scrollLeftButton, SIGNAL(pressed()), this, SLOT(scrollLeft()));
 	makeNavButton(&_scrollLeftButton);
@@ -94,13 +120,18 @@ KsTraceGraph::KsTraceGraph(QWidget *parent)
 
 	connect(&_scrollRightButton, SIGNAL(pressed()), this, SLOT(scrollRight()));
 	makeNavButton(&_scrollRightButton);	
-	
-	makeLabel(&_labelA1, &_labelA2, &_navigationBar);
-	makeLabel(&_labelB1, &_labelB2, &_navigationBar);
+
+	_navigationBar.addSeparator();	
+	_navigationBar.addWidget(&_labelA1);
+	makeMarkLabel(&_mState._buttonA, &_labelA2, &_navigationBar);
+
+	_navigationBar.addWidget(&_labelB1);
+	makeMarkLabel(&_mState._buttonB, &_labelB2, &_navigationBar);
 	makeLabel(&_labelD1, &_labelD2, &_navigationBar);
 
+	_layout.addWidget(&_pointerBar);
 	_layout.addWidget(&_navigationBar);
-
+	_layout.addWidget(&_scrollArea);
 	this->setLayout(&_layout);
 }
 
@@ -111,30 +142,33 @@ void KsTraceGraph::updateGeom()
 	if (_chartView.count() == 0)
 		return;
 
-	int hMin = 	_drawWindow.height() +
-				_toolbar.height() +
-				_navigationBar.height() +
-				_layout.contentsMargins().top() +
-				_layout.contentsMargins().bottom();
+	int hMin = _drawWindow.height() +
+		   _pointerBar.height() +
+		   _navigationBar.height() +
+		   _layout.contentsMargins().top() +
+		   _layout.contentsMargins().bottom();
 
 	if (hMin > SCREEN_HEIGHT/4) hMin = SCREEN_HEIGHT/4;
 
 	setMinimumHeight(hMin);
 
-	_scrollArea.resize(this->width(), 	this->height() -
-										_toolbar.height() -
-										_navigationBar.height() -
-										_layout.spacing()*2 -
-										_layout.contentsMargins().top() -
-										_layout.contentsMargins().bottom());
+	_scrollArea.resize(this->width(), this->height() -
+					  _pointerBar.height() -
+					  _navigationBar.height() -
+					  _layout.spacing()*2 -
+					  _layout.contentsMargins().top() -
+					  _layout.contentsMargins().bottom());
 
-	int marginsH = 	_layout.contentsMargins().left() +
-					_layout.contentsMargins().right() +
-					_drawWindow.layout()->contentsMargins().left() +
-					_drawWindow.layout()->contentsMargins().right();
+	int marginsH = _layout.contentsMargins().left() +
+		       _layout.contentsMargins().right() +
+		       _drawWindow.layout()->contentsMargins().left() +
+		       _drawWindow.layout()->contentsMargins().right();
 
-	_drawWindow.resize(	_scrollArea.width() - marginsH,
-						_drawWindow.height());
+	if (_drawWindow.height() > _scrollArea.height())
+		marginsH += style()->pixelMetric(QStyle::PM_ScrollBarExtent);
+
+	_drawWindow.resize(_scrollArea.width() - marginsH,
+			   _drawWindow.height());
 
 }
 
@@ -146,7 +180,6 @@ void KsTraceGraph::resizeEvent(QResizeEvent* event)
 void KsTraceGraph::reset()
 {
 	_model.reset(); 
-	//_chart->removeAllSeries();
 }
 
 void KsTraceGraph::addCpu(int cpu)
@@ -154,7 +187,8 @@ void KsTraceGraph::addCpu(int cpu)
 	KsChartView *view = new KsChartView(this);
 	view->_cpuId = cpu;
 	view->_model = &_model;
-	connect(view, SIGNAL(rangeBoundInit(int, size_t)),
+
+	connect(view, SIGNAL(rangeBoundInit(int, size_t)), 
 			this, SLOT(rangeBoundInit(int, size_t)));
 
 	connect(view, SIGNAL(rangeBoundStretched(int, size_t)),
@@ -163,29 +197,14 @@ void KsTraceGraph::addCpu(int cpu)
 	connect(view, SIGNAL(rangeChanged(size_t, size_t)),
 			this, SLOT(rangeChanged(size_t, size_t)));
 
-	connect(view, SIGNAL(zoomIn()),
-			this, SLOT(zoomIn()));
-
-	connect(view, SIGNAL(zoomOut()),
-			this, SLOT(zoomOut()));
-
-	connect(view, SIGNAL(scrollLeft()),
-			this, SLOT(scrollLeft()));
-
-	connect(view, SIGNAL(scrollRight()),
-			this, SLOT(scrollRight()));
-
-	connect(view, SIGNAL(stopUpdating()),
-			this, SLOT(stopUpdating()));
-
-	connect(view, SIGNAL(resetPointer()),
-			this, SLOT(resetPointer()));
-
-	connect(view, SIGNAL(select(int, bool)),
-			this, SLOT(selectReceived(int, bool)));
-
-	connect(view, SIGNAL(found(size_t)),
-			this, SLOT(setPointerInfo(size_t)));
+	connect(view, SIGNAL(zoomIn()), this, SLOT(zoomIn()));
+	connect(view, SIGNAL(zoomOut()), this, SLOT(zoomOut()));
+	connect(view, SIGNAL(scrollLeft()), this, SLOT(scrollLeft()));
+	connect(view, SIGNAL(scrollRight()), this, SLOT(scrollRight()));
+	connect(view, SIGNAL(stopUpdating()), this, SLOT(stopUpdating()));
+	connect(view, SIGNAL(resetPointer()), this, SLOT(resetPointer()));
+	connect(view, SIGNAL(select(int, bool)), this, SLOT(selectReceived(int, bool)));
+	connect(view, SIGNAL(found(size_t)), this, SLOT(setPointerInfo(size_t)));
 
 	QChart *chart = new QChart();
 	chart->setAnimationOptions(QChart::NoAnimation);
@@ -193,13 +212,13 @@ void KsTraceGraph::addCpu(int cpu)
 	//QPen pen(Qt::black);
 	QPen pen(Qt::darkBlue);
 	
-	if (SCREEN_HEIGHT < 2000) pen.setWidthF(1.5);
-	else pen.setWidthF(2.5);
+	if (SCREEN_HEIGHT < 2000)
+		pen.setWidthF(1.5);
+	else
+		pen.setWidthF(3.5);
 
 	series->setPen(pen);
-	//chart->installEventFilter(this);
-	//series->installEventFilter(this);
-	
+
 	series->setName(QString("CPU %1").arg(cpu));
 	series->setUseOpenGL(true);
 
@@ -213,16 +232,14 @@ void KsTraceGraph::addCpu(int cpu)
 	chart->legend()->hide();
 	chart->layout()->setContentsMargins(0, 0, 0, 0);
 	chart->setBackgroundRoundness(0);
-	//chart->createDefaultAxes();
 
 	QCategoryAxis *axisY = new QCategoryAxis(this);
-	axisY->setRange(0 , 1);
+	axisY->setRange(0, 1);
 	axisY->setTitleText(series->name());
 	axisY->setTitleVisible(true);
 	chart->setAxisY(axisY, series);
 
 	view->setChart(chart);
-	//_layout.addWidget(view);
 	_drawWindow.layout()->addWidget(view);
 	_chartView.append(view);
 }
@@ -236,7 +253,6 @@ void KsTraceGraph::loadData(KsDataStore *data)
 	_model.setNCpus(nCpus);
  	_model.fill(data->_pevt, data->_rows, data->size());
 
-	//drawGraphs(nCpus, 0x3);
 	drawGraphs(nCpus);
 
 	_data = data;
@@ -248,10 +264,13 @@ void KsTraceGraph::drawGraphs(int nCpus, uint32_t cpuMask)
 {
 	if (_drawWindow.layout()) {
 		QLayoutItem *child;
-		while ((child = _drawWindow.layout()->takeAt(0)) != 0)
+		while ((child = _drawWindow.layout()->takeAt(0)) != 0) {
 			delete child;
-
+		}
 		delete _drawWindow.layout();
+
+		for (auto const &c: _chartView)
+			delete c;
 	}
 
 	_drawWindow.setLayout(new QVBoxLayout());
@@ -265,82 +284,89 @@ void KsTraceGraph::drawGraphs(int nCpus, uint32_t cpuMask)
 			addCpu(cpu);
 	}
 
-	int margins = 	_drawWindow.layout()->contentsMargins().top() +
-					_drawWindow.layout()->contentsMargins().bottom();
+	int margins = _drawWindow.layout()->contentsMargins().top() +
+		      _drawWindow.layout()->contentsMargins().bottom();
 
 	_drawWindow.resize(_drawWindow.width(), CPU_GRAPH_HEIGHT*_chartView.count() + margins);
 	updateGeom();
 }
 
-void KsTraceGraph::setAxisX()
+void KsTraceGraph::cpuReDraw(QVector<Qt::CheckState> cpuVec)
 {
-	if (_axisX)
-		_axisChart->removeAxis(_axisX);
+	uint32_t mask(0), i(0);
+	for (auto const &v: cpuVec) {
+		mask |= (v == Qt::Checked) << i++;
+	}
 
-	_axisX = new QCategoryAxis(this);
-	_axisX->setGridLineVisible(false);
-	_axisX->setRange(0, (int)_model._visMap.size()-1);
-
-	QString l1, l2, l3;
-
-	l1 = QString::number(_model._visMap.binTime(0), 'f', 6);
-	_axisX->append(l1, 250);
-
-	l2 = QString::number(_model._visMap.binTime(_model._visMap.size()/2), 'f', 6);
-	_axisX->append(l2, _model._visMap.size()-250);
-
-	l3 = QString::number(_model._visMap.binTime(_model._visMap.size()-1), 'f', 6);
-	_axisX->append(l3, _model._visMap.size());
-
-	_axisChart->addAxis(_axisX, Qt::AlignBottom);
+	int nCpus = _data->_pevt->cpus;
+	_model.reset();	
+	_model.setNCpus(nCpus);
+ 	_model.fill(_data->_pevt, _data->_rows, _data->size());
+	this->drawGraphs(nCpus, mask);
 }
 
 void KsTraceGraph::rangeBoundInit(int x, size_t posMA)
 {
-	_markerA = posMA;
+	_posMarkA = posMA;
 	QString mA = QString::number(_model._visMap.binTime(posMA), 'f', 6);
 	_labelA2.setText(QString("%1").arg(mA));
 
-	int margins = 	_layout.contentsMargins().left() +
-					_drawWindow.layout()->contentsMargins().left();
+	int margins = _layout.contentsMargins().left() +
+		      _drawWindow.layout()->contentsMargins().left();
 
 	_rubberBandOrigin.rx() = x + margins;
-	_rubberBandOrigin.ry() = _toolbar.height() +
-							 _layout.contentsMargins().top() +
-							 _layout.contentsMargins().bottom() +
-							 _drawWindow.layout()->contentsMargins().top();
+	_rubberBandOrigin.ry() = _pointerBar.height() +
+				 _layout.contentsMargins().top() +
+				 _layout.contentsMargins().bottom() +
+				 _drawWindow.layout()->contentsMargins().top();
 
 	_rubberBand.setGeometry(_rubberBandOrigin.x(),
-							_rubberBandOrigin.y(),
-							0,0);
+				_rubberBandOrigin.y(),
+				0,0);
 
-    _rubberBand.show();
+	_rubberBand.show();
+}
+
+void KsTraceGraph::setMarkLabels(size_t mA, size_t  mB)
+{
+	QString markA = QString::number(_model._visMap.binTime(mA), 'f', 7);
+	_labelA2.setText(QString("%1").arg(markA));
+
+	QString markB = QString::number(_model._visMap.binTime(mB), 'f', 7);
+	_labelB2.setText(QString("%1").arg(markB));	
 }
 
 void KsTraceGraph::rangeBoundStretched(int x, size_t posMB)
 {
-	QString pointer = QString::number(_model._visMap.binTime(posMB), 'f', 6);
+	QString pointer = QString::number(_model._visMap.binTime(posMB), 'f', 7);
 	_labelP2.setText(QString("%1").arg(pointer));
 
 	if(!_rubberBand.isVisible())
 		return;
 
-	QString mB = QString::number(_model._visMap.binTime(posMB), 'f', 6);
+	QString mB = QString::number(_model._visMap.binTime(posMB), 'f', 7);
 	_labelB2.setText(QString("%1").arg(mB));
 
 	QString delta = QString::number(_model._visMap.binTime(posMB) -
-									_model._visMap.binTime(_markerA),
-									'f', 6);
+					_model._visMap.binTime(_posMarkA),
+					'f', 7);
 	_labelD2.setText(QString("%1").arg(delta));
 
 	QPoint pos;
-	int margins = 	_layout.contentsMargins().left() +
-					_drawWindow.layout()->contentsMargins().left();
+	int margins = _layout.contentsMargins().left() +
+		      _drawWindow.layout()->contentsMargins().left();
 	pos.rx() = x + margins;
-	pos.ry() = _drawWindow.height() + _toolbar.height() +
-				_drawWindow.layout()->contentsMargins().top();
 
-	_rubberBand.setGeometry(QRect(_rubberBandOrigin, pos).normalized());
+	int dwHeight = _drawWindow.height() + _pointerBar.height() +
+		       _drawWindow.layout()->spacing()*(_chartView.size() - 2);
+		       _layout.contentsMargins().top();
+
+	int saHeight = _scrollArea.height() + _pointerBar.height() +
+		       _layout.contentsMargins().top() + _layout.spacing();
+
+	pos.ry() = (dwHeight < saHeight)? dwHeight : saHeight;
+
+	_rubberBand.setGeometry(QRect(_rubberBandOrigin, pos));
 }
 
 void KsTraceGraph::rangeChanged(size_t p0, size_t p1)
@@ -350,10 +376,10 @@ void KsTraceGraph::rangeChanged(size_t p0, size_t p1)
 		return;
 	}
 
-	QString mA = QString::number(_model._visMap.binTime(p0), 'f', 6);
+	QString mA = QString::number(_model._visMap.binTime(p0), 'f', 7);
 	_labelA2.setText(QString("%1").arg(mA));
 
-	QString mB = QString::number(_model._visMap.binTime(p1), 'f', 6);
+	QString mB = QString::number(_model._visMap.binTime(p1), 'f', 7);
 	_labelB2.setText(QString("%1").arg(mB));
 
 	uint64_t min, max;
@@ -365,18 +391,15 @@ void KsTraceGraph::rangeChanged(size_t p0, size_t p1)
 		return;
 	}
 
-	std::cout << "rangeChanged (" << min << ", " << max << ")\n";
-
 	_model._visMap.setBining(KS_GRAPH_N_BINS, min, max);
 	_model.fill(_data->_pevt, _data->_rows, _data->size(), false);
 
-	//setAxisX();
 	_rubberBand.hide();
 
-	if (_mark.isSet()) {
-		_mark.remove();
-		if(_mark.reset(_data, &_model._visMap))
-			_mark.draw();
+	if (_markA.isSet()) {
+		_markA.remove();
+		if(_markA.reset(_data, &_model._visMap))
+			_markA.draw();
 	}
 
 	for (size_t i = 0; i < KS_GRAPH_N_BINS; ++i) {
@@ -410,7 +433,7 @@ void KsTraceGraph::scrollRight()
 
 void KsTraceGraph::resetPointer()
 {
-	_mark.remove();
+	_markA.remove();
 }
 
 void KsTraceGraph::setPointerInfo(size_t i)
@@ -418,29 +441,41 @@ void KsTraceGraph::setPointerInfo(size_t i)
 	ks_entry e;
 	ks_set_entry_values(_data->_pevt, _data->_rows[i], &e);
 	int str_size;
-	const char* info_str = ks_dump_entry(&e, &str_size);
-	QString info(info_str);
-
-	_labelI.setText(info);
-	_labelI.adjustSize();
+	char* info_str = ks_dump_entry(&e, &str_size);
+	char *next, *pch = strchr(info_str,';');
+	char *buff = strndup(info_str, pch - info_str);
+	_labelI1.setText(QString(buff));
+	_labelI1.adjustSize();
+	
+	QList<QLabel*> labels = {&_labelI2, &_labelI3, &_labelI4, &_labelI5};
+	for (auto const &l: labels) {
+		next = strchr(pch + 1,';');
+		buff = strndup(pch + 2, next - pch - 2);
+		pch = next;
+		l->setText(QString(buff));
+		l->adjustSize();
+		free(buff);
+	}
+	
+	free(info_str);
 }
 	
 void KsTraceGraph::markEntry(size_t pos)
 {
-	_mark.remove();
+	_markA.remove();
 
 	int cpu = _data->_rows[pos]->cpu;
-	_scrollArea.ensureVisible(	0,
-								CPU_GRAPH_HEIGHT/2 +
-								cpu*(CPU_GRAPH_HEIGHT + _drawWindow.layout()->spacing()/2),
-								50,
-								CPU_GRAPH_HEIGHT/2);
+	_scrollArea.ensureVisible(0,
+				  CPU_GRAPH_HEIGHT/2 +
+				  cpu*(CPU_GRAPH_HEIGHT + _drawWindow.layout()->spacing()/2),
+				  50,
+				  CPU_GRAPH_HEIGHT/2);
 								
 	_model.shiftTo(_data->_rows[pos]->ts);
-	_mark.set(_data, &_model._visMap, pos);
+	_markA.set(_data, &_model._visMap, pos);
 	for (auto const &v: _chartView) {
 		if (v->_cpuId == cpu)
-			_mark.draw(v);
+			_markA.draw(v);
 	}
 }
 
@@ -457,8 +492,8 @@ void KsTraceGraph::updateGraphs(GraphActions action)
 	while (_keyPressed) {
 		switch (action) {
 		case GraphActions::ZoomIn:
-			if (_mark.isSet())
-				_model.zoomIn(k, _mark._bin);
+			if (_markA.isSet())
+				_model.zoomIn(k, _markA.bin());
 			else
 				_model.zoomIn(k);
 
@@ -479,27 +514,30 @@ void KsTraceGraph::updateGraphs(GraphActions action)
 			break;
 		}
 
-		if (_mark.isSet()) {
-			_mark.remove();
-			if(_mark.reset(_data, &_model._visMap))
-				_mark.draw();
+		if (_markA.isSet()) {
+			_markA.remove();
+			if(_markA.reset(_data, &_model._visMap))
+				_markA.draw();
 		}
 
 		QCoreApplication::processEvents();
 
-		QString mA = QString::number(_model._visMap.binTime(_model._visMap._min), 'f', 6);
+		QString mA = QString::number(_model._visMap.binTime(0), 'f', 7);
 		_labelA2.setText(QString("%1").arg(mA));
 
-		QString mB = QString::number(_model._visMap.binTime(_model._visMap._max), 'f', 6);
+		QString mB =
+		QString::number(_model._visMap.binTime(_model._visMap._nBins), 'f', 7);
 		_labelB2.setText(QString("%1").arg(mB));
 
-		QString delta = QString::number(_model._visMap.binTime(_model._visMap._max) -
-										_model._visMap.binTime(_model._visMap._min),
-										'f', 6);
+		QString delta =
+		QString::number(_model._visMap.binTime(_model._visMap._nBins) -
+				_model._visMap.binTime(0),
+				'f', 7);
+		
 		_labelD2.setText(QString("%1").arg(delta));
 
 		
-		if (!_mark.isSet())
+		if (!_markA.isSet())
 			for (size_t i = 0; i < KS_GRAPH_N_BINS; ++i) {
 				if (_model._visMap[i] > 0) {
 					emit select(_model._visMap[i], false);
@@ -507,29 +545,18 @@ void KsTraceGraph::updateGraphs(GraphActions action)
 				}
 			}
 	}
-
-	//setAxisX();
 }
-
-//bool KsTraceGraph::eventFilter(QObject *obj, QEvent *event)
-//{
-    ////if (event->type() == QEvent::GraphicsSceneMouseDoubleClick)
-    //{
-		//qInfo() << "# Event " << event->type();
-    //}
-    //return QObject::eventFilter(obj, event);
-//}
 	
 KsChartView::KsChartView(QWidget *parent)
 : QChartView(parent),
-  _markerA(-1), _pointer(nullptr)
+  _posMarkA(-1), _pointer(nullptr)
 {
 	init();
 }
 
 KsChartView::KsChartView(QChart *chart, QWidget *parent)
 : QChartView(chart, parent),
-  _markerA(-1), _pointer(nullptr)
+  _posMarkA(-1), _pointer(nullptr)
 {
 	init();
 }
@@ -550,14 +577,14 @@ QPointF KsChartView::mapToValue(QMouseEvent *event)
 void KsChartView::mousePressEvent(QMouseEvent *event)
 {
 	if (event->button() == Qt::LeftButton) {
-		_markerA = this->mapToValue(event).x();
-		std::cerr << "1 @ " << _markerA << std::endl;	
-		if (_markerA < 0 || _markerA > KS_GRAPH_N_BINS ) {
-			_markerA = -1;
+		_posMarkA = this->mapToValue(event).x();
+		std::cerr << "1 @ " << _posMarkA << std::endl;	
+		if (_posMarkA < 0 || _posMarkA > KS_GRAPH_N_BINS ) {
+			_posMarkA = -1;
 			return;
 		}
 
-		emit rangeBoundInit(event->pos().x(), _markerA);
+		emit rangeBoundInit(event->pos().x(), _posMarkA);
 	} else if (event->button() == Qt::RightButton)
 		emit resetPointer();
 }
@@ -627,9 +654,9 @@ void KsChartView::mouseReleaseEvent(QMouseEvent *event)
 {
 	if ( event->button() == Qt::LeftButton ) {
 		int markerB = this->mapToValue(event).x();
-		std::cerr << "2 @ " << _markerA << " " << markerB << std::endl;
+		std::cerr << "2 @ " << _posMarkA << " " << markerB << std::endl;
 	
-		if (_markerA < 0) {
+		if (_posMarkA < 0) {
 			findAndSelect(event);
 			return;
 		}
@@ -640,12 +667,12 @@ void KsChartView::mouseReleaseEvent(QMouseEvent *event)
 		if (markerB > KS_GRAPH_N_BINS)
 			markerB = KS_GRAPH_N_BINS;
 
-		if (_markerA < markerB)
-			emit rangeChanged(_markerA, markerB);
+		if (_posMarkA < markerB)
+			emit rangeChanged(_posMarkA, markerB);
 		else
-			emit rangeChanged(markerB, _markerA);
+			emit rangeChanged(markerB, _posMarkA);
 
-		_markerA = -1;
+		_posMarkA = -1;
 	}
 }
 
@@ -682,11 +709,11 @@ void KsChartView::keyReleaseEvent(QKeyEvent *event)
 	if (event->isAutoRepeat())
 		return;
 
-	if(	event->key() == Qt::Key_Plus ||
-		event->key() == Qt::Key_Minus ||
-		event->key() == Qt::Key_Left ||
-		event->key() == Qt::Key_Right)
-		emit stopUpdating();
+	if(event->key() == Qt::Key_Plus ||
+	   event->key() == Qt::Key_Minus ||
+	   event->key() == Qt::Key_Left ||
+	   event->key() == Qt::Key_Right)
+	   emit stopUpdating();
 }
 
 void KsChartView::setPointer(size_t bin)
@@ -701,3 +728,6 @@ void KsChartView::setPointer(size_t bin)
 	_pointer->setPen(pen);
 	this->scene()->addItem(_pointer);
 }
+
+
+

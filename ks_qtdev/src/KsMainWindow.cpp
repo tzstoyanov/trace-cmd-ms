@@ -1,4 +1,6 @@
 /*
+ * Copyright (C) 2017 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
+ *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -16,7 +18,10 @@
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
+// C
 #include <sys/stat.h>
+
+// C++
 #include <iostream>
 #include <thread>
 
@@ -26,7 +31,7 @@
 #include <QMenuBar>
 #include <QLabel>
 
-// KS
+// Kernel Shark 2
 #include "KsMainWindow.h"
 #include "KsDeff.h"
 
@@ -58,24 +63,16 @@ KsMainWindow::KsMainWindow(QWidget *parent)
 
 	QSplitter *splitter = new QSplitter(Qt::Vertical);
 	splitter->addWidget(&_graph);
-	//splitter->setHandleWidth(1);
 	splitter->addWidget(&_view);
-
 	setCentralWidget(splitter);
 }
 
-KsMainWindow::~KsMainWindow()
-{
-	_data.clear();
-}
+KsMainWindow::~KsMainWindow() {}
 
 void KsMainWindow::resizeEvent(QResizeEvent* event)
 {
    QMainWindow::resizeEvent(event);
-   _graph.resize(	this->width()/* -
-					centralWidget()->contentsMargins().left() -
-					centralWidget()->contentsMargins().right()*/,
-					_graph.height());
+   _graph.resize(this->width(), _graph.height());
 }
 
 void KsMainWindow::createActions()
@@ -111,18 +108,13 @@ void KsMainWindow::createActions()
 	_quitAction.setIcon(QIcon(iconsPath + "quit.png"));
 	_quitAction.setShortcut(tr("Ctrl+Q"));
 	_quitAction.setStatusTip(tr("Exit KernelShark"));
+
 	connect(&_quitAction, SIGNAL(triggered()), this, SLOT(close()));
-
 	connect(&_eventSelectAction, SIGNAL(triggered()), this, SLOT(eventSelect()));
-
 	connect(&_cpuSelectAction, SIGNAL(triggered()), this, SLOT(cpuSelect()));
-
 	connect(&_taskSelectAction, SIGNAL(triggered()), this, SLOT(taskSelect()));
-
 	connect(&_aboutAction, SIGNAL(triggered()), this, SLOT(aboutInfo()));
-
 	connect(&_view, SIGNAL(select(size_t)), &_graph, SLOT(markEntry(size_t)));
-
 	connect(&_graph, SIGNAL(select(int, bool)), &_view, SLOT(showRow(int, bool)));
 }
 
@@ -151,24 +143,23 @@ void KsMainWindow::createMenus()
 
 void KsMainWindow::open()
 {
-	QString selfilter = tr("dat");
 	QString fileName =
-	QFileDialog::getOpenFileName(	this,
-									tr("Open File"),
-									KS_DIR,
-									tr("trace-cmd files (*.dat);;All files (*)"));
+	QFileDialog::getOpenFileName(this, 
+				     tr("Open File"),
+				     KS_DIR,
+				     tr("trace-cmd files (*.dat);;All files (*)"));
 	if (!fileName.isEmpty())
 		loadFile(fileName);
 }
 
 void KsMainWindow::importFilter()
 {
-	
+	// TODO
 }
 
 void KsMainWindow::reload()
 {
-	cerr << "RELOAD\n";
+	//TODO
 }
 
 void KsMainWindow::eventSelect()
@@ -177,7 +168,9 @@ void KsMainWindow::eventSelect()
 }
 
 void KsMainWindow::cpuSelect() {
-    /*KsCheckBoxDialog *_cpus_cb =*/ new KSCpuCheckBoxDialog(_data._pevt, this);
+    KsCheckBoxDialog *cpus_cbd = new KSCpuCheckBoxDialog(_data._pevt, this);
+    connect(cpus_cbd, SIGNAL(apply(QVector<Qt::CheckState>)),
+	    &_graph, SLOT(cpuReDraw(QVector<Qt::CheckState>)));
 }
 
 void KsMainWindow::taskSelect() {
@@ -226,11 +219,9 @@ void KsMainWindow::loadFile(const QString& fileName) {
 	}
 
 	_view.loadData(&_data);
-	//auto job = [&] {_view.loadData(&_data);};
-	//std::thread t1(job);
-	
+	//auto viewJob = [&] {_view.loadData(&_data);};
+	//std::thread t1(viewJob);
 	_graph.loadData(&_data);
-
 	//t1.join();
 }
 

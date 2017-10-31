@@ -1,4 +1,6 @@
 /*
+ * Copyright (C) 2017 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
+ *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,11 +21,13 @@
 #ifndef KS_MODEL_H
 #define KS_MODEL_H 1
 
+// C++
 #include <vector>
 
 // Qt
 #include <QAbstractTableModel>
 
+// trace-cmd
 #include "trace-cmd.h"
 
 typedef bool (*condition_func)(QString, QString);
@@ -60,21 +64,18 @@ public:
 	QVariant getValue(const QModelIndex &index) const;
 	QVariant getValue(int column, int row) const;
 
-	size_t search(	int				 column,
-					const QString	&searchText,
-					condition_func	 cond,
-					QList<size_t>	*matchList);
+	size_t search(int column,
+		      const QString	&searchText,
+		      condition_func	 cond,
+		      QList<size_t>	*matchList);
 };
 
 class KsTimeMap {
-
 	pevent_record  **_data;
-	size_t 			 _dataSize;
-	
+	size_t 		 _dataSize;
 	std::vector<int64_t> _map;
+	std::vector<size_t> _binCount;
 
-	bool endOfDataDo(size_t row, size_t lastBin);
-	void binUpdate(size_t row, size_t thisBin, size_t *lastBin);
 	void resetBins(size_t first, size_t last);
 	size_t setLowEdge();
 	void setNextBinEdge(size_t prevBin);
@@ -82,7 +83,6 @@ class KsTimeMap {
 	void setBinCounts();
 
 public:
-	std::vector<size_t> _binCount;
 	KsTimeMap();
 	KsTimeMap(size_t n, uint64_t min, uint64_t max);
 	virtual ~KsTimeMap();
@@ -124,7 +124,7 @@ public:
 class KsGraphModel : public QAbstractTableModel
 {
 	struct pevent	*_pevt;
-	int 			_cpus;
+	int 		 _cpus;
 
 public:
 

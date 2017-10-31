@@ -1,4 +1,6 @@
 /*
+ * Copyright (C) 2017 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
+ *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -27,15 +29,14 @@
 #include <QMainWindow>
 #include <QAction>
 
-// Kernelshark
+// Kernel Shark 2
 #include "KsTraceViewer.h"
 #include "KsTraceGraph.h"
 #include "KsUtils.h"
 
-class KsMainWindow : public QMainWindow {
-
+class KsMainWindow : public QMainWindow
+{
 	Q_OBJECT
-
 public:
 	KsMainWindow(QWidget *parent = 0);
 	virtual ~KsMainWindow();
@@ -46,20 +47,17 @@ private slots:
 	void open();
 	void importFilter();
 	void reload();
-
 // 	bool save();
 // 	bool saveAs();
-
 	void eventSelect();
 	void cpuSelect();
 	void taskSelect();
 	void aboutInfo();
 
 private:
-
 	void resizeEvent(QResizeEvent* event);
 
-	KsDataStore		_data;
+	KsDataStore	_data;
 	KsTraceViewer	_view;
 	KsTraceGraph	_graph;
 	
@@ -81,7 +79,6 @@ private:
 
 	QAction _taskSelectAction;
 	KsCheckBoxDialog *_tasks_cb;
-
 
 	// Help menu
 	QAction _aboutAction;

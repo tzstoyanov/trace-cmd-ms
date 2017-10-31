@@ -1,4 +1,6 @@
 /*
+ * Copyright (C) 2017 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
+ *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -15,10 +17,13 @@
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
+
 #include <iostream>
 
+// Qt
 #include <QDebug> 
 
+// Kernel Shark 2
 #include "KsModel.h"
 #include "KsUtils.h"
 #include "ks-view.h"
@@ -121,9 +126,9 @@ QVariant KsViewModel::getValue(int column, int row) const
 	}
 }
 
-QVariant KsViewModel::headerData(	int section,
-									Qt::Orientation orientation,
-									int role) const
+QVariant KsViewModel::headerData(int section,
+				 Qt::Orientation orientation,
+				 int role) const
 {
 	if (orientation != Qt::Horizontal || role != Qt::DisplayRole)
 		return {};
@@ -150,10 +155,10 @@ void KsViewModel::reset()
 	endResetModel();
 }
 
-size_t KsViewModel::search(	int				 column,
-							const QString	&searchText,
-							condition_func	 cond,
-							QList<size_t>	*matchList)
+size_t KsViewModel::search(int column,
+			   const QString  &searchText,
+			   condition_func  cond,
+			   QList<size_t>  *matchList)
 {
 	int nRows = this->rowCount({});
 	for (int r = 0; r < nRows; ++r) {
@@ -227,9 +232,9 @@ void KsGraphModel::fill(pevent *pevt, pevent_record **entries, size_t n, bool de
 	beginResetModel();
 	
 	if (defaultMap)
-		_visMap.setBining(	KS_GRAPH_N_BINS,
-							entries[0]->ts,
-							entries[n-1]->ts);
+		_visMap.setBining(KS_GRAPH_N_BINS,
+				  entries[0]->ts,
+				  entries[n-1]->ts);
 
 	_visMap.fill(entries, n);
 
@@ -336,28 +341,6 @@ void KsTimeMap::setBining(size_t n, uint64_t min, uint64_t max)
 	resetBins(0, _nBins + 1);
 }
 
-bool KsTimeMap::endOfDataDo(size_t row, size_t lastBin)
-{
-	if (row == _dataSize) {
-		_binCount[_nBins] = 0;
-		_binCount[lastBin] = _dataSize - _map[lastBin];
-		return true;
-	}
-
-	return false;	
-}
-
-void KsTimeMap::binUpdate(size_t row, size_t thisBin, size_t *lastBin)
-{
-	if (*lastBin != thisBin) {
-		_map[thisBin] = row;
-		if (_map[*lastBin] >= 0)
-			_binCount[*lastBin] = row - _map[*lastBin];
-
-		*lastBin = thisBin;
-	}
-}
-
 void KsTimeMap::resetBins(size_t first, size_t last)
 {
 	for (size_t r = first; r <= last; ++r) {
@@ -368,8 +351,6 @@ void KsTimeMap::resetBins(size_t first, size_t last)
 
 size_t KsTimeMap::setLowEdge()
 {
-	//size_t r = 0;
-	//while (_data[r]->ts < _min) {++r;}
 	size_t row = ks_find_row(_min, _data, 0, _dataSize - 1);
 
 	if (row != 0) {
@@ -459,25 +440,6 @@ void KsTimeMap::fill(struct pevent_record **data, size_t n)
 
 	setHighEdge();
 	setBinCounts();
-
-	//size_t r = setLowEdge();
-	//size_t bin, lastBin(0), time;
-
-	//while (1) {
-		//time = _data[r]->ts;
-		//bin = (time - _min) / _binSize;
-
-		//if (time > _max || bin >= _nBins) {
-			//_binCount[lastBin] = r - _map[lastBin];
-			//_map[_nBins] = r;
-			//_binCount[_nBins] = _dataSize - r;
-			//break;
-		//}
-
-		//binUpdate(r, bin, &lastBin);
-		//if (endOfDataDo(++r, lastBin))
-			//break;
-	//}
 }
 
 void KsTimeMap::shiftForward(size_t n)
@@ -516,24 +478,6 @@ void KsTimeMap::shiftForward(size_t n)
 
 	setHighEdge();
 	setBinCounts();
-	
-	//size_t lastBin = bin;
-	//size_t r = _map[bin] + 1, time;
-	//while (1) {
-		//time = _data[r]->ts;
-		//bin = (time - _min) / _binSize;
-
-		//if (time > _max || bin > _nBins) {
-			//_binCount[lastBin] = r - _map[lastBin];
-			//_map[_nBins] = r;
-			//_binCount[_nBins] = _dataSize - r;
-			//break;
-		//}
-
-		//binUpdate(r, bin, &lastBin); 
-		//if (endOfDataDo(++r, lastBin))
-			//break;
-	//}
 }
 
 void KsTimeMap::shiftBackward(size_t n)
@@ -577,21 +521,6 @@ void KsTimeMap::shiftBackward(size_t n)
 
 	setHighEdge();
 	setBinCounts();
-
-	//size_t r = setLowEdge();
-	//size_t lastBin = 0, time;
-	//while (1) {
-		//time = _data[r]->ts;
-		//bin = (time - _min) / _binSize;
-
-		//if (bin >= n) {
-			//_binCount[lastBin] = r - _map[lastBin];
-			//break;
-		//}
-
-		//binUpdate(r, bin, &lastBin);
-		//++r;
-	//}
 }
 
 void KsTimeMap::zoomOut(double r)
