@@ -5,11 +5,11 @@
 #include <assert.h>
 #include <sys/time.h>    
 
-#include "ks-view.h"
+#include "libkshark.h"
 
-void ks_set_entry_values(struct pevent *pevent,
-			 struct pevent_record *record,
-			 struct ks_entry *entry)
+void kshark_set_entry_values(struct pevent *pevent,
+			     struct pevent_record *record,
+			     struct kshark_entry *entry)
 {
 	// Position
 	entry->pos = -1;
@@ -55,7 +55,7 @@ void ks_set_entry_values(struct pevent *pevent,
 	trace_seq_destroy(&s);
 }
 
-char* ks_dump_entry(struct ks_entry *entry, int *size)
+char* kshark_dump_entry(struct kshark_entry *entry, int *size)
 {
 	char* entry_str;
 	*size = asprintf(&entry_str, "%s-%i;  CPU %i;  %s;  %s;  %s;", 
@@ -71,15 +71,15 @@ char* ks_dump_entry(struct ks_entry *entry, int *size)
 	return NULL;
 }
 
-struct ks_entry* ks_get_entry(struct pevent *pevent,
-			      struct pevent_record *record)
+struct kshark_entry* kshark_get_entry(struct pevent *pevent,
+				      struct pevent_record *record)
 {
-	struct ks_entry *e = malloc(sizeof(struct ks_entry));
-	ks_set_entry_values(pevent, record, e);
+	struct kshark_entry *e = malloc(sizeof(struct kshark_entry));
+	kshark_set_entry_values(pevent, record, e);
 	return e;
 }
 
-void ks_clear_entry(struct ks_entry *entry)
+void kshark_clear_entry(struct kshark_entry *entry)
 {
 	free(entry->task);
 	free(entry->latency);
@@ -87,19 +87,19 @@ void ks_clear_entry(struct ks_entry *entry)
 	free(entry->info);
 }
 
-void ks_free_entry(struct ks_entry *entry)
+void kshark_free_entry(struct kshark_entry *entry)
 {
-	ks_clear_entry(entry);
+	kshark_clear_entry(entry);
 	free(entry);
 	entry = NULL;
 }
 
-size_t ks_load_data_old(struct tracecmd_input *handle, struct ks_entry ***data_rows)
+size_t kshark_load_data_old(struct tracecmd_input *handle, struct kshark_entry ***data_rows)
 {
 	int cpus = tracecmd_cpus(handle), cpu;
 	size_t count, total=0;
-	struct ks_entry **cpu_list = calloc(cpus, sizeof(struct ks_entry *));
-	struct ks_entry *rec, **next;
+	struct kshark_entry **cpu_list = calloc(cpus, sizeof(struct kshark_entry *));
+	struct kshark_entry *rec, **next;
 
 	struct pevent_record	*data;
 	struct pevent			*pevt;
@@ -111,11 +111,11 @@ size_t ks_load_data_old(struct tracecmd_input *handle, struct ks_entry ***data_r
 
 		data = tracecmd_read_cpu_first(handle, cpu);
 		while (data) {
-			*next = rec = malloc( sizeof(struct ks_entry) );
+			*next = rec = malloc( sizeof(struct kshark_entry) );
 			assert(rec != NULL);
 
 			pevt = tracecmd_get_pevent(handle);
-			ks_set_entry_values(pevt, data, rec);
+			kshark_set_entry_values(pevt, data, rec);
 // 			rec.cpu_pos = count;
 		
 			rec->next = NULL;
@@ -128,8 +128,8 @@ size_t ks_load_data_old(struct tracecmd_input *handle, struct ks_entry ***data_r
 		total += count;
 	}
 
-	struct ks_entry **rows;
-	rows = calloc (total, sizeof(struct ks_entry *));
+	struct kshark_entry **rows;
+	rows = calloc (total, sizeof(struct kshark_entry *));
 
 	count = 0;
 	int next_cpu;
@@ -161,7 +161,7 @@ size_t ks_load_data_old(struct tracecmd_input *handle, struct ks_entry ***data_r
 }
 
 
-size_t ks_load_data(struct tracecmd_input *handle, struct pevent_record ***data_rows)
+size_t kshark_load_data(struct tracecmd_input *handle, struct pevent_record ***data_rows)
 {
 	struct timeval t1, t2, t3;
 	double elapsedTime;
@@ -191,7 +191,7 @@ size_t ks_load_data(struct tracecmd_input *handle, struct pevent_record ***data_
 			*temp_next = temp_rec = malloc( sizeof(*temp_rec) );
 			assert(temp_rec != NULL);
 
-// 			ks_set_entry_values(pevt, data, rec);
+// 			kshark_set_entry_values(pevt, data, rec);
 // 			rec.cpu_pos = count;
 
 			temp_rec->rec = data;
@@ -263,9 +263,9 @@ size_t ks_load_data(struct tracecmd_input *handle, struct pevent_record ***data_
 	return total;
 }
 
-uint32_t ks_find_row(uint64_t time,
-		     struct pevent_record **data_rows,
-		     uint32_t l, uint32_t h)
+uint32_t kshark_find_row(uint64_t time,
+			 struct pevent_record **data_rows,
+			 uint32_t l, uint32_t h)
 {
 	if (data_rows[l]->ts >= time)
 		return l;

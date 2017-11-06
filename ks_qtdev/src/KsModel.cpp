@@ -2,39 +2,37 @@
  * Copyright (C) 2017 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation;
- * version 2.1 of the License (not later!)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License (not later!)
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not,  see <http://www.gnu.org/licenses>
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not,  see <http://www.gnu.org/licenses>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
-#include <iostream>
-
-// Qt
-#include <QDebug> 
-
 // Kernel Shark 2
 #include "KsModel.h"
 #include "KsUtils.h"
-#include "ks-view.h"
+#include "libkshark.h"
 
 struct trace_seq KsViewModel::_seq;
 
 KsViewModel::KsViewModel(QObject *parent)
 : QAbstractTableModel(parent),
+//: QStandardItemModel(parent),
   _header({"#", "CPU", "Time Stamp", "Task", "PID", "Latency", "Event", "Info"}),
-  _pevt(nullptr) /*,
-  _page(0) */
+  _pevt(nullptr),
+  //_page(0),
+  _markA(-1),
+  _markB(-1)
 {
 	trace_seq_init(&_seq);
 }
@@ -47,11 +45,26 @@ KsViewModel::~KsViewModel()
 
 QVariant KsViewModel::data(const QModelIndex &index, int role) const
 {
-	if (role != Qt::DisplayRole)
-		return {};
+	if (role == Qt::ForegroundRole) {
+		if (index.row() == _markA)
+			return QVariant::fromValue(QColor(Qt::white));
 
-	QVariant val = this->getValue(index.column(), index.row());
-	return val;
+		if (index.row() == _markB)
+			return QVariant::fromValue(QColor(Qt::white));
+	}
+
+	if (role == Qt::BackgroundRole) {
+		if (index.row() == _markA)
+			return QVariant::fromValue(QColor(Qt::darkGreen));
+
+		if (index.row() == _markB)
+			return QVariant::fromValue(QColor(Qt::darkCyan));
+	}
+		
+	if (role == Qt::DisplayRole)
+		return this->getValue(index.column(), index.row());
+
+	return {};
 }
 
 int KsViewModel::rowCount(const QModelIndex &) const {
@@ -148,6 +161,19 @@ void KsViewModel::fill(pevent *pevt, pevent_record **entries, size_t n)
 	endInsertRows();
 }
 
+void KsViewModel::selectRow(DualMarkerState state, int row)
+{
+	beginResetModel();
+	if (state == DualMarkerState::A) {
+		_markA = row;
+		_markB = -1;
+	} else {
+		_markB = row;
+		_markA = -1;
+	}
+	endResetModel();
+}
+
 void KsViewModel::reset()
 {
 	beginResetModel();
@@ -183,7 +209,6 @@ KsGraphModel::KsGraphModel(QObject *parent)
 KsGraphModel::KsGraphModel(int cpus, QObject *parent)
 : QAbstractTableModel(parent), _pevt(nullptr), _cpus(cpus) {}
 
-
 KsGraphModel::~KsGraphModel() {}
 
 QVariant KsGraphModel::getValue(int column, int row) const
@@ -195,7 +220,7 @@ QVariant KsGraphModel::getValue(int column, int row) const
 		}
 		case 1 :
 		{
-			int pid = 1;//pevent_data_pid(_pevt, _visMap._data[ _visMap[row] ]);
+			int pid = 1;//pevent_data_pid(_pevt, _histo._data[ _histo[row] ]);
 			return pevent_data_comm_from_pid(_pevt, pid);
 		}
 
@@ -204,7 +229,7 @@ QVariant KsGraphModel::getValue(int column, int row) const
 	}
 
 	double val = 0.;
-	if (_visMap.isEmpty(row, column - 2))
+	if (_histo.isEmpty(row, column - 2))
 		val += .9;
 
 	return val;
@@ -232,11 +257,11 @@ void KsGraphModel::fill(pevent *pevt, pevent_record **entries, size_t n, bool de
 	beginResetModel();
 	
 	if (defaultMap)
-		_visMap.setBining(KS_GRAPH_N_BINS,
+		_histo.setBining(KS_GRAPH_N_BINS,
 				  entries[0]->ts,
 				  entries[n-1]->ts);
 
-	_visMap.fill(entries, n);
+	_histo.fill(entries, n);
 
 	endResetModel();
 }
@@ -244,42 +269,42 @@ void KsGraphModel::fill(pevent *pevt, pevent_record **entries, size_t n, bool de
 void KsGraphModel::shiftForward(size_t n)
 {
 	beginResetModel();
-	_visMap.shiftForward(n);
+	_histo.shiftForward(n);
 	endResetModel();
 }
 
 void KsGraphModel::shiftBackward(size_t n)
 {
 	beginResetModel();
-	_visMap.shiftBackward(n);
+	_histo.shiftBackward(n);
 	endResetModel();
 }
 
 void KsGraphModel::shiftTo(size_t ts)
 {
 	beginResetModel();
-	_visMap.shiftTo(ts);
+	_histo.shiftTo(ts);
 	endResetModel();
 }
 
 void KsGraphModel::zoomOut(double r)
 {
 	beginResetModel();
-	_visMap.zoomOut(r);
+	_histo.zoomOut(r);
 	endResetModel();
 }
 
 void KsGraphModel::zoomIn(double r, size_t mark)
 {
 	beginResetModel();
-	_visMap.zoomIn(r, mark);
+	_histo.zoomIn(r, mark);
 	endResetModel();
 }
 
 void KsGraphModel::reset()
 {
 	beginResetModel();
-	_visMap.setBining(1,0,1);
+	_histo.setBining(1,0,1);
 	endResetModel();
 }
 
@@ -349,9 +374,9 @@ void KsTimeMap::resetBins(size_t first, size_t last)
 	}
 }
 
-size_t KsTimeMap::setLowEdge()
+size_t KsTimeMap::setLowerEdge()
 {
-	size_t row = ks_find_row(_min, _data, 0, _dataSize - 1);
+	size_t row = kshark_find_row(_min, _data, 0, _dataSize - 1);
 
 	if (row != 0) {
 		_map[_nBins + 1] = 0;
@@ -368,9 +393,9 @@ size_t KsTimeMap::setLowEdge()
 	return row;
 }
 
-size_t KsTimeMap::setHighEdge()
+size_t KsTimeMap::setUpperhEdge()
 {
-	size_t row = ks_find_row(_max, _data, 0, _dataSize - 1);
+	size_t row = kshark_find_row(_max, _data, 0, _dataSize - 1);
 
 	if (row < _dataSize - 1) {
 		_map[_nBins] = row;
@@ -388,7 +413,7 @@ void KsTimeMap::setNextBinEdge(size_t prevBin)
 	size_t bin = prevBin + 1;
 	size_t time = _min + bin*_binSize;
 
-	size_t row = ks_find_row(time, _data, 0, _dataSize - 1);
+	size_t row = kshark_find_row(time, _data, 0, _dataSize - 1);
 
 	if (_data[row]->ts  >= time + _binSize) {
 		_map[bin] = -1;
@@ -431,20 +456,20 @@ void KsTimeMap::fill(struct pevent_record **data, size_t n)
 	if (_nBins == 0 || _binSize == 0)
 		return;
 
-	setLowEdge();
+	setLowerEdge();
 	size_t bin = 0;
 	while (bin < _nBins) {
 		setNextBinEdge(bin);
 		++bin;
 	}
 
-	setHighEdge();
+	setUpperhEdge();
 	setBinCounts();
 }
 
 void KsTimeMap::shiftForward(size_t n)
 {
-	if (binCount(-1) == 0)
+	if (binCount(OverflowBin::Upper) == 0)
 		return;
 
 	_min += n*_binSize;
@@ -476,13 +501,13 @@ void KsTimeMap::shiftForward(size_t n)
 		++bin;
 	}
 
-	setHighEdge();
+	setUpperhEdge();
 	setBinCounts();
 }
 
 void KsTimeMap::shiftBackward(size_t n)
 {
-	if (binCount(LowerOverflowBin) == 0)
+	if (binCount(OverflowBin::Lower) == 0)
 		return;
 
 	_min -= n*_binSize;
@@ -511,7 +536,7 @@ void KsTimeMap::shiftBackward(size_t n)
 
 	resetBins(0, bin);
 	resetBins(_nBins, _nBins + 1);
-	setLowEdge();
+	setLowerEdge();
 
 	bin = 0;
 	while (bin < n) {
@@ -519,7 +544,7 @@ void KsTimeMap::shiftBackward(size_t n)
 		++bin;
 	}
 
-	setHighEdge();
+	setUpperhEdge();
 	setBinCounts();
 }
 
@@ -562,17 +587,17 @@ void KsTimeMap::zoomIn(double r, size_t mark)
 
 void KsTimeMap::dump()
 {
-	std::cerr << "\n\n of < " << at(-2) << "  " << binCount(-2) << std::endl;
+	//std::cerr << "\n\n of < " << at(-2) << "  " << binCount(-2) << std::endl;
 
-	for (size_t i=0; i<50; ++i)
-		std::cerr << i << " " << at(i) << "  " << binCount(i) << std::endl;
+	//for (size_t i=0; i<50; ++i)
+		//std::cerr << i << " " << at(i) << "  " << binCount(i) << std::endl;
 
-	std::cerr << "....\n";
+	//std::cerr << "....\n";
 
-	for (size_t i=_nBins-5; i<_nBins; ++i)
-		std::cerr << i << " " << at(i) << "  " << binCount(i) << std::endl;
+	//for (size_t i=_nBins-5; i<_nBins; ++i)
+		//std::cerr << i << " " << at(i) << "  " << binCount(i) << std::endl;
 
-	std::cerr << " of > " << at(-1) << "  " << binCount(-1) << std::endl;
+	//std::cerr << " of > " << at(-1) << "  " << binCount(-1) << std::endl;
 }
 
 void KsTimeMap::shiftTo(size_t ts)
@@ -606,10 +631,10 @@ size_t KsTimeMap::binCount(int bin) const
 	if (bin >= 0 && bin < (int)_nBins)
 		return _binCount[bin];
 
-	if (bin == -1)
+	if (bin == OverflowBin::Upper)
 		return _binCount[_nBins];
 
-	if (bin == -2)
+	if (bin == OverflowBin::Lower)
 		return _binCount[_nBins + 1];
 
 	return 0;

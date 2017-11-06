@@ -2,24 +2,24 @@
  * Copyright (C) 2017 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation;
- * version 2.1 of the License (not later!)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License (not later!)
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not,  see <http://www.gnu.org/licenses>
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not,  see <http://www.gnu.org/licenses>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
-#ifndef KS_TRACEGRAPH_H
-#define KS_TRACEGRAPH_H 1
+#ifndef _KS_TRACEGRAPH_H
+#define _KS_TRACEGRAPH_H
 
 // Qt
 #include <QtWidgets>
@@ -39,6 +39,8 @@ class KsChartView : public QChartView
 public:
 	KsChartView(QWidget *parent = 0);
 	KsChartView(QChart *chart, QWidget *parent = 0);
+
+	int cpu() {return _cpuId;}
 
 signals:
 	void rangeBoundInit(int x, size_t);
@@ -65,16 +67,17 @@ protected:
 	void keyReleaseEvent(QKeyEvent *event);
 
 private:
+	QGraphicsLineItem *_pointer;
+
 	void init();
 	QPointF mapToValue(QMouseEvent *event);
 	bool find(QMouseEvent *event, size_t variance, size_t *row);
 	void findAndSelect(QMouseEvent *event);
 
-	int 	_posMarkA;
+	int _posMarkA;
 
 public:
 	int		   _cpuId;
-	QGraphicsLineItem *_pointer;
 	KsGraphModel	  *_model;
 };
 
@@ -86,6 +89,7 @@ public:
 	virtual ~KsTraceGraph();
 
 	void loadData(KsDataStore *data);
+	void setMarkerSM(KsDualMarkerSM *m);
 	void reset();
 
 private slots:
@@ -111,7 +115,6 @@ signals:
 
 private:
 	void resizeEvent(QResizeEvent* event);
-	void setMarkLabels(size_t mA, size_t  mB);
 
 	enum class GraphActions {
 		ZoomIn,
@@ -132,14 +135,9 @@ private:
 	QPushButton     _zoomInButton;
 	QPushButton     _zoomOutButton;
 	QPushButton     _scrollRightButton;
-	KsMarkerState   _mState;
-
 
 	QLabel	_labelP1, _labelP2, 				  // Pointer
-		_labelI1, _labelI2, _labelI3, _labelI4, _labelI5, // Process Info
-		_labelA1, _labelA2,				  // Marker A
-		_labelB1, _labelB2,				  // Marker B
-		_labelD1, _labelD2;				  // Delta
+		_labelI1, _labelI2, _labelI3, _labelI4, _labelI5; // Process Info
 
 	QScrollArea _scrollArea;
 	QWidget     _drawWindow;
@@ -148,9 +146,8 @@ private:
 	QVector<KsChartView*>	_chartView;
 	QVBoxLayout		_layout;
 
+	KsDualMarkerSM  *_mState;
 	KsDataStore 	*_data;
-	QChart 		*_axisChart;
-	QCategoryAxis 	*_axisX;
 	QVXYModelMapper *_mapper;
 
 	QRubberBand 	_rubberBand;
@@ -158,11 +155,9 @@ private:
 
 	size_t _posMarkA;
 	bool _keyPressed;
-
-	KsGraphMark _markA, _markB;
 };
 
-#endif // KS_TRACEGRAPH_H
+#endif // _KS_TRACEGRAPH_H
 
 
 

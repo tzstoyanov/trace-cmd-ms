@@ -2,28 +2,24 @@
  * Copyright (C) 2017 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation;
- * version 2.1 of the License (not later!)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License (not later!)
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not,  see <http://www.gnu.org/licenses>
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not,  see <http://www.gnu.org/licenses>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
 // C
 #include <sys/stat.h>
-
-// C++
-#include <iostream>
-#include <thread>
 
 // Qt
 #include <QMenu>
@@ -41,18 +37,19 @@ KsMainWindow::KsMainWindow(QWidget *parent)
 : QMainWindow(parent),
   _view(this),
   _graph(this),
+  _mState(this),
   _openAction(tr("&Open"), parent),
   _importFilterAction(tr("&Import Filter"), parent),
   _saveFilterAction(tr("&Save Filter"), parent),
-  _saveFilterAsAction(tr("&Save Filter As"),parent),
-  _exportFilterAction(tr("&Export Filter"),parent),
-  _quitAction(tr("&Quit"),parent),
-  _eventSelectAction(tr("&Events"),parent),
-  _cpuSelectAction(tr("&CPUs"),parent),
-  _taskSelectAction(tr("&Tasks"),parent),
-  _aboutAction(tr("About"),parent)
+  _saveFilterAsAction(tr("&Save Filter As"), parent),
+  _exportFilterAction(tr("&Export Filter"), parent),
+  _quitAction(tr("&Quit"), parent),
+  _eventSelectAction(tr("&Events"), parent),
+  _cpuSelectAction(tr("&CPUs"), parent),
+  _taskSelectAction(tr("&Tasks"), parent),
+  _aboutAction(tr("About"), parent)
 {
-	this->setWindowTitle("KernelShark");
+	this->setWindowTitle("Kernel Shark");
 
 	int height = SCREEN_HEIGHT*.8;
 	int width = SCREEN_WIDTH*.8;	
@@ -65,9 +62,12 @@ KsMainWindow::KsMainWindow(QWidget *parent)
 	splitter->addWidget(&_graph);
 	splitter->addWidget(&_view);
 	setCentralWidget(splitter);
-}
 
-KsMainWindow::~KsMainWindow() {}
+	_view.setMarkerSM(&_mState);
+	connect(&_mState, SIGNAL(markSwitch()), &_view, SLOT(markSwitch()));
+
+	_graph.setMarkerSM(&_mState);
+}
 
 void KsMainWindow::resizeEvent(QResizeEvent* event)
 {
@@ -110,6 +110,7 @@ void KsMainWindow::createActions()
 	_quitAction.setStatusTip(tr("Exit KernelShark"));
 
 	connect(&_quitAction, SIGNAL(triggered()), this, SLOT(close()));
+	//connect(QApplication::desktop(), SIGNAL(resized(int)), this, SLOT(reset(int));
 	connect(&_eventSelectAction, SIGNAL(triggered()), this, SLOT(eventSelect()));
 	connect(&_cpuSelectAction, SIGNAL(triggered()), this, SLOT(cpuSelect()));
 	connect(&_taskSelectAction, SIGNAL(triggered()), this, SLOT(taskSelect()));
@@ -164,7 +165,8 @@ void KsMainWindow::reload()
 
 void KsMainWindow::eventSelect()
 {
-	/*KSEventsCheckBoxDialog *_events_cb =*/ new KSEventsCheckBoxDialog(_data._pevt, this);
+	//KSEventsCheckBoxDialog *_events_cb =
+		new KSEventsCheckBoxDialog(_data._pevt, this);
 }
 
 void KsMainWindow::cpuSelect() {
@@ -174,7 +176,8 @@ void KsMainWindow::cpuSelect() {
 }
 
 void KsMainWindow::taskSelect() {
-    /*KSTasksCheckBoxDialog *_tasks_cb =*/ new KSTasksCheckBoxDialog(_data._pevt, this);
+    //KSTasksCheckBoxDialog *_tasks_cb =
+	new KSTasksCheckBoxDialog(_data._pevt, this);
 }
 
 void KsMainWindow::aboutInfo() {
@@ -189,7 +192,7 @@ void KsMainWindow::aboutInfo() {
 
 void KsMainWindow::loadFile(const QString& fileName) {
 	struct stat st;
-	cerr << "Loading " << fileName.toStdString() << endl;
+	qInfo() << "Loading " << fileName;
 	int ret = stat(fileName.toStdString().c_str(), &st);
 	if (ret != 0) {
 		_view.reset();
@@ -200,13 +203,12 @@ void KsMainWindow::loadFile(const QString& fileName) {
 		KsMessageDialog *message = new KsMessageDialog(text);
 		message->setWindowFlags(Qt::WindowStaysOnTopHint);
 		message->show();
-		cerr << "ERROR Opening file " << fileName.toStdString() << endl;
+		qCritical() << "ERROR Opening file " << fileName;
 		return;
 	}
 
 	_data.loadData(fileName);
-	if (!_data.size())
-	{
+	if (!_data.size()) {
 		_view.reset();
 		_graph.reset();
 		QString text("File \n");

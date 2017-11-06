@@ -18,8 +18,8 @@
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
-#ifndef KS_CHEKBOXDIALOG_H
-#define KS_CHEKBOXDIALOG_H 1
+#ifndef _KS_UTILS_H
+#define _KS_UTILS_H
 
 // C++
 #include <vector>
@@ -31,12 +31,12 @@
 #include "event-parse.h"
 
 // Kernel Shark 2
-#include "ks-view.h"
+#include "libkshark.h"
 
 #define SCREEN_HEIGHT  QApplication::desktop()->screenGeometry().height()
 #define SCREEN_WIDTH   QApplication::desktop()->screenGeometry().width()
 
-auto fontHeight = []()
+auto fontHeight = [] ()
 {
 	QFont font;
 	QFontMetrics fm(font);
@@ -54,13 +54,10 @@ auto stringWidth = [](QString s)
 #define FONT_WIDTH  stringWidth("4")
 #define STRING_WIDTH(s)  stringWidth(s)
 
+typedef std::chrono::high_resolution_clock::time_point  hd_time;
 #define GET_TIME std::chrono::high_resolution_clock::now()
-
 #define GET_DURATION(t0) std::chrono::duration_cast<std::chrono::duration<double>>( \
 std::chrono::high_resolution_clock::now()-t0).count()
-
-typedef std::chrono::high_resolution_clock::time_point  hd_time;
-
 
 class KsMessageDialog : public QDialog
 {
@@ -70,18 +67,16 @@ public:
 	KsMessageDialog(QString message, QWidget *parent=0);
 
 private:
-	QVBoxLayout 	_layout;
-	QLabel 		_text;
-	QPushButton 	_close_button;
+	QVBoxLayout _layout;
+	QLabel 	    _text;
+	QPushButton _close_button;
 };
 
-class KsCheckBoxDialog : public QDialog {
-
+class KsCheckBoxDialog : public QDialog
+{
 	Q_OBJECT
-
 public:
 	KsCheckBoxDialog(const QString &n="", QWidget *parent = 0);
-	virtual ~KsCheckBoxDialog();
 
 private slots:
 	void applyPress();
@@ -91,8 +86,8 @@ signals:
 	void apply(QVector<Qt::CheckState>);
 
 protected:
-	QCheckBox _all_cb;
-	std::vector<QCheckBox*> _cb;
+	QCheckBox 	    _all_cb;
+	QVector<QCheckBox*> _cb;
 
 	QVBoxLayout 	*_cb_layout;
 	QWidget     	*_cb_widget;
@@ -102,29 +97,32 @@ protected:
 
 private:
 	QString 	_name;
-
 	QPushButton 	_cansel_button;
 	QPushButton 	_apply_button;
 };
 
-struct KSCpuCheckBoxDialog : public KsCheckBoxDialog {
+struct KSCpuCheckBoxDialog : public KsCheckBoxDialog
+{
 	KSCpuCheckBoxDialog(struct pevent *pe, QWidget *parent = 0);
 };
 
-struct KSTasksCheckBoxDialog : public KsCheckBoxDialog {
+struct KSTasksCheckBoxDialog : public KsCheckBoxDialog
+{
 	KSTasksCheckBoxDialog(struct pevent *pe, QWidget *parent = 0);
 };
 
-struct KSEventsCheckBoxDialog : public KsCheckBoxDialog {
+struct KSEventsCheckBoxDialog : public KsCheckBoxDialog
+{
 	KSEventsCheckBoxDialog(struct pevent *pe, QWidget *parent = 0);
 };
 
 class KsDataStore
 {
-public:
-	KsDataStore()
-	: _rows(nullptr), _pevt(nullptr),_handle(nullptr), _data_size(0) {}
+	struct tracecmd_input *_handle;
+	size_t _data_size;
 
+public:
+	KsDataStore();
 	~KsDataStore();
 
 	void loadData(struct tracecmd_input *handle);
@@ -134,67 +132,89 @@ public:
 
 	struct pevent_record **_rows;
 	pevent		      *_pevt;
-
-private:
-	struct tracecmd_input *_handle;
-	size_t _data_size;
 };
 
 class KsTimeMap;
 class KsChartView;
 
-class KsGraphMark
-{
-	int		   _bin;
-	size_t		   _pos;
-	QGraphicsLineItem *_mark;
-	QColor 		   _color;
-	KsChartView 	  *_graph;
-
-public:
-
-	KsGraphMark()
-	: _bin(-1), _pos(0), _mark(nullptr), _color(Qt::darkGreen), _graph(nullptr) {}
-
-	KsGraphMark(QColor col)
-	: _bin(-1), _pos(0), _mark(nullptr), _color(col), _graph(nullptr) {}
-
-	bool set(KsDataStore *data, KsTimeMap *map, size_t pos);
-	bool reset(KsDataStore *data, KsTimeMap *map);
-	bool isSet();
-
-	int bin() const {return _bin;}
-
-	void draw(KsChartView *graph);
-	void draw();
-	void remove();
+enum class DualMarkerState {
+	A,
+	B
 };
 
-class KsMarkerState : public QWidget
+class KsGraphMark : public QObject
 {
 	Q_OBJECT
 public:
-	KsMarkerState(QWidget *parent = 0);
+	KsGraphMark() = delete;
+	KsGraphMark(DualMarkerState s);
+	KsGraphMark(DualMarkerState s, QColor col);
 
-	enum {
-		STATE_A,
-		STATE_B
-	};
+	const DualMarkerState _state;
 
-	int getState() const {return _markState;}
+	bool set(const KsDataStore &data, const KsTimeMap &histo, size_t pos);
+	bool reset(const KsDataStore &data, const KsTimeMap &histo);
+	bool isSet();
 
-	QPushButton _buttonA;
-	QPushButton _buttonB;
+	int bin() const {return _bin;}
+	int row() const {return _pos;}
+	void draw(KsChartView *graph);
+	void draw();
+	void remove();
+
+signals:
+	void update(KsTimeMap *histo);
+
+private:
+	int		   _bin;
+	size_t		   _pos;
+	QColor 		   _color;
+	QGraphicsLineItem *_mark;
+	KsChartView 	  *_graph;
+	
+};
+
+DualMarkerState operator !(const DualMarkerState &state);
+
+class KsDualMarkerSM : public QWidget
+{
+	Q_OBJECT
+public:
+	KsDualMarkerSM(QWidget *parent = 0);
+	
+	void placeInToolBar(QToolBar *tb);
+
+	DualMarkerState getState() const {return _markState;}
+
+	KsGraphMark &getMarker(DualMarkerState s);
+	KsGraphMark &activeMarker();
+	KsGraphMark &markerA();
+	KsGraphMark &markerB();
+
+	QState *stateAPtr() {return _stateA;}
+	QState *stateBPtr() {return _stateB;}
+
+	void updateMarkers(const KsDataStore &data, const KsTimeMap &histo);
+	void updateLabels(const KsTimeMap &histo);
+
+signals:
+	void markSwitch();
 
 private slots:
 	void setStateA();
 	void setStateB();
 
 private:
-	QState *_stateA;
-	QState *_stateB;
-	QStateMachine _machine;
-	int _markState;
+	QPushButton 	 _buttonA;
+	QPushButton 	 _buttonB;
+	QLabel 	    	 _labelMA, _labelMB, _labelDelta;
+	QLabel 	    	 _labelDeltaDescr;
+	QState		*_stateA;
+	QState 		*_stateB;
+	QStateMachine 	 _machine;
+
+	DualMarkerState	 _markState;
+	KsGraphMark 	 _markA, _markB;
 };
 
 

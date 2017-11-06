@@ -18,9 +18,6 @@
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
-// C++
-#include <iostream>
-
 //Qt
 #include <QFrame>
 
@@ -34,7 +31,7 @@ KsMessageDialog::KsMessageDialog(QString message, QWidget *parent)
   _text(message, this),
   _close_button("Close", this)
 {
-	this->resize(200, 50);
+	this->resize(SCREEN_WIDTH/10, SCREEN_HEIGHT/5);
 	_layout.addWidget(&_text);
 	_layout.addWidget(&_close_button);
 	connect(&_close_button,  SIGNAL(pressed()), this, SLOT(close()));
@@ -82,8 +79,6 @@ KsCheckBoxDialog::KsCheckBoxDialog(const QString &n, QWidget *parent)
 	this->show();
 }
 
-KsCheckBoxDialog::~KsCheckBoxDialog() {}
-
 void KsCheckBoxDialog::applyPress()
 {
 	QVector<Qt::CheckState> vec;
@@ -113,19 +108,19 @@ KSCpuCheckBoxDialog::KSCpuCheckBoxDialog(struct pevent *pe, QWidget *parent)
 {
 	int i=0;
 	_cb.resize(pe->cpus);
+
 	for (auto &c: _cb) {
 		c = new QCheckBox(QString("CPU %1").arg(i++), this);
 		c->setCheckState(Qt::Checked);
 		_cb_layout->addWidget(c);
 	}
+
 	_cb_widget->resize(this->width(), _cb[0]->height()*_cb.size()*1.8);
 }
 
 KSTasksCheckBoxDialog::KSTasksCheckBoxDialog(struct pevent *pe, QWidget *parent)
 : KsCheckBoxDialog("Tasks", parent)
-{
-
-}
+{}
 
 KSEventsCheckBoxDialog::KSEventsCheckBoxDialog(struct pevent *pe, QWidget *parent)
 : KsCheckBoxDialog("Events", parent)
@@ -148,13 +143,16 @@ KSEventsCheckBoxDialog::KSEventsCheckBoxDialog(struct pevent *pe, QWidget *paren
 	_cb_widget->resize(this->width(), _cb[0]->height()*_cb.size()*2);
 }
 
+KsDataStore::KsDataStore()
+: _handle(nullptr), _data_size(0), _rows(nullptr), _pevt(nullptr)
+{}
 
 KsDataStore::~KsDataStore()
 {
 	clear();
 }
 
-void KsDataStore::loadData(const QString& file)
+void KsDataStore::loadData(const QString &file)
 {
 	hd_time t0 = GET_TIME;
 
@@ -162,7 +160,7 @@ void KsDataStore::loadData(const QString& file)
 	_handle = tracecmd_open( file.toStdString().c_str() );
 
 	if(!_handle) {
-		std::cerr << "ERROR Loading file " << file.toStdString() << std::endl;
+		qCritical() << "ERROR Loading file " << file;
 		return;
 	}
 
@@ -178,14 +176,14 @@ void KsDataStore::loadData(const QString& file)
 
 	loadData(_handle);
 
-	double time2 = GET_DURATION(t0);
-	std::cout <<"entries: " << _data_size << "  time: " << 1e3*time2 << " ms.\n";
+	double time = GET_DURATION(t0);
+	qInfo() <<"Data loading time: " << 1e3*time << " ms.   entries: " << _data_size;
 }
 
 
 void KsDataStore::loadData(struct tracecmd_input *handle)
 {
-	_data_size = ks_load_data(handle, &_rows);
+	_data_size = kshark_load_data(handle, &_rows);
 	_pevt = tracecmd_get_pevent(handle);
 }
 
@@ -209,21 +207,28 @@ void KsDataStore::clear()
 	}
 }
 
+KsGraphMark::KsGraphMark(DualMarkerState s)
+: _state(s), _bin(-1), _pos(0), _color(Qt::darkGreen), _mark(nullptr), _graph(nullptr)
+{}
 
-bool KsGraphMark::set(KsDataStore *data, KsTimeMap *map, size_t pos) {
+KsGraphMark::KsGraphMark(DualMarkerState s, QColor col)
+: _state(s), _bin(-1), _pos(0), _color(col), _mark(nullptr), _graph(nullptr)
+{}
+
+bool KsGraphMark::set(const KsDataStore &data, const  KsTimeMap &histo, size_t pos) {
 	_pos = pos;
-	size_t ts = data->_rows[_pos]->ts;
-	if (ts > map->_max || ts < map->_min) {
+	size_t ts = data._rows[_pos]->ts;
+	if (ts > histo._max || ts < histo._min) {
 		_bin = -1;
 		return false;
 	}
 		
-	_bin = (ts - map->_min)/map->_binSize;
+	_bin = (ts - histo._min)/histo._binSize;
 	return true;
 }
 
-bool KsGraphMark::reset(KsDataStore *data, KsTimeMap *map) {
-	return set(data, map, this->_pos);
+bool KsGraphMark::reset(const KsDataStore &data, const KsTimeMap &histo) {
+	return set(data, histo, this->_pos);
 }
 
 bool KsGraphMark::isSet() {
@@ -261,24 +266,52 @@ void KsGraphMark::remove() {
 	}
 }
 
+DualMarkerState operator !(const DualMarkerState &state)  {
+	if (state == DualMarkerState::B)
+		return DualMarkerState::A;
 
-KsMarkerState::KsMarkerState(QWidget *parent)
- : QWidget(parent), _buttonA("Marker A"), _buttonB("Marker B")
+	return DualMarkerState::B;
+} 
+
+KsDualMarkerSM::KsDualMarkerSM(QWidget *parent)
+: QWidget(parent),
+  _buttonA("Marker A", this),
+  _buttonB("Marker B", this),
+  _labelDeltaDescr("    A,B Delta: ", this),
+  _markA(DualMarkerState::A, Qt::darkGreen),
+  _markB(DualMarkerState::B, Qt::darkCyan)
 {
 	_buttonA.setFixedWidth(STRING_WIDTH(" Marker A "));
 	_buttonA.setFixedHeight(FONT_HEIGHT*1.2);
 	_buttonB.setFixedWidth(STRING_WIDTH(" Marker B "));
 	_buttonB.setFixedHeight(FONT_HEIGHT*1.2);
 
+	for (auto const &l: {&_labelMA, &_labelMB, &_labelDelta}) {
+		l->setFrameStyle(QFrame::Panel | QFrame::Sunken);
+		l->setStyleSheet("QLabel {background-color : white;}");
+		l->setFixedHeight(FONT_HEIGHT*1.2);
+		l->setFixedWidth(FONT_WIDTH*16);
+	}
+
 	_stateA = new QState;
 	_stateA->setObjectName("A");
-	_stateA->assignProperty(&_buttonA, "styleSheet", "background-color: green;");
-	_stateA->assignProperty(&_buttonB, "styleSheet", "");
+	_stateA->assignProperty(&_buttonA,
+				"styleSheet",
+				"background: darkGreen; color: white");
+
+	_stateA->assignProperty(&_buttonB,
+				"styleSheet",
+				"color: rgb(70, 70, 70)");
 
 	_stateB = new QState;
 	_stateB->setObjectName("B");
-	_stateB->assignProperty(&_buttonA, "styleSheet", "");
-	_stateB->assignProperty(&_buttonB, "styleSheet", "background-color: darkCyan;");
+	_stateB->assignProperty(&_buttonA,
+				"styleSheet",
+				"color: rgb(70, 70, 70)");
+
+	_stateB->assignProperty(&_buttonB,
+				"styleSheet",
+				"background: darkCyan; color: white");
 
 	_stateB->addTransition(&_buttonA, SIGNAL(clicked()), _stateA);
 	connect(&_buttonA, SIGNAL(clicked()), this, SLOT(setStateA()));
@@ -289,7 +322,7 @@ KsMarkerState::KsMarkerState(QWidget *parent)
 	_machine.addState(_stateA);
 	_machine.addState(_stateB);
 	_machine.setInitialState(_stateA);
-	_markState = STATE_A;
+	_markState = DualMarkerState::A;
 	_machine.start();
 	
 	this->setLayout(new QHBoxLayout);
@@ -297,16 +330,97 @@ KsMarkerState::KsMarkerState(QWidget *parent)
 	this->layout()->addWidget(&_buttonB);
 }
 
-void KsMarkerState::setStateA()
+void KsDualMarkerSM::setStateA()
 {
-	_markState = STATE_A;
-	std::cerr << _markState << std::endl;
+	_markState = DualMarkerState::A;
+	emit markSwitch();
 }
 
-void KsMarkerState::setStateB()
+void KsDualMarkerSM::setStateB()
 {
-	_markState = STATE_B;
-	std::cerr << _markState << std::endl;
+	_markState = DualMarkerState::B;
+	emit markSwitch();
+}
+
+KsGraphMark &KsDualMarkerSM::getMarker(DualMarkerState s)
+{
+	if (s == DualMarkerState::A)
+		return _markA;
+
+	return _markB;
+}
+
+KsGraphMark &KsDualMarkerSM::activeMarker()
+{
+	return this->getMarker(_markState);
+}
+
+KsGraphMark &KsDualMarkerSM::markerA()
+{
+	return _markA;
+}
+
+KsGraphMark &KsDualMarkerSM::markerB()
+{
+	return _markB;
+}
+
+void KsDualMarkerSM::placeInToolBar(QToolBar *tb)
+{
+	tb->addWidget(new QLabel("   "));
+	tb->addWidget(&_buttonA);
+	tb->addWidget(&_labelMA);
+	tb->addSeparator();
+	tb->addWidget(new QLabel("   "));
+	tb->addWidget(&_buttonB);
+	tb->addWidget(&_labelMB);
+	tb->addSeparator();
+	tb->addWidget(&_labelDeltaDescr);
+	tb->addWidget(&_labelDelta);
+}
+
+void KsDualMarkerSM::updateMarkers(const KsDataStore &data, const KsTimeMap &histo)
+{
+	if (_markA.isSet()) {
+		_markA.remove();
+		if(_markA.reset(data, histo))
+			_markA.draw();
+	}
+
+	if (_markB.isSet()) {
+		_markB.remove();
+		if(_markB.reset(data, histo))
+			_markB.draw();
+	}
+}
+
+void KsDualMarkerSM::updateLabels(const KsTimeMap &histo)
+{
+	// Marker A
+	if (_markA.isSet()) {
+		QString markA = QString::number(histo.binTime(_markA.bin()), 'f', 7);
+		_labelMA.setText(QString("%1").arg(markA));
+	} else {
+		_labelMA.setText("");
+	}
+
+	// Marker B
+	if (_markB.isSet()) {
+		QString markB = QString::number(histo.binTime(_markB.bin()), 'f', 7);
+		_labelMB.setText(QString("%1").arg(markB));
+	} else {
+		_labelMB.setText("");
+	}
+
+	// Delta
+	if (_markA.isSet() && _markB.isSet()) {
+		QString delta = QString::number(histo.binTime(_markB.bin()) -
+						histo.binTime(_markA.bin()),
+						'f', 7);
+		_labelDelta.setText(QString("%1").arg(delta));
+	} else {
+		_labelDelta.setText("");
+	}
 }
 
 

@@ -2,28 +2,24 @@
  * Copyright (C) 2017 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation;
- * version 2.1 of the License (not later!)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License (not later!)
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not,  see <http://www.gnu.org/licenses>
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not,  see <http://www.gnu.org/licenses>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
-#ifndef KS_MAINWINDOW_H
-#define KS_MAINWINDOW_H
-
-// C++
-#include <iostream>
-#include <vector>
+#ifndef _KS_MAINWINDOW_H
+#define _KS_MAINWINDOW_H
 
 // Qt
 #include <QMainWindow>
@@ -39,7 +35,6 @@ class KsMainWindow : public QMainWindow
 	Q_OBJECT
 public:
 	KsMainWindow(QWidget *parent = 0);
-	virtual ~KsMainWindow();
 
 	void loadFile(const QString& fileName);
 
@@ -55,12 +50,18 @@ private slots:
 	void aboutInfo();
 
 private:
-	void resizeEvent(QResizeEvent* event);
-
+	/** Data manager */
 	KsDataStore	_data;
+
+	// Widget for reading searching in the trace data */
 	KsTraceViewer	_view;
+
+	/** Widget for graphical visualization of the trace data */
 	KsTraceGraph	_graph;
-	
+
+	/** Dual Marker State Machine */
+	KsDualMarkerSM  _mState;
+
 	// File menu
 	QAction _openAction;
 	QAction _importFilterAction;
@@ -83,9 +84,10 @@ private:
 	// Help menu
 	QAction _aboutAction;
 
+	void resizeEvent(QResizeEvent* event);
 	void createActions();
 	void createMenus();
 };
 
-#endif
+#endif // _KS_MAINWINDOW_H
 

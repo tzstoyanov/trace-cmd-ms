@@ -2,25 +2,21 @@
  *  Copyright (C) 2017 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation;
- * version 2.1 of the License (not later!)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License (not later!)
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not,  see <http://www.gnu.org/licenses>
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not,  see <http://www.gnu.org/licenses>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
-
-
-#include <iostream>
-#include <iomanip>
 
 // Kernel Shark 2
 #include "KsTraceGraph.h"
@@ -36,7 +32,6 @@ KsTraceGraph::KsTraceGraph(QWidget *parent)
   _zoomInButton("+", this),
   _zoomOutButton("-", this),
   _scrollRightButton(">", this),
-  _mState(this),
   _labelP1("Pointer: ", this),
   _labelP2("", this),
   _labelI1("", this),
@@ -44,22 +39,13 @@ KsTraceGraph::KsTraceGraph(QWidget *parent)
   _labelI3("", this),
   _labelI4("", this),
   _labelI5("", this),
-  _labelA1("    ", this),
-  _labelA2("", this),
-  _labelB1("    ", this),
-  _labelB2("", this),
-  _labelD1("    A,B Delta: ", this),
-  _labelD2("", this),
   _scrollArea(this),
   _drawWindow(this),
   _model(this),
+  _mState(nullptr),
   _data(nullptr),
-  _axisChart(nullptr),
-  _axisX(nullptr),
   _mapper(nullptr),
-  _rubberBand(QRubberBand::Rectangle, this),
-  _markA(Qt::darkGreen),
-  _markB(Qt::darkCyan)
+  _rubberBand(QRubberBand::Rectangle, this)
 {
 	auto makeNavButton = [&](QPushButton *b) {
 		b->setMaximumWidth(FONT_WIDTH*5);
@@ -73,14 +59,6 @@ KsTraceGraph::KsTraceGraph(QWidget *parent)
 		l2->setStyleSheet("QLabel { background-color : white;}");
 		l2->setFixedWidth(FONT_WIDTH*15);
 		tb->addWidget(l2);
-		tb->addSeparator();
-	};
-	auto makeMarkLabel = [&](QPushButton *b, QLabel *l, QToolBar *tb) {
-		tb->addWidget(b);
-		l->setFrameStyle(QFrame::Panel | QFrame::Sunken);
-		l->setStyleSheet("QLabel { background-color : white;}");
-		l->setFixedWidth(FONT_WIDTH*15);
-		tb->addWidget(l);
 		tb->addSeparator();
 	};
 
@@ -120,14 +98,6 @@ KsTraceGraph::KsTraceGraph(QWidget *parent)
 
 	connect(&_scrollRightButton, SIGNAL(pressed()), this, SLOT(scrollRight()));
 	makeNavButton(&_scrollRightButton);	
-
-	_navigationBar.addSeparator();	
-	_navigationBar.addWidget(&_labelA1);
-	makeMarkLabel(&_mState._buttonA, &_labelA2, &_navigationBar);
-
-	_navigationBar.addWidget(&_labelB1);
-	makeMarkLabel(&_mState._buttonB, &_labelB2, &_navigationBar);
-	makeLabel(&_labelD1, &_labelD2, &_navigationBar);
 
 	_layout.addWidget(&_pointerBar);
 	_layout.addWidget(&_navigationBar);
@@ -169,7 +139,6 @@ void KsTraceGraph::updateGeom()
 
 	_drawWindow.resize(_scrollArea.width() - marginsH,
 			   _drawWindow.height());
-
 }
 
 void KsTraceGraph::resizeEvent(QResizeEvent* event)
@@ -254,10 +223,18 @@ void KsTraceGraph::loadData(KsDataStore *data)
  	_model.fill(data->_pevt, data->_rows, data->size());
 
 	drawGraphs(nCpus);
-
 	_data = data;
-	double time2 = GET_DURATION(t0);
-	std::cout <<"time: " << 1e3*time2 << " ms.\n";
+
+	double time = GET_DURATION(t0);
+	qInfo() <<"Graph loading time: " << 1e3*time << " ms.";
+}
+
+void KsTraceGraph::setMarkerSM(KsDualMarkerSM *m)
+{
+	_mState = m;
+
+	_navigationBar.addSeparator();
+	_mState->placeInToolBar(&_navigationBar);
 }
 
 void KsTraceGraph::drawGraphs(int nCpus, uint32_t cpuMask)
@@ -308,14 +285,13 @@ void KsTraceGraph::cpuReDraw(QVector<Qt::CheckState> cpuVec)
 void KsTraceGraph::rangeBoundInit(int x, size_t posMA)
 {
 	_posMarkA = posMA;
-	QString mA = QString::number(_model._visMap.binTime(posMA), 'f', 6);
-	_labelA2.setText(QString("%1").arg(mA));
-
 	int margins = _layout.contentsMargins().left() +
 		      _drawWindow.layout()->contentsMargins().left();
 
 	_rubberBandOrigin.rx() = x + margins;
 	_rubberBandOrigin.ry() = _pointerBar.height() +
+				 _navigationBar.height() +
+				 _layout.spacing()/2 +
 				 _layout.contentsMargins().top() +
 				 _layout.contentsMargins().bottom() +
 				 _drawWindow.layout()->contentsMargins().top();
@@ -327,46 +303,44 @@ void KsTraceGraph::rangeBoundInit(int x, size_t posMA)
 	_rubberBand.show();
 }
 
-void KsTraceGraph::setMarkLabels(size_t mA, size_t  mB)
-{
-	QString markA = QString::number(_model._visMap.binTime(mA), 'f', 7);
-	_labelA2.setText(QString("%1").arg(markA));
-
-	QString markB = QString::number(_model._visMap.binTime(mB), 'f', 7);
-	_labelB2.setText(QString("%1").arg(markB));	
-}
-
 void KsTraceGraph::rangeBoundStretched(int x, size_t posMB)
 {
-	QString pointer = QString::number(_model._visMap.binTime(posMB), 'f', 7);
+	QString pointer = QString::number(_model.histo().binTime(posMB), 'f', 7);
 	_labelP2.setText(QString("%1").arg(pointer));
 
 	if(!_rubberBand.isVisible())
 		return;
-
-	QString mB = QString::number(_model._visMap.binTime(posMB), 'f', 7);
-	_labelB2.setText(QString("%1").arg(mB));
-
-	QString delta = QString::number(_model._visMap.binTime(posMB) -
-					_model._visMap.binTime(_posMarkA),
-					'f', 7);
-	_labelD2.setText(QString("%1").arg(delta));
 
 	QPoint pos;
 	int margins = _layout.contentsMargins().left() +
 		      _drawWindow.layout()->contentsMargins().left();
 	pos.rx() = x + margins;
 
-	int dwHeight = _drawWindow.height() + _pointerBar.height() +
+	int dwHeight = _drawWindow.height() +
+		       _pointerBar.height() +
+		       _navigationBar.height() +
+		       _layout.spacing()/2 +
 		       _drawWindow.layout()->spacing()*(_chartView.size() - 2);
 		       _layout.contentsMargins().top();
 
-	int saHeight = _scrollArea.height() + _pointerBar.height() +
+	int saHeight = _scrollArea.height() +
+		       _pointerBar.height() +
+		       _navigationBar.height() +
+		       _layout.spacing()/2 +
 		       _layout.contentsMargins().top() + _layout.spacing();
 
 	pos.ry() = (dwHeight < saHeight)? dwHeight : saHeight;
 
-	_rubberBand.setGeometry(QRect(_rubberBandOrigin, pos));
+	if (_rubberBandOrigin.x() < pos.x())
+		_rubberBand.setGeometry(QRect(_rubberBandOrigin.x(),
+					      _rubberBandOrigin.y(),
+					      pos.x() - _rubberBandOrigin.x(),
+					      pos.y() - _rubberBandOrigin.y()));
+	else
+		_rubberBand.setGeometry(QRect(pos.x(),
+					      _rubberBandOrigin.y(),
+					      _rubberBandOrigin.x() - pos.x(),
+					      pos.y() - _rubberBandOrigin.y()));
 }
 
 void KsTraceGraph::rangeChanged(size_t p0, size_t p1)
@@ -376,35 +350,25 @@ void KsTraceGraph::rangeChanged(size_t p0, size_t p1)
 		return;
 	}
 
-	QString mA = QString::number(_model._visMap.binTime(p0), 'f', 7);
-	_labelA2.setText(QString("%1").arg(mA));
-
-	QString mB = QString::number(_model._visMap.binTime(p1), 'f', 7);
-	_labelB2.setText(QString("%1").arg(mB));
-
 	uint64_t min, max;
-	min = _model._visMap.ts(p0);
-	max = _model._visMap.ts(p1);
+	min = _model.histo().ts(p0);
+	max = _model.histo().ts(p1);
 
 	if (max - min < KS_GRAPH_N_BINS) {
 		_rubberBand.hide();
 		return;
 	}
 
-	_model._visMap.setBining(KS_GRAPH_N_BINS, min, max);
+	_model.histoPtr()->setBining(KS_GRAPH_N_BINS, min, max);
 	_model.fill(_data->_pevt, _data->_rows, _data->size(), false);
 
 	_rubberBand.hide();
 
-	if (_markA.isSet()) {
-		_markA.remove();
-		if(_markA.reset(_data, &_model._visMap))
-			_markA.draw();
-	}
+	_mState->updateMarkers(*_data, _model.histo());
 
 	for (size_t i = 0; i < KS_GRAPH_N_BINS; ++i) {
-		if (_model._visMap[i] > 0) {
-			emit select(_model._visMap[i], false);
+		if (_model.histo()[i] > 0) {
+			emit select(_model.histo()[i], false);
 			break;
 		}
 	}
@@ -433,15 +397,15 @@ void KsTraceGraph::scrollRight()
 
 void KsTraceGraph::resetPointer()
 {
-	_markA.remove();
+	_mState->activeMarker().remove();
 }
 
 void KsTraceGraph::setPointerInfo(size_t i)
 {
-	ks_entry e;
-	ks_set_entry_values(_data->_pevt, _data->_rows[i], &e);
+	kshark_entry e;
+	kshark_set_entry_values(_data->_pevt, _data->_rows[i], &e);
 	int str_size;
-	char* info_str = ks_dump_entry(&e, &str_size);
+	char* info_str = kshark_dump_entry(&e, &str_size);
 	char *next, *pch = strchr(info_str,';');
 	char *buff = strndup(info_str, pch - info_str);
 	_labelI1.setText(QString(buff));
@@ -462,7 +426,7 @@ void KsTraceGraph::setPointerInfo(size_t i)
 	
 void KsTraceGraph::markEntry(size_t pos)
 {
-	_markA.remove();
+	_mState->activeMarker().remove();
 
 	int cpu = _data->_rows[pos]->cpu;
 	_scrollArea.ensureVisible(0,
@@ -472,10 +436,13 @@ void KsTraceGraph::markEntry(size_t pos)
 				  CPU_GRAPH_HEIGHT/2);
 								
 	_model.shiftTo(_data->_rows[pos]->ts);
-	_markA.set(_data, &_model._visMap, pos);
+	_mState->activeMarker().set(*_data, _model.histo(), pos);
+
 	for (auto const &v: _chartView) {
-		if (v->_cpuId == cpu)
-			_markA.draw(v);
+		if (v->_cpuId == cpu) {
+			_mState->activeMarker().draw(v);
+			_mState->updateLabels(_model.histo());
+		}
 	}
 }
 
@@ -492,8 +459,8 @@ void KsTraceGraph::updateGraphs(GraphActions action)
 	while (_keyPressed) {
 		switch (action) {
 		case GraphActions::ZoomIn:
-			if (_markA.isSet())
-				_model.zoomIn(k, _markA.bin());
+			if (_mState->activeMarker().isSet())
+				_model.zoomIn(k, _mState->activeMarker().bin());
 			else
 				_model.zoomIn(k);
 
@@ -514,49 +481,21 @@ void KsTraceGraph::updateGraphs(GraphActions action)
 			break;
 		}
 
-		if (_markA.isSet()) {
-			_markA.remove();
-			if(_markA.reset(_data, &_model._visMap))
-				_markA.draw();
-		}
-
+		_mState->updateMarkers(*_data, _model.histo());
 		QCoreApplication::processEvents();
-
-		QString mA = QString::number(_model._visMap.binTime(0), 'f', 7);
-		_labelA2.setText(QString("%1").arg(mA));
-
-		QString mB =
-		QString::number(_model._visMap.binTime(_model._visMap._nBins), 'f', 7);
-		_labelB2.setText(QString("%1").arg(mB));
-
-		QString delta =
-		QString::number(_model._visMap.binTime(_model._visMap._nBins) -
-				_model._visMap.binTime(0),
-				'f', 7);
-		
-		_labelD2.setText(QString("%1").arg(delta));
-
-		
-		if (!_markA.isSet())
-			for (size_t i = 0; i < KS_GRAPH_N_BINS; ++i) {
-				if (_model._visMap[i] > 0) {
-					emit select(_model._visMap[i], false);
-					break;
-				}
-			}
 	}
 }
 	
 KsChartView::KsChartView(QWidget *parent)
 : QChartView(parent),
-  _posMarkA(-1), _pointer(nullptr)
+  _pointer(nullptr), _posMarkA(-1)
 {
 	init();
 }
 
 KsChartView::KsChartView(QChart *chart, QWidget *parent)
 : QChartView(chart, parent),
-  _posMarkA(-1), _pointer(nullptr)
+  _pointer(nullptr), _posMarkA(-1)
 {
 	init();
 }
@@ -578,7 +517,7 @@ void KsChartView::mousePressEvent(QMouseEvent *event)
 {
 	if (event->button() == Qt::LeftButton) {
 		_posMarkA = this->mapToValue(event).x();
-		std::cerr << "1 @ " << _posMarkA << std::endl;	
+		qInfo() << "1 @ " << _posMarkA;	
 		if (_posMarkA < 0 || _posMarkA > KS_GRAPH_N_BINS ) {
 			_posMarkA = -1;
 			return;
@@ -597,19 +536,19 @@ bool KsChartView::find(QMouseEvent *event, size_t variance, size_t *row)
 		return false;
 	}
 
-	int64_t found = _model->_visMap.at(pos, _cpuId);
+	int64_t found = _model->histo().at(pos, _cpuId);
 	if ( found >= 0) {
 		*row = found;
 		return true;
 	}
 		
 	for (size_t i = 1; i < variance; ++i) {
-		found = _model->_visMap.at(pos + i, _cpuId);
+		found = _model->histo().at(pos + i, _cpuId);
 		if ( found >= 0) {
 			*row = found;
 			return true;
 		}
-		found = _model->_visMap.at(pos - i, _cpuId);
+		found = _model->histo().at(pos - i, _cpuId);
 		if ( found >= 0) {
 			*row = found;
 			return true;
@@ -625,19 +564,20 @@ void KsChartView::findAndSelect(QMouseEvent *event)
 	emit resetPointer();
 	size_t row;
 	bool found = find(event, 10, &row);
-	if ( found)
+	if (found)
 		emit select(row, true);
 }
 
 void KsChartView::mouseMoveEvent(QMouseEvent *event)
 {
 	int markerB = this->mapToValue(event).x();
+
 	if (markerB < 0 || markerB > KS_GRAPH_N_BINS )
 		return;
 	
 	size_t row;
 	bool status = find(event, 5, &row);
-	if ( status)
+	if (status)
 		emit found(row);
 
 	emit rangeBoundStretched(event->pos().x(), markerB);
@@ -654,7 +594,7 @@ void KsChartView::mouseReleaseEvent(QMouseEvent *event)
 {
 	if ( event->button() == Qt::LeftButton ) {
 		int markerB = this->mapToValue(event).x();
-		std::cerr << "2 @ " << _posMarkA << " " << markerB << std::endl;
+		qInfo() << "2 @ " << _posMarkA << " " << markerB;
 	
 		if (_posMarkA < 0) {
 			findAndSelect(event);
@@ -684,23 +624,23 @@ void KsChartView::keyPressEvent(QKeyEvent *event)
 	switch (event->key()) {
 	case Qt::Key_Plus:
 		emit zoomIn();
-		break;
+		return;
 
 	case Qt::Key_Minus:
 		emit zoomOut();
-		break;
+		return;
 
 	case Qt::Key_Left:
 		emit scrollLeft();
-		break;
+		return;
 
 	case Qt::Key_Right:
 		emit scrollRight();
-		break;
+		return;
 
 	default:
 		QGraphicsView::keyPressEvent(event);
-		break;
+		return;
 	}
 }
 
