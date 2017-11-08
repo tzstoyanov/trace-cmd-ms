@@ -66,7 +66,10 @@ KsCheckBoxDialog::KsCheckBoxDialog(const QString &n, QWidget *parent)
 	_cb_widget = new QWidget(this);
 	_cb_layout = new QVBoxLayout();
 	_cb_widget->setLayout(_cb_layout);
-	_scrollArea.setMinimumHeight(this->height() - _apply_button.height()*5.5);
+	_scrollArea.setMinimumHeight(this->height() -
+				   FONT_HEIGHT*3 -
+				   _apply_button.height());
+
 	_scrollArea.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	_scrollArea.setWidget(_cb_widget);
 					  
@@ -79,15 +82,20 @@ KsCheckBoxDialog::KsCheckBoxDialog(const QString &n, QWidget *parent)
 	this->show();
 }
 
+void KsCheckBoxDialog::cbResize(size_t n)
+{
+	_cb.resize(n);
+	_cb_widget->resize(this->width(), FONT_HEIGHT*1.8*n);
+}
+
+
 void KsCheckBoxDialog::applyPress()
 {
 	QVector<Qt::CheckState> vec;
 	vec.resize(_cb.size());
-	int i = 0;
-	for (auto &c: _cb) {
-		vec[i] = c->checkState();
-		++i;
-	}
+	int n = _cb.size();
+	for (int i = 0; i < n; ++i)
+		vec[i] = _cb[i]->checkState();
 
 	emit apply(vec);
 	close();
@@ -103,30 +111,34 @@ void KsCheckBoxDialog::chechAll(int st)
 	}
 }
 
-KSCpuCheckBoxDialog::KSCpuCheckBoxDialog(struct pevent *pe, QWidget *parent)
-: KsCheckBoxDialog("Filter CPUs", parent)
+void KsCheckBoxDialog::resizeEvent(QResizeEvent* event)
 {
-	int i=0;
-	_cb.resize(pe->cpus);
+	QDialog::resizeEvent(event);
+	_scrollArea.resize(_scrollArea.width(),
+			   this->height() - FONT_HEIGHT*5);
+}
 
-	for (auto &c: _cb) {
-		c = new QCheckBox(QString("CPU %1").arg(i++), this);
-		c->setCheckState(Qt::Checked);
-		_cb_layout->addWidget(c);
+KSCpuCheckBoxDialog::KSCpuCheckBoxDialog(struct pevent *pe, QWidget *parent)
+: KsCheckBoxDialog("CPU plots", parent)
+{
+	this->cbResize(pe->cpus);
+
+	int n = _cb.size();
+	for (int i = 0; i < n; ++i) {
+		_cb[i] = new QCheckBox(QString("CPU %1").arg(i+1), this);
+		_cb[i]->setCheckState(Qt::Checked);
+		_cb_layout->addWidget(_cb[i]);
 	}
-
-	_cb_widget->resize(this->width(), _cb[0]->height()*_cb.size()*1.8);
 }
 
 KSTasksCheckBoxDialog::KSTasksCheckBoxDialog(struct pevent *pe, QWidget *parent)
-: KsCheckBoxDialog("Tasks", parent)
+: KsCheckBoxDialog("Task plotss", parent)
 {}
 
 KSEventsCheckBoxDialog::KSEventsCheckBoxDialog(struct pevent *pe, QWidget *parent)
 : KsCheckBoxDialog("Events", parent)
 {
-	int i=0;
-	_cb.resize(pe->nr_events);
+	this->cbResize(pe->nr_events);
 
 	struct event_format **events;
 	
@@ -134,13 +146,12 @@ KSEventsCheckBoxDialog::KSEventsCheckBoxDialog(struct pevent *pe, QWidget *paren
 	if (!events)
 		return;
 
-	for (auto &c: _cb) {
-		c = new QCheckBox(QString(pe->events[i]->name), this);
-		c->setCheckState(Qt::Checked);
-		_cb_layout->addWidget(c);
-		++i;
+	int n = _cb.size();
+	for (int i = 0; i < n; ++i) {
+		_cb[i] = new QCheckBox(QString(pe->events[i]->name), this);
+		_cb[i]->setCheckState(Qt::Checked);
+		_cb_layout->addWidget(_cb[i]);
 	}
-	_cb_widget->resize(this->width(), _cb[0]->height()*_cb.size()*2);
 }
 
 KsDataStore::KsDataStore()
@@ -200,8 +211,7 @@ void KsDataStore::clear()
 
 	_pevt = nullptr;
 
-	if (_handle)
-	{
+	if (_handle) {
 		tracecmd_close(_handle);
 		_handle = nullptr;
 	}
@@ -215,7 +225,8 @@ KsGraphMark::KsGraphMark(DualMarkerState s, QColor col)
 : _state(s), _bin(-1), _pos(0), _color(col), _mark(nullptr), _graph(nullptr)
 {}
 
-bool KsGraphMark::set(const KsDataStore &data, const  KsTimeMap &histo, size_t pos) {
+bool KsGraphMark::set(const KsDataStore &data, const  KsTimeMap &histo, size_t pos)
+{
 	_pos = pos;
 	size_t ts = data._rows[_pos]->ts;
 	if (ts > histo._max || ts < histo._min) {
@@ -227,18 +238,21 @@ bool KsGraphMark::set(const KsDataStore &data, const  KsTimeMap &histo, size_t p
 	return true;
 }
 
-bool KsGraphMark::reset(const KsDataStore &data, const KsTimeMap &histo) {
+bool KsGraphMark::reset(const KsDataStore &data, const KsTimeMap &histo)
+{
 	return set(data, histo, this->_pos);
 }
 
-bool KsGraphMark::isSet() {
+bool KsGraphMark::isSet()
+{
 	if (_mark)
 		return true;
 
 	return false;
 }
 
-void KsGraphMark::draw(KsChartView *graph) {
+void KsGraphMark::draw(KsChartView *graph)
+{
 	_graph = graph;
 	QPointF p0 = _graph->chart()->mapToPosition(QPoint(_bin, 4));
 	QPointF p1 = _graph->chart()->mapToPosition(QPoint(_bin, -3));
@@ -254,11 +268,13 @@ void KsGraphMark::draw(KsChartView *graph) {
 	_graph->scene()->addItem(_mark);
 }
 
-void KsGraphMark::draw() {
+void KsGraphMark::draw()
+{
 	draw(this->_graph);
 }
 
-void KsGraphMark::remove() {
+void KsGraphMark::remove()
+{
 	if (_mark) {
 		_graph->scene()->removeItem(_mark);
 		delete _mark;
@@ -266,7 +282,8 @@ void KsGraphMark::remove() {
 	}
 }
 
-DualMarkerState operator !(const DualMarkerState &state)  {
+DualMarkerState operator !(const DualMarkerState &state)
+{
 	if (state == DualMarkerState::B)
 		return DualMarkerState::A;
 
@@ -297,21 +314,21 @@ KsDualMarkerSM::KsDualMarkerSM(QWidget *parent)
 	_stateA->setObjectName("A");
 	_stateA->assignProperty(&_buttonA,
 				"styleSheet",
-				"background: darkGreen; color: white");
+				"background : darkGreen; color : white");
 
 	_stateA->assignProperty(&_buttonB,
 				"styleSheet",
-				"color: rgb(70, 70, 70)");
+				"color : rgb(70, 70, 70)");
 
 	_stateB = new QState;
 	_stateB->setObjectName("B");
 	_stateB->assignProperty(&_buttonA,
 				"styleSheet",
-				"color: rgb(70, 70, 70)");
+				"color : rgb(70, 70, 70)");
 
 	_stateB->assignProperty(&_buttonB,
 				"styleSheet",
-				"background: darkCyan; color: white");
+				"background : darkCyan; color : white");
 
 	_stateB->addTransition(&_buttonA, SIGNAL(clicked()), _stateA);
 	connect(&_buttonA, SIGNAL(clicked()), this, SLOT(setStateA()));
@@ -324,10 +341,6 @@ KsDualMarkerSM::KsDualMarkerSM(QWidget *parent)
 	_machine.setInitialState(_stateA);
 	_markState = DualMarkerState::A;
 	_machine.start();
-	
-	this->setLayout(new QHBoxLayout);
-	this->layout()->addWidget(&_buttonA);
-	this->layout()->addWidget(&_buttonB);
 }
 
 void KsDualMarkerSM::setStateA()

@@ -86,7 +86,8 @@ private:
 
 	KsDualMarkerSM  *_mState;
 
-	enum Condition {
+	enum Condition
+	{
 		Containes,
 		Match,
 		NotHave

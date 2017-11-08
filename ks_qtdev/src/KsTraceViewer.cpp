@@ -44,10 +44,10 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	this->setMinimumHeight(SCREEN_HEIGHT/4);
 	this->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
 
-	/** Make a search toolbar. */
+	/* Make a search toolbar. */
 	_toolbar.setOrientation(Qt::Horizontal);
 
-	/** On the toolbar make a page Spin box. */
+	/* On the toolbar make a page Spin box. This is currently disabled. */
 	//_toolbar.addWidget(&_labelPage);
 	//_pageSpinBox.setMaximum(0);
 	//connect(&_pageSpinBox, SIGNAL(valueChanged(int)),
@@ -56,7 +56,7 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	//_toolbar.addWidget(&_pageSpinBox);
 	//_toolbar.addSeparator();
 
-	/** On the toolbar make two Combo boxes for the search settings. */
+	/* On the toolbar make two Combo boxes for the search settings. */
 	_toolbar.addWidget(&_labelSearch);
 	_columnComboBox.addItems(_tableHeader);
 	connect(&_columnComboBox, SIGNAL(currentIndexChanged(int)),
@@ -70,7 +70,7 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 		this, SLOT(searchEditSelect(int)));
 	_toolbar.addWidget(&_selectComboBox);
 
-	/** On the toolbar make a Line edit field the search. */
+	/* On the toolbar, make a Line edit field for search. */
 	_searchLineEdit.setMaximumWidth(FONT_WIDTH*30);
 
 	connect(&_searchLineEdit, SIGNAL(returnPressed()),
@@ -82,7 +82,7 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	_toolbar.addWidget(&_searchLineEdit);
 	_toolbar.addSeparator();
 
-	/** On the toolbar add Prev & Next buttons */
+	/* On the toolbar, add Prev & Next buttons */
 	int bWidth = STRING_WIDTH("  Next  ");
 
 	_nextButton.setFixedWidth(bWidth);
@@ -95,8 +95,9 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 
 	_toolbar.addSeparator();
 
-	/** On the toolbar make a Check box for connecting the search pannel
-	 *  to the Graph widget. */
+	/* On the toolbar, make a Check box for connecting the search pannel
+	 * to the Graph widget.
+	 */
 	_graphFollowsCheckBox.setCheckState(Qt::Checked);	
 	connect(&_graphFollowsCheckBox, SIGNAL(stateChanged(int)),
 		this, SLOT(graphFollowsChanged(int)));
@@ -104,7 +105,7 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	_toolbar.addWidget(&_graphFollowsCheckBox);
 	_toolbar.addWidget(&_labelGrFollows);
 
-	/** Initialize the trace viewer. */
+	/* Initialize the trace viewer. */
 	_view.horizontalHeader()->setStretchLastSection(true);
 	_view.verticalHeader()->setVisible(false);
 	_view.setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -120,7 +121,7 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	connect(&_view, SIGNAL(clicked(const QModelIndex&)),
 		this, SLOT(clicked(const QModelIndex&)));
 
-	/** Set the layout */
+	/* Set the layout */
 	_layout.addWidget(&_toolbar);
 	_layout.addWidget(&_view);
 	this->setLayout(&_layout);
@@ -140,14 +141,22 @@ void KsTraceViewer::loadData(KsDataStore *data)
 
 void KsTraceViewer::setMarkerSM(KsDualMarkerSM *m)
 {
+	/* Assign a property to State A of the Dual marker state machine.
+	 * When the marker is in State A the background color of the selected
+	 * row will be darkGreem. Actualy color is set to be "green" but
+	 * it shows up as "darkGreem". This looks like a Qt bug.
+	 */
 	_mState = m;
 	_mState->stateAPtr()->assignProperty(&_view,
 					     "styleSheet",
-					     "selection-background-color: green;");
+					     "selection-background-color : green;");
 
+	/* Assign a property to State B. When the marker is in State B
+	 * the background color of the selected row will be "darkCyan".
+	 */
 	_mState->stateBPtr()->assignProperty(&_view,
 					     "styleSheet",
-					     "selection-background-color: darkCyan;");
+					     "selection-background-color : darkCyan;");
 }
 
 void KsTraceViewer::reset()
@@ -202,11 +211,11 @@ bool matchCond(QString searchText, QString itemText)
 
 void KsTraceViewer::search()
 {
-	/** Disable the user input until the search is done. */
+	/* Disable the user input until the search is done. */
 	_searchLineEdit.setReadOnly(true);
 	if (!_searchDone) {
-		/** The search is not done. This means that the search settings
-		 *  have been modified since the last time we searched.
+		/* The search is not done. This means that the search settings
+		 * have been modified since the last time we searched.
 		 */
 		_matchList.clear();
 		QString xText = _searchLineEdit.text();
@@ -231,17 +240,19 @@ void KsTraceViewer::search()
 		}
 
 		if (!_matchList.empty()) {
-			//_view.selectRow(*_it);
 			this->showRow(*_it, true);
 
 			if (_graphFollows)
 				emit select(*_it); // Send a signal to the Graph widget.
 		}
 	} else {
+		/* If the search is done, pressing "Enter" is equivalent
+		 * to pressing "Next" button.
+		 */
 		this->next();
 	}
 
-	/** Enable the user input. */
+	/* Enable the user input. */
 	_searchLineEdit.setReadOnly(false);
 }
 
@@ -260,7 +271,6 @@ void KsTraceViewer::next()
 		}
 
 		// Select the row of the item.
-		//_view.selectRow(*_it);
 		this->showRow(*_it, true);
 
 		if (_graphFollows)
@@ -278,7 +288,7 @@ void KsTraceViewer::prev()
 			--_it; // Move the iterator.
 		}
 		
-		//_view.selectRow(*_it);
+		// Select the row of the item.
 		this->showRow(*_it, true);
 
 		if (_graphFollows)
@@ -304,8 +314,12 @@ void KsTraceViewer::showRow(int r, bool mark)
 				       QAbstractItemView::PositionAtCenter);
 
 		_view.selectRow(r);
-	} else
+	} else {
+		/* Just make sure that the row is visible.
+		 * It will show up at the top of the visible part of the table.
+		 */
 		_view.scrollTo(_model.index(r, 1), QAbstractItemView::PositionAtTop);
+	}
 }
 
 void KsTraceViewer::markSwitch()
@@ -316,19 +330,24 @@ void KsTraceViewer::markSwitch()
 	/* First deal with the passive marker. */
 	if (_mState->getMarker(!state).isSet()) {
 		/* The passive marker is set. 
-		 * Use the model to color the row of the passive marker. */
+		 * Use the model to color the row of the passive marker.
+		 */
 		_model.selectRow(!state, _mState->getMarker(!state).row());
 	}
 	else {
 		/* The passive marker is not set. 
-		 * Make sure that the model colors nothing. */
+		 * Make sure that the model colors nothing.
+		 */
 		_model.selectRow(!state, -1);
 	}
 
 	/* Now deal with the active marker. This has to be done after dealing
 	 *  with the model, because changing the model clears the selection. */
 	if (_mState->getMarker(state).isSet()) {
-		/* The active marker is set. Use the TableView select its row. */
+		/* The active marker is set. Use QTableView to select its row.
+		 * The row of the active marker will be colored according to
+		 * the assigned property of the current state of the Dual marker.
+		 */
 		_view.selectRow(_mState->getMarker(state).row());
 	}
 }
@@ -343,12 +362,13 @@ void KsTraceViewer::resizeToContents()
 bool KsTraceViewer::event(QEvent *event)
 {
 	if (_graphFollows && event->type() == QEvent::KeyRelease) {
+		// Get the Key event.
 		QKeyEvent *ke = static_cast<QKeyEvent *>(event);
 		if (ke->key() == Qt::Key_Up || ke->key() == Qt::Key_Down) {
 			QItemSelectionModel *sm = _view.selectionModel();
 			if (sm->hasSelection()) {
-				int row =  sm->selectedRows()[0].row();
-				
+				/* Only one row at the time can be selected. */
+				int row = sm->selectedRows()[0].row();
 				emit select(row); // Send a signal to the Graph widget.
 			}
 
@@ -365,6 +385,8 @@ size_t KsTraceViewer::searchItems(int column,
 {
 	int count = _model.search(column, searchText, cond, &_matchList);
 	_searchDone = true;
+
+	// Move the iterator to the the beginningof the match list.
 	_view.clearSelection();
 	_it = _matchList.begin();
 	return count;

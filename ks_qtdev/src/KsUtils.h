@@ -64,7 +64,7 @@ class KsMessageDialog : public QDialog
 	Q_OBJECT
 public:
 	KsMessageDialog(QWidget *parent) = delete;
-	KsMessageDialog(QString message, QWidget *parent=0);
+	KsMessageDialog(QString message, QWidget *parent = 0);
 
 private:
 	QVBoxLayout _layout;
@@ -76,7 +76,8 @@ class KsCheckBoxDialog : public QDialog
 {
 	Q_OBJECT
 public:
-	KsCheckBoxDialog(const QString &n="", QWidget *parent = 0);
+	KsCheckBoxDialog(const QString &n = "", QWidget *parent = 0);
+	void cbResize(size_t n);
 
 private slots:
 	void applyPress();
@@ -86,6 +87,8 @@ signals:
 	void apply(QVector<Qt::CheckState>);
 
 protected:
+	void resizeEvent(QResizeEvent* event);
+
 	QCheckBox 	    _all_cb;
 	QVector<QCheckBox*> _cb;
 
@@ -137,7 +140,8 @@ public:
 class KsTimeMap;
 class KsChartView;
 
-enum class DualMarkerState {
+enum class DualMarkerState
+{
 	A,
 	B
 };
@@ -171,7 +175,6 @@ private:
 	QColor 		   _color;
 	QGraphicsLineItem *_mark;
 	KsChartView 	  *_graph;
-	
 };
 
 DualMarkerState operator !(const DualMarkerState &state);

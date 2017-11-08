@@ -71,8 +71,8 @@ KsMainWindow::KsMainWindow(QWidget *parent)
 
 void KsMainWindow::resizeEvent(QResizeEvent* event)
 {
-   QMainWindow::resizeEvent(event);
-   _graph.resize(this->width(), _graph.height());
+	QMainWindow::resizeEvent(event);
+	_graph.resize(this->width(), _graph.height());
 }
 
 void KsMainWindow::createActions()

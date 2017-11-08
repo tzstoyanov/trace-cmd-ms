@@ -55,9 +55,6 @@ signals:
 	void select(int pos, bool mark);
 	void found(size_t);
 
-public slots:
-	void setPointer(size_t);
-
 protected:
 	void mousePressEvent(QMouseEvent *event);
 	void mouseMoveEvent(QMouseEvent *event);
@@ -74,12 +71,13 @@ private:
 	bool find(QMouseEvent *event, size_t variance, size_t *row);
 	void findAndSelect(QMouseEvent *event);
 
-	int _posMarkA;
+	int _posMousePress;
 
 public:
-	int		   _cpuId;
-	KsGraphModel	  *_model;
+	int		 _cpuId;
+	KsGraphModel	*_model;
 };
+
 
 class KsTraceGraph : public QWidget
 {
@@ -95,7 +93,7 @@ public:
 private slots:
 	void rangeBoundInit(int x, size_t);
 	void rangeBoundStretched(int x, size_t);
-	void rangeChanged(size_t, size_t);
+	void rangeChanged(size_t , size_t);
 	void zoomIn();
 	void zoomOut();
 	void scrollLeft();
@@ -124,7 +122,7 @@ private:
 	};
 
 	void addCpu(int cpu);
-	void drawGraphs(int nCpus, uint32_t cpuMask=0xffffffff);
+	void drawGraphs(int nCpus, QVector<Qt::CheckState> cpuMask = {});
 	void updateGeom();
 	void updateGraphs(GraphActions action);
 	void setAxisX();
@@ -143,18 +141,17 @@ private:
 	QWidget     _drawWindow;
 
 	KsGraphModel		_model;
-	QVector<KsChartView*>	_chartView;
+	QMap<int, KsChartView*> _chartMap;
 	QVBoxLayout		_layout;
 
 	KsDualMarkerSM  *_mState;
 	KsDataStore 	*_data;
 	QVXYModelMapper *_mapper;
+	QRubberBand 	 _rubberBand;
+	QPoint 		 _rubberBandOrigin;
 
-	QRubberBand 	_rubberBand;
-	QPoint 		_rubberBandOrigin;
-
-	size_t _posMarkA;
-	bool _keyPressed;
+	size_t _posMousePress;
+	bool   _keyPressed;
 };
 
 #endif // _KS_TRACEGRAPH_H

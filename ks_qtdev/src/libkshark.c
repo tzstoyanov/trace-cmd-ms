@@ -97,12 +97,12 @@ void kshark_free_entry(struct kshark_entry *entry)
 size_t kshark_load_data_old(struct tracecmd_input *handle, struct kshark_entry ***data_rows)
 {
 	int cpus = tracecmd_cpus(handle), cpu;
-	size_t count, total=0;
+	size_t count, total = 0;
 	struct kshark_entry **cpu_list = calloc(cpus, sizeof(struct kshark_entry *));
 	struct kshark_entry *rec, **next;
 
-	struct pevent_record	*data;
-	struct pevent			*pevt;
+	struct pevent_record *data;
+	struct pevent	     *pevt;
 
 	for (cpu = 0; cpu < cpus; ++cpu) {
 		count = 0;

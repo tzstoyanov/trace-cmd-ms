@@ -53,6 +53,7 @@ KsTraceGraph::KsTraceGraph(QWidget *parent)
 		connect(b, SIGNAL(released()), this, SLOT(stopUpdating()));
 		_navigationBar.addWidget(b);
 	};
+
 	auto makeLabel = [&](QLabel *l1, QLabel *l2, QToolBar *tb) {
 		tb->addWidget(l1);
 		l2->setFrameStyle(QFrame::Panel | QFrame::Sunken);
@@ -109,7 +110,7 @@ KsTraceGraph::~KsTraceGraph() {}
 
 void KsTraceGraph::updateGeom()
 {
-	if (_chartView.count() == 0)
+	if (_chartMap.count() == 0)
 		return;
 
 	int hMin = _drawWindow.height() +
@@ -178,7 +179,6 @@ void KsTraceGraph::addCpu(int cpu)
 	QChart *chart = new QChart();
 	chart->setAnimationOptions(QChart::NoAnimation);
 	QLineSeries *series = new QLineSeries();
-	//QPen pen(Qt::black);
 	QPen pen(Qt::darkBlue);
 	
 	if (SCREEN_HEIGHT < 2000)
@@ -187,7 +187,6 @@ void KsTraceGraph::addCpu(int cpu)
 		pen.setWidthF(3.5);
 
 	series->setPen(pen);
-
 	series->setName(QString("CPU %1").arg(cpu));
 	series->setUseOpenGL(true);
 
@@ -210,7 +209,7 @@ void KsTraceGraph::addCpu(int cpu)
 
 	view->setChart(chart);
 	_drawWindow.layout()->addWidget(view);
-	_chartView.append(view);
+	_chartMap[cpu] = view;
 }
 
 void KsTraceGraph::loadData(KsDataStore *data)
@@ -237,8 +236,9 @@ void KsTraceGraph::setMarkerSM(KsDualMarkerSM *m)
 	_mState->placeInToolBar(&_navigationBar);
 }
 
-void KsTraceGraph::drawGraphs(int nCpus, uint32_t cpuMask)
+void KsTraceGraph::drawGraphs(int nCpus, QVector<Qt::CheckState> cpuMask)
 {
+	/* The Very first thing to do is to clean up. */
 	if (_drawWindow.layout()) {
 		QLayoutItem *child;
 		while ((child = _drawWindow.layout()->takeAt(0)) != 0) {
@@ -246,45 +246,42 @@ void KsTraceGraph::drawGraphs(int nCpus, uint32_t cpuMask)
 		}
 		delete _drawWindow.layout();
 
-		for (auto const &c: _chartView)
-			delete c;
+		for (auto const &m: _chartMap)
+			delete m;
+
+		_chartMap.clear();
 	}
 
+	/*Now start on a new layout. */
 	_drawWindow.setLayout(new QVBoxLayout());
 	_drawWindow.layout()->setContentsMargins(0, 0, 0, 0);
 	_drawWindow.layout()->setSpacing(SCREEN_HEIGHT/400);
 
-	_chartView.clear();
+	if (cpuMask.size() != nCpus)
+		cpuMask.fill(Qt::Checked, nCpus);
 
 	for (int cpu = 0; cpu <nCpus ; ++cpu) {
-		if (0x1 & cpuMask >> cpu)
+		if (cpuMask[cpu] == Qt::Checked)
 			addCpu(cpu);
 	}
 
 	int margins = _drawWindow.layout()->contentsMargins().top() +
 		      _drawWindow.layout()->contentsMargins().bottom();
 
-	_drawWindow.resize(_drawWindow.width(), CPU_GRAPH_HEIGHT*_chartView.count() + margins);
+	_drawWindow.resize(_drawWindow.width(),
+			   CPU_GRAPH_HEIGHT*_chartMap.count() + margins);
 	updateGeom();
 }
 
-void KsTraceGraph::cpuReDraw(QVector<Qt::CheckState> cpuVec)
+void KsTraceGraph::cpuReDraw(QVector<Qt::CheckState> cpuMask)
 {
-	uint32_t mask(0), i(0);
-	for (auto const &v: cpuVec) {
-		mask |= (v == Qt::Checked) << i++;
-	}
-
 	int nCpus = _data->_pevt->cpus;
-	_model.reset();	
-	_model.setNCpus(nCpus);
- 	_model.fill(_data->_pevt, _data->_rows, _data->size());
-	this->drawGraphs(nCpus, mask);
+	this->drawGraphs(nCpus, cpuMask);
 }
 
-void KsTraceGraph::rangeBoundInit(int x, size_t posMA)
+void KsTraceGraph::rangeBoundInit(int x, size_t posMC)
 {
-	_posMarkA = posMA;
+	_posMousePress = posMC;
 	int margins = _layout.contentsMargins().left() +
 		      _drawWindow.layout()->contentsMargins().left();
 
@@ -320,7 +317,7 @@ void KsTraceGraph::rangeBoundStretched(int x, size_t posMB)
 		       _pointerBar.height() +
 		       _navigationBar.height() +
 		       _layout.spacing()/2 +
-		       _drawWindow.layout()->spacing()*(_chartView.size() - 2);
+		       _drawWindow.layout()->spacing()*(_chartMap.size() - 2);
 		       _layout.contentsMargins().top();
 
 	int saHeight = _scrollArea.height() +
@@ -331,16 +328,17 @@ void KsTraceGraph::rangeBoundStretched(int x, size_t posMB)
 
 	pos.ry() = (dwHeight < saHeight)? dwHeight : saHeight;
 
-	if (_rubberBandOrigin.x() < pos.x())
+	if (_rubberBandOrigin.x() < pos.x()) {
 		_rubberBand.setGeometry(QRect(_rubberBandOrigin.x(),
 					      _rubberBandOrigin.y(),
 					      pos.x() - _rubberBandOrigin.x(),
 					      pos.y() - _rubberBandOrigin.y()));
-	else
+	} else {
 		_rubberBand.setGeometry(QRect(pos.x(),
 					      _rubberBandOrigin.y(),
 					      _rubberBandOrigin.x() - pos.x(),
 					      pos.y() - _rubberBandOrigin.y()));
+	}
 }
 
 void KsTraceGraph::rangeChanged(size_t p0, size_t p1)
@@ -410,9 +408,8 @@ void KsTraceGraph::setPointerInfo(size_t i)
 	char *buff = strndup(info_str, pch - info_str);
 	_labelI1.setText(QString(buff));
 	_labelI1.adjustSize();
-	
-	QList<QLabel*> labels = {&_labelI2, &_labelI3, &_labelI4, &_labelI5};
-	for (auto const &l: labels) {
+
+	for (auto const &l: {&_labelI2, &_labelI3, &_labelI4, &_labelI5}) {
 		next = strchr(pch + 1,';');
 		buff = strndup(pch + 2, next - pch - 2);
 		pch = next;
@@ -431,19 +428,16 @@ void KsTraceGraph::markEntry(size_t pos)
 	int cpu = _data->_rows[pos]->cpu;
 	_scrollArea.ensureVisible(0,
 				  CPU_GRAPH_HEIGHT/2 +
-				  cpu*(CPU_GRAPH_HEIGHT + _drawWindow.layout()->spacing()/2),
+				  cpu*(CPU_GRAPH_HEIGHT +
+				  _drawWindow.layout()->spacing()/2),
 				  50,
 				  CPU_GRAPH_HEIGHT/2);
 								
 	_model.shiftTo(_data->_rows[pos]->ts);
 	_mState->activeMarker().set(*_data, _model.histo(), pos);
 
-	for (auto const &v: _chartView) {
-		if (v->_cpuId == cpu) {
-			_mState->activeMarker().draw(v);
-			_mState->updateLabels(_model.histo());
-		}
-	}
+	_mState->activeMarker().draw(_chartMap[cpu]);
+	_mState->updateLabels(_model.histo());
 }
 
 void KsTraceGraph::selectReceived(int pos, bool mark)
@@ -487,15 +481,13 @@ void KsTraceGraph::updateGraphs(GraphActions action)
 }
 	
 KsChartView::KsChartView(QWidget *parent)
-: QChartView(parent),
-  _pointer(nullptr), _posMarkA(-1)
+: QChartView(parent), _pointer(nullptr), _posMousePress(-1)
 {
 	init();
 }
 
 KsChartView::KsChartView(QChart *chart, QWidget *parent)
-: QChartView(chart, parent),
-  _pointer(nullptr), _posMarkA(-1)
+: QChartView(chart, parent), _pointer(nullptr), _posMousePress(-1)
 {
 	init();
 }
@@ -516,22 +508,23 @@ QPointF KsChartView::mapToValue(QMouseEvent *event)
 void KsChartView::mousePressEvent(QMouseEvent *event)
 {
 	if (event->button() == Qt::LeftButton) {
-		_posMarkA = this->mapToValue(event).x();
-		qInfo() << "1 @ " << _posMarkA;	
-		if (_posMarkA < 0 || _posMarkA > KS_GRAPH_N_BINS ) {
-			_posMarkA = -1;
+		_posMousePress = this->mapToValue(event).x();
+		qInfo() << "1 @ " << _posMousePress;
+		if (_posMousePress < 0 || _posMousePress > KS_GRAPH_N_BINS) {
+			_posMousePress = -1;
 			return;
 		}
 
-		emit rangeBoundInit(event->pos().x(), _posMarkA);
-	} else if (event->button() == Qt::RightButton)
+		emit rangeBoundInit(event->pos().x(), _posMousePress);
+	} else if (event->button() == Qt::RightButton) {
 		emit resetPointer();
+	}
 }
 
 bool KsChartView::find(QMouseEvent *event, size_t variance, size_t *row)
 {
 	size_t pos = this->mapToValue(event).x();
-	if (pos < 0 || pos > KS_GRAPH_N_BINS ) {
+	if (pos < 0 || pos > KS_GRAPH_N_BINS) {
 		*row = 0;
 		return false;
 	}
@@ -548,6 +541,7 @@ bool KsChartView::find(QMouseEvent *event, size_t variance, size_t *row)
 			*row = found;
 			return true;
 		}
+
 		found = _model->histo().at(pos - i, _cpuId);
 		if ( found >= 0) {
 			*row = found;
@@ -572,7 +566,7 @@ void KsChartView::mouseMoveEvent(QMouseEvent *event)
 {
 	int markerB = this->mapToValue(event).x();
 
-	if (markerB < 0 || markerB > KS_GRAPH_N_BINS )
+	if (markerB < 0 || markerB > KS_GRAPH_N_BINS)
 		return;
 	
 	size_t row;
@@ -585,34 +579,34 @@ void KsChartView::mouseMoveEvent(QMouseEvent *event)
 
 void KsChartView::mouseDoubleClickEvent(QMouseEvent *event)
 {
-	if ( event->button() == Qt::LeftButton ) {
+	if (event->button() == Qt::LeftButton) {
 		findAndSelect(event);
 	}
 }
 
 void KsChartView::mouseReleaseEvent(QMouseEvent *event)
 {
-	if ( event->button() == Qt::LeftButton ) {
-		int markerB = this->mapToValue(event).x();
-		qInfo() << "2 @ " << _posMarkA << " " << markerB;
+	if (event->button() == Qt::LeftButton) {
+		int posMouseRel = this->mapToValue(event).x();
+		qInfo() << "2 @ " << _posMousePress << " " << posMouseRel;
 	
-		if (_posMarkA < 0) {
+		if (_posMousePress < 0) {
 			findAndSelect(event);
 			return;
 		}
 
-		if (markerB < 0)
-			markerB = 0;
+		if (posMouseRel < 0)
+			posMouseRel = 0;
 
-		if (markerB > KS_GRAPH_N_BINS)
-			markerB = KS_GRAPH_N_BINS;
+		if (posMouseRel > KS_GRAPH_N_BINS)
+			posMouseRel = KS_GRAPH_N_BINS;
 
-		if (_posMarkA < markerB)
-			emit rangeChanged(_posMarkA, markerB);
+		if (_posMousePress < posMouseRel)
+			emit rangeChanged(_posMousePress, posMouseRel);
 		else
-			emit rangeChanged(markerB, _posMarkA);
+			emit rangeChanged(posMouseRel, _posMousePress);
 
-		_posMarkA = -1;
+		_posMousePress = -1;
 	}
 }
 
@@ -653,21 +647,9 @@ void KsChartView::keyReleaseEvent(QKeyEvent *event)
 	   event->key() == Qt::Key_Minus ||
 	   event->key() == Qt::Key_Left ||
 	   event->key() == Qt::Key_Right)
-	   emit stopUpdating();
+		emit stopUpdating();
 }
 
-void KsChartView::setPointer(size_t bin)
-{
-	emit resetPointer();
-	QPointF p0 = this->chart()->mapToPosition(QPoint(bin, 2));
-	QPointF p1 = this->chart()->mapToPosition(QPoint(bin, -1));
-
-	_pointer = new QGraphicsLineItem(p0.x(), p0.y(), p1.x(), p1.y());
-	QPen pen(Qt::darkGreen);
-	pen.setWidth(2);
-	_pointer->setPen(pen);
-	this->scene()->addItem(_pointer);
-}
 
 
 
