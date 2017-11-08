@@ -23,6 +23,7 @@
 
 // C++
 #include <vector>
+#include <chrono>
 
 // Qt
 #include <QtWidgets>
