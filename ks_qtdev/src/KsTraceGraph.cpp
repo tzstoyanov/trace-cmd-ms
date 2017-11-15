@@ -149,7 +149,7 @@ void KsTraceGraph::resizeEvent(QResizeEvent* event)
 
 void KsTraceGraph::reset()
 {
-	_model.reset(); 
+	_model.reset();
 }
 
 void KsTraceGraph::addCpu(int cpu)
@@ -158,12 +158,12 @@ void KsTraceGraph::addCpu(int cpu)
 	view->_cpuId = cpu;
 	view->_model = &_model;
 
-	connect(view, SIGNAL(rangeBoundInit(int, size_t)), 
+	connect(view, SIGNAL(rangeBoundInit(int, size_t)),
 			this, SLOT(rangeBoundInit(int, size_t)));
 
 	connect(view, SIGNAL(rangeBoundStretched(int, size_t)),
 			this, SLOT(rangeBoundStretched(int, size_t)));
-	
+
 	connect(view, SIGNAL(rangeChanged(size_t, size_t)),
 			this, SLOT(rangeChanged(size_t, size_t)));
 
@@ -181,7 +181,7 @@ void KsTraceGraph::addCpu(int cpu)
 	chart->setAnimationOptions(QChart::NoAnimation);
 	QLineSeries *series = new QLineSeries();
 	QPen pen(Qt::darkBlue);
-	
+
 	if (SCREEN_HEIGHT < 2000)
 		pen.setWidthF(1.5);
 	else
@@ -216,7 +216,7 @@ void KsTraceGraph::addCpu(int cpu)
 void KsTraceGraph::loadData(KsDataStore *data)
 {
 	hd_time t0 = GET_TIME;
-	
+
 	int nCpus = data->_pevt->cpus;
 	_model.reset();	
 	_model.setNCpus(nCpus);
@@ -408,7 +408,7 @@ void KsTraceGraph::setPointerInfo(size_t i)
 	pevent_record *record = tracecmd_read_at(kshark_ctx->handle,
 						 e->offset,
 						 NULL);
-								 
+
 	QString comm(kshark_get_task(kshark_ctx->pevt, e));
 	comm.append("-");
 	comm.append(QString("%1").arg(e->pid));
@@ -427,7 +427,7 @@ void KsTraceGraph::setPointerInfo(size_t i)
 
 	free_record(record);
 }
-	
+
 void KsTraceGraph::markEntry(size_t pos)
 {
 	_mState->activeMarker().remove();
@@ -439,7 +439,7 @@ void KsTraceGraph::markEntry(size_t pos)
 				  _drawWindow.layout()->spacing()/2),
 				  50,
 				  CPU_GRAPH_HEIGHT/2);
-								
+
 	_model.shiftTo(_data->_rows[pos]->ts);
 	_mState->activeMarker().set(*_data, _model.histo(), pos);
 
@@ -606,7 +606,7 @@ void KsChartView::mouseReleaseEvent(QMouseEvent *event)
 	if (event->button() == Qt::LeftButton) {
 		int posMouseRel = this->mapToValue(event).x();
 		qInfo() << "2 @ " << _posMousePress << " " << posMouseRel;
-	
+
 		if (_posMousePress < 0) {
 			findAndSelect(event);
 			return;

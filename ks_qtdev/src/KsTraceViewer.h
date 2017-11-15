@@ -42,7 +42,7 @@ public:
 
 signals:
 	void select(size_t);
-	
+
 private slots:
 	//void pageChanged(int);
 	void searchEditColumn(int);
@@ -84,7 +84,7 @@ private:
 	QList<size_t> _matchList;
 	QList<size_t>::iterator _it;
 
-	KsDualMarkerSM  *_mState;
+	KsDualMarkerSM *_mState;
 
 	enum Condition
 	{

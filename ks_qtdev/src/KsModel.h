@@ -89,7 +89,7 @@ public:
 };
 
 class KsTimeMap {
-	/* All functionalities of the histogram class have to be rewritten in C. 
+	/* All functionalities of the histogram class have to be rewritten in C.
 	 * The histogram code will be part of the C library (libkshark).
 	*/
 	//pevent_record  		**_data;

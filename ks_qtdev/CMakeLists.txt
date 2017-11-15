@@ -48,5 +48,5 @@ message(STATUS "Linker flags : " ${CMAKE_EXE_LINKER_FLAGS}\n)
 add_subdirectory(${KS_DIR}/src)
 
 IF (GTEST_FOUND)
-	add_subdirectory(${KS_DIR}/tests)
+    add_subdirectory(${KS_DIR}/tests)
 ENDIF (GTEST_FOUND)

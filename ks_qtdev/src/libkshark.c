@@ -19,7 +19,6 @@ static int kshark_default_context(struct kshark_context **context)
 	if (!ctx)
 	return -1;
 
-
 	if (*context && *context != kshark_context_handler) {
 		free(*context);
 	}
@@ -49,7 +48,7 @@ int kshark_init(struct kshark_context **context)
 		*context = kshark_context_handler;
 	}
 
-  return true;
+	return true;
 }
 
 const char *kshark_get_task(struct pevent *pe, struct kshark_entry *entry)
@@ -200,11 +199,11 @@ size_t kshark_load_data_entries(struct tracecmd_input *handle,
 			assert(rec != NULL);
 
 			kshark_set_entry_values(ctx->pevt, data, rec);
-		
+
 			rec->next = NULL;
 			next = &(rec->next);
 			free_record(data);
-			
+
 			++count;
 			data = tracecmd_read_data(handle, cpu);
 		}
@@ -253,7 +252,6 @@ size_t kshark_load_data_entries(struct tracecmd_input *handle,
 	return total;
 }
 
-
 size_t kshark_load_data_records(struct tracecmd_input *handle,
 				struct pevent_record ***data_rows)
 {
@@ -283,7 +281,7 @@ size_t kshark_load_data_records(struct tracecmd_input *handle,
 
 		data = tracecmd_read_cpu_first(handle, cpu);
 		while (data) {
-			*temp_next = temp_rec = malloc( sizeof(*temp_rec) );
+			*temp_next = temp_rec = malloc(sizeof(*temp_rec));
 
 			temp_rec->rec = data;
 			temp_rec->next = NULL;
@@ -300,7 +298,7 @@ size_t kshark_load_data_records(struct tracecmd_input *handle,
 	elapsedTime = (t2.tv_sec - t1.tv_sec) * 1000.0;      // sec to ms
 	elapsedTime += (t2.tv_usec - t1.tv_usec) / 1000.0;
 	fprintf(stderr, "load time1: %f ms\n", elapsedTime);
-	
+
 	struct pevent_record **rows;
 	rows = calloc (total, sizeof(struct pevent_record *));
 
@@ -336,7 +334,7 @@ size_t kshark_load_data_records(struct tracecmd_input *handle,
 	elapsedTime = (t3.tv_sec - t2.tv_sec) * 1000.0;      // sec to ms
 	elapsedTime += (t3.tv_usec - t2.tv_usec) / 1000.0;
 	fprintf(stderr, "load time2: %f ms\n", elapsedTime);
-    
+
 	return total;
 }
 

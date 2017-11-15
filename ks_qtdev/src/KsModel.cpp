@@ -288,10 +288,10 @@ KsGraphModel::~KsGraphModel()
 QVariant KsGraphModel::getValue(int column, int row) const
 {
 	switch (column) {
-		case 0 :
+		case 0:
 			return row;
 
-		case 1 :
+		case 1:
 		{
 			const kshark_entry *e = _histo.dataAt(row);
 			return e->pid;
@@ -494,14 +494,14 @@ void KsTimeMap::setNextBinEdge(size_t prevBin)
 		_map[bin] = -1;
 		return;
 	}
-	
+
 	_map[bin] = row;
 }
 
 void KsTimeMap::setBinCounts()
 {
 	size_t i = 0, prevNotEmpty;
-	
+
 	if (_map[_nBins + 1] != -1) {
 		prevNotEmpty = _nBins + 1;
 	} else {
@@ -569,9 +569,9 @@ void KsTimeMap::shiftForward(size_t n)
 
 	_map[bin] = _map[bin+n];
 	_binCount[bin] = 0;
-	
+
 	resetBins(bin + 1, _nBins);
-	
+
 	while (bin < _nBins) {
 		setNextBinEdge(bin);
 		++bin;

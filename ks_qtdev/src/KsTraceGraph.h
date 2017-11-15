@@ -33,7 +33,7 @@ QT_CHARTS_USE_NAMESPACE
 
 class KsChartView : public QChartView
 {
-	Q_OBJECT	
+	Q_OBJECT
 public:
 	KsChartView(QWidget *parent = 0);
 	KsChartView(QChart *chart, QWidget *parent = 0);
@@ -130,24 +130,24 @@ private:
 
 	QToolBar 	_pointerBar;
 	QToolBar 	_navigationBar;
-	QPushButton     _scrollLeftButton;
-	QPushButton     _zoomInButton;
-	QPushButton     _zoomOutButton;
-	QPushButton     _scrollRightButton;
+	QPushButton	_scrollLeftButton;
+	QPushButton	_zoomInButton;
+	QPushButton	_zoomOutButton;
+	QPushButton	_scrollRightButton;
 
-	QLabel	_labelP1, _labelP2, 				  // Pointer
+	QLabel	_labelP1, _labelP2,				  // Pointer
 		_labelI1, _labelI2, _labelI3, _labelI4, _labelI5; // Process Info
 
-	QScrollArea _scrollArea;
-	QWidget     _drawWindow;
+	QScrollArea	_scrollArea;
+	QWidget		_drawWindow;
 
 	KsGraphModel		_model;
 	QMap<int, KsChartView*> _chartMap;
 	QVBoxLayout		_layout;
 
-	KsDualMarkerSM  *_mState;
+	KsDualMarkerSM	*_mState;
 	KsDataStore 	*_data;
-	QVXYModelMapper *_mapper;
+	QVXYModelMapper	*_mapper;
 	QRubberBand 	 _rubberBand;
 	QPoint 		 _rubberBandOrigin;
 

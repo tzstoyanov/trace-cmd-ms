@@ -45,7 +45,7 @@ struct kshark_entry {
 	uint8_t		cpu;
 	uint64_t	ts;
 	int16_t		pid;
-	
+
 	int		event_id;
 	uint8_t		visible;
 };

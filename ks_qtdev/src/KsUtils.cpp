@@ -54,7 +54,7 @@ KsCheckBoxDialog::KsCheckBoxDialog(const QString &n, QWidget *parent)
 	this->setWindowTitle(_name);
 
 	connect(&_apply_button, SIGNAL(pressed()), this, SLOT(applyPress()));
-	connect(&_apply_button, SIGNAL(pressed()), parentWidget(), SLOT(reload()) );
+	connect(&_apply_button, SIGNAL(pressed()), parentWidget(), SLOT(reload()));
 
 	connect(&_cansel_button,  SIGNAL(pressed()), this, SLOT(close()));
 
@@ -72,7 +72,7 @@ KsCheckBoxDialog::KsCheckBoxDialog(const QString &n, QWidget *parent)
 
 	_scrollArea.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	_scrollArea.setWidget(_cb_widget);
-					  
+
 	_top_layout.addWidget(&_all_cb);
 	_top_layout.addWidget(&_scrollArea);
 	_top_layout.addLayout(&_button_layout, 1);
@@ -87,7 +87,6 @@ void KsCheckBoxDialog::cbResize(size_t n)
 	_cb.resize(n);
 	_cb_widget->resize(this->width(), FONT_HEIGHT*1.8*n);
 }
-
 
 void KsCheckBoxDialog::applyPress()
 {
@@ -200,7 +199,6 @@ void KsDataStore::loadData(const QString &file)
 	qInfo() <<"Data loading time: " << 1e3*time << " ms.   entries: " << _data_size;
 }
 
-
 void KsDataStore::loadData(struct tracecmd_input *handle)
 {
 	//_data_size = kshark_load_data_records(handle, &_rows);
@@ -299,7 +297,7 @@ DualMarkerState operator !(const DualMarkerState &state)
 		return DualMarkerState::A;
 
 	return DualMarkerState::B;
-} 
+}
 
 KsDualMarkerSM::KsDualMarkerSM(QWidget *parent)
 : QWidget(parent),
@@ -346,7 +344,7 @@ KsDualMarkerSM::KsDualMarkerSM(QWidget *parent)
 
 	_stateA->addTransition(&_buttonB, SIGNAL(clicked()), _stateB);
 	connect(&_buttonB, SIGNAL(clicked()), this, SLOT(setStateB()));
-	
+
 	_machine.addState(_stateA);
 	_machine.addState(_stateB);
 	_machine.setInitialState(_stateA);

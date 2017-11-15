@@ -11,7 +11,7 @@ The external dependencies are listed below:
     sudo apt-get install build-essential git cmake -y
     sudo apt-get install qtbase5-dev libqt5charts5-dev libpython2.7-dev libgtest-dev -y
 
-  In order to install the packages on Centos as root do the following:
+  In order to install the packages on Fedora, as root do the following:
     dnf install gcc gcc-c++ git cmake -y
     dnf install qt5-qtbase-devel qt5-qtcharts-devel python2-devel gtest-devel -y
 

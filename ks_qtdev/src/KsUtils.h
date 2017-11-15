@@ -67,9 +67,9 @@ public:
 	KsMessageDialog(QString message, QWidget *parent = 0);
 
 private:
-	QVBoxLayout _layout;
-	QLabel 	    _text;
-	QPushButton _close_button;
+	QVBoxLayout	_layout;
+	QLabel		_text;
+	QPushButton	_close_button;
 };
 
 class KsCheckBoxDialog : public QDialog
@@ -171,11 +171,11 @@ signals:
 	void update(KsTimeMap *histo);
 
 private:
-	int		   _bin;
-	size_t		   _pos;
-	QColor 		   _color;
-	QGraphicsLineItem *_mark;
-	KsChartView 	  *_graph;
+	int			 _bin;
+	size_t		 	 _pos;
+	QColor 			 _color;
+	QGraphicsLineItem	*_mark;
+	KsChartView 		*_graph;
 };
 
 DualMarkerState operator !(const DualMarkerState &state);
@@ -211,15 +211,14 @@ private slots:
 private:
 	QPushButton 	 _buttonA;
 	QPushButton 	 _buttonB;
-	QLabel 	    	 _labelMA, _labelMB, _labelDelta;
-	QLabel 	    	 _labelDeltaDescr;
+	QLabel		 _labelMA, _labelMB, _labelDelta;
+	QLabel		 _labelDeltaDescr;
 	QState		*_stateA;
-	QState 		*_stateB;
+	QState		*_stateB;
 	QStateMachine 	 _machine;
 
 	DualMarkerState	 _markState;
 	KsGraphMark 	 _markA, _markB;
 };
-
 
 #endif

@@ -98,7 +98,7 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	/* On the toolbar, make a Check box for connecting the search pannel
 	 * to the Graph widget.
 	 */
-	_graphFollowsCheckBox.setCheckState(Qt::Checked);	
+	_graphFollowsCheckBox.setCheckState(Qt::Checked);
 	connect(&_graphFollowsCheckBox, SIGNAL(stateChanged(int)),
 		this, SLOT(graphFollowsChanged(int)));
 
@@ -203,7 +203,7 @@ bool containsCond(QString searchText, QString itemText)
 
 bool matchCond(QString searchText, QString itemText)
 {
-	if (itemText.compare(searchText, Qt::CaseInsensitive) == 0 )
+	if (itemText.compare(searchText, Qt::CaseInsensitive) == 0)
 		return true;
 
 	return false;
@@ -280,14 +280,14 @@ void KsTraceViewer::next()
 
 void KsTraceViewer::prev()
 {
-	if (!_matchList.empty()) { // Items have been found.
+	if (!_matchList.empty()) {	// Items have been found.
 		if (_it == _matchList.begin()) {
 			// This is the first item of the list. Go to the last item.
 			_it = _matchList.end() - 1;
 		} else {
 			--_it; // Move the iterator.
 		}
-		
+
 		// Select the row of the item.
 		this->showRow(*_it, true);
 

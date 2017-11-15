@@ -146,7 +146,7 @@ void KsMainWindow::createMenus()
 void KsMainWindow::open()
 {
 	QString fileName =
-	QFileDialog::getOpenFileName(this, 
+	QFileDialog::getOpenFileName(this,
 				     tr("Open File"),
 				     KS_DIR,
 				     tr("trace-cmd files (*.dat);;All files (*)"));
@@ -171,13 +171,13 @@ void KsMainWindow::eventSelect()
 }
 
 void KsMainWindow::cpuSelect() {
-    KsCheckBoxDialog *cpus_cbd = new KSCpuCheckBoxDialog(_data._pevt, this);
-    connect(cpus_cbd, SIGNAL(apply(QVector<Qt::CheckState>)),
-	    &_graph, SLOT(cpuReDraw(QVector<Qt::CheckState>)));
+	KsCheckBoxDialog *cpus_cbd = new KSCpuCheckBoxDialog(_data._pevt, this);
+	connect(cpus_cbd, SIGNAL(apply(QVector<Qt::CheckState>)),
+		&_graph, SLOT(cpuReDraw(QVector<Qt::CheckState>)));
 }
 
 void KsMainWindow::taskSelect() {
-    //KSTasksCheckBoxDialog *_tasks_cb =
+	//KSTasksCheckBoxDialog *_tasks_cb =
 	new KSTasksCheckBoxDialog(_data._pevt, this);
 }
 
