@@ -22,9 +22,6 @@
 #include <sys/stat.h>
 #include <getopt.h>
 
-// C++
-#include <iostream>
-
 // Qt
 #include <QApplication>
 
@@ -38,9 +35,8 @@
 #define default_input_file (char*)"trace.dat"
 static char *input_file;
 
-void usage(char **argv)
+void usage(const char *prog)
 {
-	char *prog = basename(argv[0]);
 	printf("Usage: %s\n", prog);
 	printf("  -h	Display this help message\n");
 	printf("  -v	Display version and exit\n");
@@ -50,21 +46,6 @@ void usage(char **argv)
 static void add_plugin(const char *file)
 {
 	// TODO
-// 	struct stat st;
-// 	int ret;
-// 
-// 	ret = stat(file, &st);
-// 	if (ret < 0) {
-// 		warning("plugin %s not found", file);
-// 		return;
-// 	}
-// 
-// 	*plugin_next = (plugin_list*) calloc(sizeof(struct plugin_list), 1);
-// 	if (!*plugin_next)
-// 		die("failed to allocat memory for plugin");
-// 
-// 	(*plugin_next)->file = file;
-// 	plugin_next = &(*plugin_next)->next;
 }
 
 int main(int argc, char **argv)
@@ -73,17 +54,21 @@ int main(int argc, char **argv)
 	while ((c = getopt(argc, argv, "hvi:p:")) != -1) {
 		switch(c) {
 		case 'h':
-			usage(argv);
+			usage(argv[0]);
 			return 0;
+
 		case 'v':
 			printf("%s - %s\n", basename(argv[0]), KS_VERSION_STRING);
 			return 0;
+
 		case 'i':
 			input_file = optarg;
 			break;
+
 		case 'p':
 			add_plugin(optarg);
 			break;
+
 		default:
 			break;
 		}
@@ -91,7 +76,7 @@ int main(int argc, char **argv)
 
 	if ((argc - optind) >= 1) {
 		if (input_file)
-			usage(argv);
+			usage(argv[0]);
 		input_file = argv[optind];
 	}
 
@@ -107,4 +92,3 @@ int main(int argc, char **argv)
 	ks.show();
 	return a.exec();
 }
-

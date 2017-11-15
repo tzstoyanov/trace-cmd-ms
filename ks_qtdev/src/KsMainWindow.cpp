@@ -117,6 +117,7 @@ void KsMainWindow::createActions()
 	connect(&_aboutAction, SIGNAL(triggered()), this, SLOT(aboutInfo()));
 	connect(&_view, SIGNAL(select(size_t)), &_graph, SLOT(markEntry(size_t)));
 	connect(&_graph, SIGNAL(select(int, bool)), &_view, SLOT(showRow(int, bool)));
+	connect(&_graph, SIGNAL(deselect()), &_view, SLOT(deselect()));
 }
 
 void KsMainWindow::createMenus()
@@ -226,4 +227,3 @@ void KsMainWindow::loadFile(const QString& fileName) {
 	_graph.loadData(&_data);
 	//t1.join();
 }
-

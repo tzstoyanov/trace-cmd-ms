@@ -2,12 +2,26 @@
 This directory contains experimental code, aimed towards
 development of a Qt-based version of the KernelShark GUI.
 
-BUILDING:
+Third Party Software:
+------------------------------------------------------------
+The external dependencies are listed below:
+1. Qt5Base, Qt5Charts, Python2.7 and GTest
 
+  In order to install the packages on Ubuntu do the following:
+    sudo apt-get install build-essential git cmake -y
+    sudo apt-get install qtbase5-dev libqt5charts5-dev libpython2.7-dev libgtest-dev -y
+
+  In order to install the packages on Centos as root do the following:
+    dnf install gcc gcc-c++ git cmake -y
+    dnf install qt5-qtbase-devel qt5-qtcharts-devel python2-devel gtest-devel -y
+
+
+Building:
+------------------------------------------------------------
 1. Follow the instructions given in trace-cmd/README and build
 the original libraries.
 
 2. Do:
-cd ks_qtdev/build
-cmake ../
-make
+    cd ks_qtdev/build
+    cmake ../
+    make

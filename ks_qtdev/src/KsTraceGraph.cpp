@@ -58,7 +58,7 @@ KsTraceGraph::KsTraceGraph(QWidget *parent)
 		tb->addWidget(l1);
 		l2->setFrameStyle(QFrame::Panel | QFrame::Sunken);
 		l2->setStyleSheet("QLabel { background-color : white;}");
-		l2->setFixedWidth(FONT_WIDTH*15);
+		l2->setFixedWidth(FONT_WIDTH*16);
 		tb->addWidget(l2);
 		tb->addSeparator();
 	};
@@ -174,6 +174,7 @@ void KsTraceGraph::addCpu(int cpu)
 	connect(view, SIGNAL(stopUpdating()), this, SLOT(stopUpdating()));
 	connect(view, SIGNAL(resetPointer()), this, SLOT(resetPointer()));
 	connect(view, SIGNAL(select(int, bool)), this, SLOT(selectReceived(int, bool)));
+	connect(view, SIGNAL(deselect()), this, SLOT(deselectReceived()));
 	connect(view, SIGNAL(found(size_t)), this, SLOT(setPointerInfo(size_t)));
 
 	QChart *chart = new QChart();
@@ -400,25 +401,31 @@ void KsTraceGraph::resetPointer()
 
 void KsTraceGraph::setPointerInfo(size_t i)
 {
-	kshark_entry e;
-	kshark_set_entry_values(_data->_pevt, _data->_rows[i], &e);
-	int str_size;
-	char* info_str = kshark_dump_entry(&e, &str_size);
-	char *next, *pch = strchr(info_str,';');
-	char *buff = strndup(info_str, pch - info_str);
-	_labelI1.setText(QString(buff));
-	_labelI1.adjustSize();
+	kshark_entry *e = _data->_rows[i];
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_init(&kshark_ctx);
 
-	for (auto const &l: {&_labelI2, &_labelI3, &_labelI4, &_labelI5}) {
-		next = strchr(pch + 1,';');
-		buff = strndup(pch + 2, next - pch - 2);
-		pch = next;
-		l->setText(QString(buff));
-		l->adjustSize();
-		free(buff);
-	}
-	
-	free(info_str);
+	pevent_record *record = tracecmd_read_at(kshark_ctx->handle,
+						 e->offset,
+						 NULL);
+								 
+	QString comm(kshark_get_task(kshark_ctx->pevt, e));
+	comm.append("-");
+	comm.append(QString("%1").arg(e->pid));
+	_labelI1.setText(comm);
+
+	_labelI2.setText(QString("%1").arg(e->cpu));
+
+	QString lat(kshark_get_latency(kshark_ctx->pevt, record));
+	_labelI3.setText(lat);
+
+	QString event(kshark_get_event_name(kshark_ctx->pevt, e));
+	_labelI4.setText(event);
+
+	QString info(kshark_get_info(kshark_ctx->pevt, record, e));
+	_labelI5.setText(info);
+
+	free_record(record);
 }
 	
 void KsTraceGraph::markEntry(size_t pos)
@@ -444,6 +451,11 @@ void KsTraceGraph::selectReceived(int pos, bool mark)
 {
 	emit select(pos, mark);
 	markEntry(pos);
+}
+
+void KsTraceGraph::deselectReceived()
+{
+	emit deselect();
 }
 
 void KsTraceGraph::updateGraphs(GraphActions action)
@@ -518,6 +530,7 @@ void KsChartView::mousePressEvent(QMouseEvent *event)
 		emit rangeBoundInit(event->pos().x(), _posMousePress);
 	} else if (event->button() == Qt::RightButton) {
 		emit resetPointer();
+		emit deselect();
 	}
 }
 
@@ -553,13 +566,17 @@ bool KsChartView::find(QMouseEvent *event, size_t variance, size_t *row)
 	return false;
 }
 
-void KsChartView::findAndSelect(QMouseEvent *event)
+bool KsChartView::findAndSelect(QMouseEvent *event)
 {
 	emit resetPointer();
 	size_t row;
 	bool found = find(event, 10, &row);
 	if (found)
 		emit select(row, true);
+	else
+		emit deselect();
+
+	return found;
 }
 
 void KsChartView::mouseMoveEvent(QMouseEvent *event)
@@ -649,7 +666,3 @@ void KsChartView::keyReleaseEvent(QKeyEvent *event)
 	   event->key() == Qt::Key_Right)
 		emit stopUpdating();
 }
-
-
-
-

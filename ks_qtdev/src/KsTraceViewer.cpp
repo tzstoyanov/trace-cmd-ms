@@ -322,6 +322,11 @@ void KsTraceViewer::showRow(int r, bool mark)
 	}
 }
 
+void KsTraceViewer::deselect()
+{
+	_view.clearSelection();
+}
+
 void KsTraceViewer::markSwitch()
 {
 	/* The state of the Dual marker has changed. Get the new active marker. */
@@ -391,6 +396,3 @@ size_t KsTraceViewer::searchItems(int column,
 	_it = _matchList.begin();
 	return count;
 }
-
-
-

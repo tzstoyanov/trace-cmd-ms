@@ -22,8 +22,8 @@
 #include <QFrame>
 
 // Kernel Shark 2
-#include "KsUtils.h"
 #include "KsDeff.h"
+#include "KsUtils.h"
 #include "KsTraceGraph.h"
 
 KsMessageDialog::KsMessageDialog(QString message, QWidget *parent)
@@ -121,7 +121,7 @@ void KsCheckBoxDialog::resizeEvent(QResizeEvent* event)
 KSCpuCheckBoxDialog::KSCpuCheckBoxDialog(struct pevent *pe, QWidget *parent)
 : KsCheckBoxDialog("CPU plots", parent)
 {
-	this->cbResize(pe->cpus);
+	cbResize(pe->cpus);
 
 	int n = _cb.size();
 	for (int i = 0; i < n; ++i) {
@@ -132,13 +132,22 @@ KSCpuCheckBoxDialog::KSCpuCheckBoxDialog(struct pevent *pe, QWidget *parent)
 }
 
 KSTasksCheckBoxDialog::KSTasksCheckBoxDialog(struct pevent *pe, QWidget *parent)
-: KsCheckBoxDialog("Task plotss", parent)
-{}
+: KsCheckBoxDialog("Task plots", parent)
+{
+	cbResize(pe->cmdline_count);
+
+	int n = _cb.size();
+	for (int i = 0; i < n; ++i) {
+		_cb[i] = new QCheckBox(QString("Task %1").arg(i+1), this);
+		_cb[i]->setCheckState(Qt::Checked);
+		_cb_layout->addWidget(_cb[i]);
+	}
+}
 
 KSEventsCheckBoxDialog::KSEventsCheckBoxDialog(struct pevent *pe, QWidget *parent)
 : KsCheckBoxDialog("Events", parent)
 {
-	this->cbResize(pe->nr_events);
+	cbResize(pe->nr_events);
 
 	struct event_format **events;
 	
@@ -194,7 +203,8 @@ void KsDataStore::loadData(const QString &file)
 
 void KsDataStore::loadData(struct tracecmd_input *handle)
 {
-	_data_size = kshark_load_data(handle, &_rows);
+	//_data_size = kshark_load_data_records(handle, &_rows);
+	_data_size = kshark_load_data_entries(handle, &_rows);
 	_pevt = tracecmd_get_pevent(handle);
 }
 
@@ -202,7 +212,8 @@ void KsDataStore::clear()
 {
 	if (_data_size) {
 		for (size_t r = 0; r < _data_size; ++r)
-			free_record( _rows[r] );
+			//free_record(_rows[r]);
+			free(_rows[r]);
 
 		free(_rows);
 		_rows = nullptr;
@@ -435,5 +446,3 @@ void KsDualMarkerSM::updateLabels(const KsTimeMap &histo)
 		_labelDelta.setText("");
 	}
 }
-
-

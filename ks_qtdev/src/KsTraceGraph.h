@@ -22,10 +22,8 @@
 #define _KS_TRACEGRAPH_H
 
 // Qt
-#include <QtWidgets>
 #include <QRubberBand>
 #include <QtCharts>
-#include <QDebug>
 using namespace QtCharts;
 QT_CHARTS_USE_NAMESPACE
 
@@ -53,6 +51,7 @@ signals:
 	void stopUpdating();
 	void resetPointer();
 	void select(int pos, bool mark);
+	void deselect();
 	void found(size_t);
 
 protected:
@@ -69,7 +68,7 @@ private:
 	void init();
 	QPointF mapToValue(QMouseEvent *event);
 	bool find(QMouseEvent *event, size_t variance, size_t *row);
-	void findAndSelect(QMouseEvent *event);
+	bool findAndSelect(QMouseEvent *event);
 
 	int _posMousePress;
 
@@ -103,10 +102,12 @@ private slots:
 	void setPointerInfo(size_t);
 	void markEntry(size_t);
 	void selectReceived(int bin, bool mark);
+	void deselectReceived();
 	void cpuReDraw(QVector<Qt::CheckState>);
 
 signals:
 	void select(int, bool);
+	void deselect();
 
 //protected:
 	//bool eventFilter(QObject *obj, QEvent *event);
@@ -155,6 +156,3 @@ private:
 };
 
 #endif // _KS_TRACEGRAPH_H
-
-
-

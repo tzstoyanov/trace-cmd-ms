@@ -22,7 +22,6 @@
 #define _KS_TRACEVIEW_H
 
 // Qt
-#include <QtWidgets>
 #include <QTableView>
 
 // Kernel Shark 2
@@ -55,6 +54,7 @@ private slots:
 	void prev();
 	void clicked(const QModelIndex& i);
 	void showRow(int r, bool mark);
+	void deselect();
 	void markSwitch();
 
 private:
@@ -95,5 +95,3 @@ private:
 };
 
 #endif // _KS_TRACEVIEW_H
-
-

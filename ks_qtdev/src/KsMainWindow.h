@@ -90,4 +90,3 @@ private:
 };
 
 #endif // _KS_MAINWINDOW_H
-

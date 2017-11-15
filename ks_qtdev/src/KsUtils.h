@@ -22,7 +22,6 @@
 #define _KS_UTILS_H
 
 // C++
-#include <vector>
 #include <chrono>
 
 // Qt
@@ -134,7 +133,8 @@ public:
 	void clear();
 	size_t size() const {return _data_size;}
 
-	struct pevent_record **_rows;
+	struct kshark_entry  **_rows;
+	//struct pevent_record **_rows;
 	pevent		      *_pevt;
 };
 

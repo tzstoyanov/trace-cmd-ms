@@ -3,12 +3,13 @@ cmake_minimum_required(VERSION 2.8.11 FATAL_ERROR)
 
 # Set the name and version of the project
 project(kernelshark)
-MESSAGE("\n project: Kernel Shark")
+
 set(KS_VERSION_MAJOR 0)
 set(KS_VERSION_MINOR 3)
 set(KS_VERSION_PATCH 0)
 set(KS_VERSION_STRING ${KS_VERSION_MAJOR}.${KS_VERSION_MINOR}.${KS_VERSION_PATCH})
-MESSAGE(STATUS "version: ${KS_VERSION_STRING} \n")
+
+MESSAGE("\n project: Kernel Shark:  (version: ${KS_VERSION_STRING}) \n")
 
 set(KS_DIR ${CMAKE_SOURCE_DIR})
 
@@ -16,14 +17,14 @@ set(KS_DIR ${CMAKE_SOURCE_DIR})
 include(ProcessorCount)
 ProcessorCount(N_CPUS)
 
-find_package(Qt5Widgets 5.9.1 REQUIRED)
-MESSAGE(STATUS "Found Qt5Widgets:   (found version " ${Qt5Widgets_VERSION} ")")
-
-find_package(Qt5Charts REQUIRED)
-find_package(PythonLibs REQUIRED)
-find_package(GTest)
-
 include(${KS_DIR}/build/FindTraceCmd.cmake)
+
+find_package(Qt5Widgets 5.9.1)
+MESSAGE(STATUS "Found Qt5Widgets:  (version ${Qt5Widgets_VERSION})")
+
+find_package(Qt5Charts 5.9.1)
+find_package(PythonLibs)
+find_package(GTest)
 
 configure_file( ${KS_DIR}/build/deff.h.cmake
                 ${KS_DIR}/src/KsDeff.h)

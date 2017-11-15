@@ -81,17 +81,14 @@ QVariant KsViewModel::getValue(const QModelIndex &index) const
 
 QVariant KsViewModel::getValue(int column, int row) const
 {
-	if (row >= _data.count())
-		return {};
-
 	switch (column) {
-		case TRACE_VIEW_STORE_COL_INDEX :
+		case TRACE_VIEW_COL_INDEX :
 			return row;
 
-		case TRACE_VIEW_STORE_COL_CPU :
+		case TRACE_VIEW_COL_CPU:
 			return _data[row]->cpu;
 
-		case TRACE_VIEW_STORE_COL_TS :
+		case TRACE_VIEW_COL_TS:
 			char time[32];
 			uint64_t secs, usecs;
 			usecs = _data[row]->ts;
@@ -101,24 +98,31 @@ QVariant KsViewModel::getValue(int column, int row) const
 			sprintf(time, "%llu.%06llu", (long long)secs, (long long)usecs);
 			return time;
 
-		case TRACE_VIEW_STORE_COL_COMM :
+		case TRACE_VIEW_COL_COMM:
+			return pevent_data_comm_from_pid(_pevt, _data[row]->pid);
+
+		case TRACE_VIEW_COL_PID:
+			return _data[row]->pid;
+
+		case TRACE_VIEW_COL_LAT: 
 		{
-			int pid = pevent_data_pid(_pevt, _data[row]);
-			return pevent_data_comm_from_pid(_pevt, pid);
+			struct kshark_context *ctx = NULL;
+			kshark_init(&ctx);
+
+			pevent_record *record = tracecmd_read_at(ctx->handle,
+								 _data[row]->offset,
+								 NULL);
+			char *lat = kshark_get_latency(ctx->pevt, record);
+			free_record(record);
+
+			return lat;
 		}
 
-		case TRACE_VIEW_STORE_COL_PID :
-			return pevent_data_pid(_pevt, _data[row]);
-
-		case TRACE_VIEW_STORE_COL_LAT :
-			trace_seq_reset(&_seq);
-			pevent_data_lat_fmt(_pevt, &_seq, _data[row]);
-			return _seq.buffer;
-
-		case TRACE_VIEW_STORE_COL_EVENT :
+		case TRACE_VIEW_COL_EVENT:
 		{
-			int etype = pevent_data_type(_pevt, _data[row]);
-			struct event_format *event = pevent_data_event_from_type(_pevt, etype);
+			struct event_format *event =
+				pevent_data_event_from_type(_pevt, _data[row]->event_id);
+
 			if (!event) {
 				return "[UNKNOWN EVENT]";
 			} else {
@@ -126,18 +130,84 @@ QVariant KsViewModel::getValue(int column, int row) const
 			}
 		}
 
-		case TRACE_VIEW_STORE_COL_INFO :
+		case TRACE_VIEW_COL_INFO :
 		{
-			int etype = pevent_data_type(_pevt, _data[row]);
-			struct event_format *event = pevent_data_event_from_type(_pevt, etype);
-			trace_seq_reset(&_seq);
-			pevent_event_info(&_seq, event,_data[row] );
-			return _seq.buffer;
+			
+			struct kshark_context *ctx = NULL;
+			kshark_init(&ctx);
+			pevent_record *record = tracecmd_read_at(ctx->handle,
+							      _data[row]->offset,
+							      NULL);
+			char *info = kshark_get_info(ctx->pevt, record, _data[row]);
+			free_record(record);
+
+			return  info;
 		}
 
 		default: return {};
 	}
 }
+
+
+//QVariant KsViewModel::getValue(int column, int row) const
+//{
+	//if (row >= _data.count())
+		//return {};
+
+	//switch (column) {
+		//case TRACE_VIEW_COL_INDEX :
+			//return row;
+
+		//case TRACE_VIEW_COL_CPU :
+			//return _data[row]->cpu;
+
+		//case TRACE_VIEW_COL_TS :
+			//char time[32];
+			//uint64_t secs, usecs;
+			//usecs = _data[row]->ts;
+			//usecs /= 1000;
+			//secs = usecs / 1000000ULL;
+			//usecs -= secs * 1000000ULL;
+			//sprintf(time, "%llu.%06llu", (long long)secs, (long long)usecs);
+			//return time;
+
+		//case TRACE_VIEW_COL_COMM :
+		//{
+			//int pid = pevent_data_pid(_pevt, _data[row]);
+			//return pevent_data_comm_from_pid(_pevt, pid);
+		//}
+
+		//case TRACE_VIEW_COL_PID :
+			//return pevent_data_pid(_pevt, _data[row]);
+
+		//case TRACE_VIEW_COL_LAT :
+			//trace_seq_reset(&_seq);
+			//pevent_data_lat_fmt(_pevt, &_seq, _data[row]);
+			//return _seq.buffer;
+
+		//case TRACE_VIEW_COL_EVENT :
+		//{
+			//int etype = pevent_data_type(_pevt, _data[row]);
+			//struct event_format *event = pevent_data_event_from_type(_pevt, etype);
+			//if (!event) {
+				//return "[UNKNOWN EVENT]";
+			//} else {
+				//return event->name;
+			//}
+		//}
+
+		//case TRACE_VIEW_COL_INFO :
+		//{
+			//int etype = pevent_data_type(_pevt, _data[row]);
+			//struct event_format *event = pevent_data_event_from_type(_pevt, etype);
+			//trace_seq_reset(&_seq);
+			//pevent_event_info(&_seq, event,_data[row] );
+			//return _seq.buffer;
+		//}
+
+		//default: return {};
+	//}
+//}
 
 QVariant KsViewModel::headerData(int section,
 				 Qt::Orientation orientation,
@@ -152,7 +222,8 @@ QVariant KsViewModel::headerData(int section,
 	return {};
 }
 
-void KsViewModel::fill(pevent *pevt, pevent_record **entries, size_t n)
+//void KsViewModel::fill(pevent *pevt, pevent_record **entries, size_t n)
+void KsViewModel::fill(pevent *pevt, kshark_entry **entries, size_t n)
 {
 	_pevt = pevt;
 	beginInsertRows(QModelIndex(), _data.count(), _data.count() + n - 1);
@@ -204,24 +275,26 @@ size_t KsViewModel::search(int column,
 //////////////////////////////////////////////////////////////////////////////////////
 
 KsGraphModel::KsGraphModel(QObject *parent)
-: QAbstractTableModel(parent), _pevt(nullptr), _cpus(1) {}
+: QAbstractTableModel(parent), _pevt(nullptr), _cpus(1)
+{}
 
 KsGraphModel::KsGraphModel(int cpus, QObject *parent)
-: QAbstractTableModel(parent), _pevt(nullptr), _cpus(cpus) {}
+: QAbstractTableModel(parent), _pevt(nullptr), _cpus(cpus)
+{}
 
-KsGraphModel::~KsGraphModel() {}
+KsGraphModel::~KsGraphModel()
+{}
 
 QVariant KsGraphModel::getValue(int column, int row) const
 {
 	switch (column) {
 		case 0 :
-		{
 			return row;
-		}
+
 		case 1 :
 		{
-			int pid = 1;//pevent_data_pid(_pevt, _histo._data[ _histo[row] ]);
-			return pevent_data_comm_from_pid(_pevt, pid);
+			const kshark_entry *e = _histo.dataAt(row);
+			return e->pid;
 		}
 
 		default:
@@ -229,7 +302,8 @@ QVariant KsGraphModel::getValue(int column, int row) const
 	}
 
 	double val = 0.;
-	if (_histo.isEmpty(row, column - 2))
+	int cpu = column - 2;
+	if (_histo.isEmpty(row, cpu))
 		val += .9;
 
 	return val;
@@ -251,7 +325,8 @@ QVariant KsGraphModel::data(const QModelIndex &index, int role) const
 	return val;
 }
 
-void KsGraphModel::fill(pevent *pevt, pevent_record **entries, size_t n, bool defaultMap)
+//void KsGraphModel::fill(pevent *pevt, pevent_record **entries, size_t n, bool defaultMap)
+void KsGraphModel::fill(pevent *pevt, kshark_entry **entries, size_t n, bool defaultMap)
 {
 	_pevt = pevt;
 	beginResetModel();
@@ -376,7 +451,7 @@ void KsTimeMap::resetBins(size_t first, size_t last)
 
 size_t KsTimeMap::setLowerEdge()
 {
-	size_t row = kshark_find_row(_min, _data, 0, _dataSize - 1);
+	size_t row = kshark_find_entry_row(_min, _data, 0, _dataSize - 1);
 
 	if (row != 0) {
 		_map[_nBins + 1] = 0;
@@ -395,7 +470,7 @@ size_t KsTimeMap::setLowerEdge()
 
 size_t KsTimeMap::setUpperhEdge()
 {
-	size_t row = kshark_find_row(_max, _data, 0, _dataSize - 1);
+	size_t row = kshark_find_entry_row(_max, _data, 0, _dataSize - 1);
 
 	if (row < _dataSize - 1) {
 		_map[_nBins] = row;
@@ -413,7 +488,7 @@ void KsTimeMap::setNextBinEdge(size_t prevBin)
 	size_t bin = prevBin + 1;
 	size_t time = _min + bin*_binSize;
 
-	size_t row = kshark_find_row(time, _data, 0, _dataSize - 1);
+	size_t row = kshark_find_entry_row(time, _data, 0, _dataSize - 1);
 
 	if (_data[row]->ts  >= time + _binSize) {
 		_map[bin] = -1;
@@ -448,7 +523,8 @@ void KsTimeMap::setBinCounts()
 		_binCount[prevNotEmpty] = _map[_nBins] - _map[prevNotEmpty];
 }
 
-void KsTimeMap::fill(struct pevent_record **data, size_t n)
+//void KsTimeMap::fill(struct pevent_record **data, size_t n)
+void KsTimeMap::fill(struct kshark_entry **data, size_t n)
 {	
 	_data = data;
 	_dataSize = n;
@@ -686,10 +762,10 @@ int64_t KsTimeMap::at(int i) const
 	if (i >= 0 && i < (int)_nBins)
 		return _map[i];
 
-	if (i == -1)
+	if (i == OverflowBin::Upper)
 		return _map[_nBins];
 
-	if (i == -2)
+	if (i == OverflowBin::Lower)
 		return _map[_nBins + 1];
 
 	return -1;
@@ -699,7 +775,3 @@ int64_t KsTimeMap::operator[](int i) const
 {
 	return this->at(i);
 }
-
-
-
-

@@ -35,7 +35,8 @@ TEST(KsTimeMapInitTest, InitWrong)
 struct KsTimeMapTest : public testing::Test
 {
 	KsTimeMap *map;
-	std::vector <struct pevent_record *> data;
+	//std::vector <struct pevent_record *> data;
+	std::vector <struct kshark_entry *> data;
 	
 protected:
 
@@ -46,7 +47,8 @@ protected:
 		map = new KsTimeMap();
 		data.resize(1000);
 		for (auto &d: data) {
-			d = new struct pevent_record;
+			//d = new struct pevent_record;
+			d = new struct kshark_entry;
 			d->ts = ts++;
 		}
 	}

@@ -26,10 +26,13 @@
 
 // Qt
 #include <QAbstractTableModel>
-#include <QStandardItemModel>
 
 // trace-cmd
 #include "trace-cmd.h"
+
+// kernel shark 2
+#include "libkshark.h"
+
 
 typedef bool (*condition_func)(QString, QString);
 
@@ -39,14 +42,25 @@ enum class DualMarkerState;
 
 class KsViewModel : public QAbstractTableModel
 {
-	QList<pevent_record*>	_data;
-	//pevent_record	      **_data;
-	//int 			_count;
+	//QList<pevent_record*>	_data;
+	QList<kshark_entry*>	_data;
 	QStringList 		_header;
 // 	size_t			_page;
 
 	static struct trace_seq	 _seq;
 	struct pevent		*_pevt;
+
+	enum {
+		TRACE_VIEW_COL_INDEX,
+		TRACE_VIEW_COL_CPU,
+		TRACE_VIEW_COL_TS,
+		TRACE_VIEW_COL_COMM,
+		TRACE_VIEW_COL_PID,
+		TRACE_VIEW_COL_LAT,
+		TRACE_VIEW_COL_EVENT,
+		TRACE_VIEW_COL_INFO,
+		TRACE_VIEW_N_COLUMNS,
+	};
 
 public:
 	int _markA, _markB;
@@ -59,7 +73,8 @@ public:
 	QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
 	QVariant data(const QModelIndex &index, int role) const override;
 
-	void fill(pevent *pevt, pevent_record **entries, size_t n);
+	//void fill(pevent *pevt, pevent_record **entries, size_t n);
+	void fill(pevent *pevt, kshark_entry **entries, size_t n);
 	void selectRow(DualMarkerState state, int row);
 	void reset();
 
@@ -67,7 +82,7 @@ public:
 	QVariant getValue(const QModelIndex &index) const;
 	QVariant getValue(int column, int row) const;
 
-	size_t search(int column,
+	size_t search(int 		 column,
 		      const QString	&searchText,
 		      condition_func	 cond,
 		      QList<size_t>	*matchList);
@@ -77,7 +92,8 @@ class KsTimeMap {
 	/* All functionalities of the histogram class have to be rewritten in C. 
 	 * The histogram code will be part of the C library (libkshark).
 	*/
-	pevent_record  		**_data;
+	//pevent_record  		**_data;
+	kshark_entry  		**_data;
 	size_t 		 	  _dataSize;
 	std::vector<int64_t> 	  _map;
 	std::vector<size_t> 	  _binCount;
@@ -94,7 +110,9 @@ public:
 	virtual ~KsTimeMap();
 
 	void setBining(size_t n, uint64_t min, uint64_t max);
-	void fill(struct pevent_record **data, size_t n);
+	//void fill(struct pevent_record **data, size_t n);
+	void fill(struct kshark_entry **data, size_t n);
+
 	void shiftForward(size_t n);
 	void shiftBackward(size_t n);
 	void shiftTo(size_t ts);
@@ -103,6 +121,7 @@ public:
 
 	size_t size() const {return _nBins;}
 	void clear();
+
 	size_t binCount(int bin) const;
 	size_t binCount(int bin, int cpu) const;
 	bool isEmpty(int bin) const;
@@ -114,6 +133,7 @@ public:
 	int64_t operator[](int i) const;
 	int64_t at(int i) const;
 	int64_t at(int i, int cpu) const;
+	kshark_entry *dataAt(int i) const {return _data[i];}
 
 	void dump();
 
@@ -121,8 +141,8 @@ public:
 	size_t _nBins;
 
 	enum OverflowBin {
-		Lower = -2,
-		Upper = -1
+		Upper = -1,
+		Lower = -2
 	};
 };
 
@@ -146,7 +166,9 @@ public:
 
 	void setNCpus(int n) {_cpus = n;}
 
-	void fill(pevent *pevt, pevent_record **entries, size_t n, bool defaultMap = true);
+	//void fill(pevent *pevt, pevent_record **entries, size_t n, bool defaultMap = true);
+	void fill(pevent *pevt, kshark_entry **entries, size_t n, bool defaultMap = true);
+
 	void shiftForward(size_t n);
 	void shiftBackward(size_t n);
 	void shiftTo(size_t ts);

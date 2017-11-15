@@ -18,68 +18,74 @@
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
  
-#ifndef _LIB_KSHARH_H
-#define _LIB_KSHARH_H
+#ifndef _LIB_KSHARK_H
+#define _LIB_KSHARK_H
 
+// C
 #include <stdint.h>
+
+// trace-cmd
 #include "trace-cmd.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-	
-enum {
-	TRACE_VIEW_STORE_COL_INDEX,
-	TRACE_VIEW_STORE_COL_CPU,
-	TRACE_VIEW_STORE_COL_TS,
-	TRACE_VIEW_STORE_COL_COMM,
-	TRACE_VIEW_STORE_COL_PID,
-	TRACE_VIEW_STORE_COL_LAT,
-	TRACE_VIEW_STORE_COL_EVENT,
-	TRACE_VIEW_STORE_COL_INFO,
-	TRACE_VIEW_STORE_N_COLUMNS,
+
+struct kshark_context {
+	struct tracecmd_input *handle;
+	struct pevent *pevt;
 };
+
+int kshark_init(struct kshark_context **context);
 
 struct kshark_entry {
-	uint32_t	pos;
-	uint8_t		cpu;
-	uint64_t	timestamp;
-	char* 		task;
-	int32_t		pid;
-	char* 		latency;
-	char* 		event;
-	char* 		info;
-
 	struct kshark_entry *next;
-	// int visible;
+
+	size_t		offset;
+	uint8_t		cpu;
+	uint64_t	ts;
+	int16_t		pid;
+	
+	int		event_id;
+	uint8_t		visible;
 };
 
-void kshark_set_entry_values(struct pevent *pevent,
+const char *kshark_get_task(struct pevent *pevt, struct kshark_entry *entry);
+
+char *kshark_get_latency(struct pevent *pevt,
+			 struct pevent_record *record);
+
+char *kshark_get_event_name(struct pevent *pevt, struct kshark_entry *entry);
+
+char *kshark_get_info(struct pevent *pevt,
+		      struct pevent_record *record,
+		      struct kshark_entry *entry);
+
+void kshark_set_entry_values(struct pevent *pevt,
 			     struct pevent_record *record,
 			     struct kshark_entry *entry);
 
 char* kshark_dump_entry(struct kshark_entry *entry, int *size);
 
-struct kshark_entry* kshark_get_entry(struct pevent *pevent,
+struct kshark_entry* kshark_get_entry(struct pevent *pevt,
 				      struct pevent_record *record);
 
-size_t kshark_load_data_old(struct tracecmd_input *handle,
-			    struct kshark_entry ***data_rows);
+size_t kshark_load_data_entries(struct tracecmd_input *handle,
+				struct kshark_entry ***data_rows);
 
-void kshark_clear_entry(struct kshark_entry *entry);
+size_t kshark_load_data_records(struct tracecmd_input *handle,
+				struct pevent_record ***data_rows);
 
-void kshark_free_entry(struct kshark_entry *entry);
+uint32_t kshark_find_entry_row(uint64_t time,
+			       struct kshark_entry **data_rows,
+			       uint32_t l, uint32_t h);
 
-size_t kshark_load_data(struct tracecmd_input *handle,
-			struct pevent_record ***data_rows);
-
-uint32_t kshark_find_row(uint64_t time,
-			 struct pevent_record **data_rows,
-			 uint32_t l, uint32_t h);
+uint32_t kshark_find_record_row(uint64_t time,
+				struct pevent_record **data_rows,
+				uint32_t l, uint32_t h);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // _LIB_KSHARH_H
-
+#endif // _LIB_KSHARK_H
