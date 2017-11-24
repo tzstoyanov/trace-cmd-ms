@@ -38,15 +38,19 @@ KsMainWindow::KsMainWindow(QWidget *parent)
   _view(this),
   _graph(this),
   _mState(this),
-  _openAction(tr("&Open"), parent),
-  _importFilterAction(tr("&Import Filter"), parent),
-  _saveFilterAction(tr("&Save Filter"), parent),
-  _saveFilterAsAction(tr("&Save Filter As"), parent),
-  _exportFilterAction(tr("&Export Filter"), parent),
-  _quitAction(tr("&Quit"), parent),
-  _eventSelectAction(tr("&Events"), parent),
-  _cpuSelectAction(tr("&CPUs"), parent),
-  _taskSelectAction(tr("&Tasks"), parent),
+  _openAction(tr("Open"), parent),
+  _importFilterAction(tr("Import Filter"), parent),
+  _saveFilterAction(tr("Save Filter"), parent),
+  _saveFilterAsAction(tr("Save Filter As"), parent),
+  _exportFilterAction(tr("Export Filter"), parent),
+  _quitAction(tr("Quit"), parent),
+  _taskSyncAction(tr("Sync Graph and List task filters"), parent),
+  _eventSyncAction(tr("Sync Graph and List event filters"), parent),
+  _showEventsAction(tr("Show events"), parent),
+  _showTasksAction(tr("Show tasks"), parent),
+  _hideTasksAction(tr("Hide tasks"), parent),
+  _cpuSelectAction(tr("CPUs"), parent),
+  _taskSelectAction(tr("Tasks"), parent),
   _aboutAction(tr("About"), parent)
 {
 	this->setWindowTitle("Kernel Shark");
@@ -67,6 +71,12 @@ KsMainWindow::KsMainWindow(QWidget *parent)
 	connect(&_mState, SIGNAL(markSwitch()), &_view, SLOT(markSwitch()));
 
 	_graph.setMarkerSM(&_mState);
+
+	connect(&_view, SIGNAL(select(size_t)), &_graph, SLOT(markEntry(size_t)));
+	connect(&_graph, SIGNAL(select(int, bool)), &_view, SLOT(showRow(int, bool)));
+	connect(&_graph, SIGNAL(deselect()), &_view, SLOT(deselect()));
+	connect(&_data, SIGNAL(updateView()), &_view, SLOT(update()));
+	connect(&_data, SIGNAL(updateGraph()), &_graph, SLOT(update()));
 }
 
 void KsMainWindow::resizeEvent(QResizeEvent* event)
@@ -93,7 +103,7 @@ void KsMainWindow::createActions()
 	_saveFilterAction.setIcon(QIcon(iconsPath + "save.png"));
 	_saveFilterAction.setShortcut(tr("Ctrl+S"));
 	_saveFilterAction.setStatusTip(tr("Save a filter"));
-	connect(&_saveFilterAction, SIGNAL(triggered()), this, SLOT(importFilter()));
+	connect(&_saveFilterAction, SIGNAL(triggered()), this, SLOT(saveFilter()));
 
 	_saveFilterAsAction.setIcon(QIcon(iconsPath + "save-as.png"));
 	_saveFilterAsAction.setShortcut(tr("Shift+Ctrl+S"));
@@ -111,18 +121,18 @@ void KsMainWindow::createActions()
 
 	connect(&_quitAction, SIGNAL(triggered()), this, SLOT(close()));
 	//connect(QApplication::desktop(), SIGNAL(resized(int)), this, SLOT(reset(int));
-	connect(&_eventSelectAction, SIGNAL(triggered()), this, SLOT(eventSelect()));
+	connect(&_showEventsAction, SIGNAL(triggered()), this, SLOT(showEvents()));
+	connect(&_showTasksAction, SIGNAL(triggered()), this, SLOT(showTasks()));
+	connect(&_hideTasksAction, SIGNAL(triggered()), this, SLOT(hideTasks()));
 	connect(&_cpuSelectAction, SIGNAL(triggered()), this, SLOT(cpuSelect()));
 	connect(&_taskSelectAction, SIGNAL(triggered()), this, SLOT(taskSelect()));
 	connect(&_aboutAction, SIGNAL(triggered()), this, SLOT(aboutInfo()));
-	connect(&_view, SIGNAL(select(size_t)), &_graph, SLOT(markEntry(size_t)));
-	connect(&_graph, SIGNAL(select(int, bool)), &_view, SLOT(showRow(int, bool)));
-	connect(&_graph, SIGNAL(deselect()), &_view, SLOT(deselect()));
 }
 
 void KsMainWindow::createMenus()
 {
-	QMenu *file = menuBar()->addMenu("&File");
+	/* File menu */
+	QMenu *file = menuBar()->addMenu("File");
 	file->addAction(&_openAction);
 	file->addAction(&_importFilterAction);
 	file->addAction(&_saveFilterAction);
@@ -130,16 +140,30 @@ void KsMainWindow::createMenus()
 	file->addAction(&_exportFilterAction);
 	file->addAction(&_quitAction);
 
-	QMenu *filter = menuBar()->addMenu("&Filter");
-	filter->addAction(&_eventSelectAction);
+	/* Filter menu */
+	QMenu *filter = menuBar()->addMenu("Filter");
+	_taskSyncAction.setCheckable(true);
+	_taskSyncAction.setChecked(true);
+	filter->addAction(&_taskSyncAction);
 
-	QMenu *plots = menuBar()->addMenu("&Plots");
+	_eventSyncAction.setCheckable(true);
+	_eventSyncAction.setChecked(true);
+	filter->addAction(&_eventSyncAction);
+
+	filter->addAction(&_showEventsAction);
+	filter->addAction(&_showTasksAction);
+	filter->addAction(&_hideTasksAction);
+
+	/* Plot menu */
+	QMenu *plots = menuBar()->addMenu("Plots");
 	plots->addAction(&_cpuSelectAction);
 	plots->addAction(&_taskSelectAction);
 
-	/*QMenu *capture = */menuBar()->addMenu("&Capture");
+	/* Capture menu */
+	/*QMenu *capture = */menuBar()->addMenu("Capture");
 
-	QMenu *help = menuBar()->addMenu("&Help");
+	/* Help menu */
+	QMenu *help = menuBar()->addMenu("Help");
 	help->addAction(&_aboutAction);
 }
 
@@ -159,26 +183,52 @@ void KsMainWindow::importFilter()
 	// TODO
 }
 
-void KsMainWindow::reload()
+bool KsMainWindow::saveFilter()
 {
-	//TODO
+	// TODO
 }
 
-void KsMainWindow::eventSelect()
+void KsMainWindow::reload()
 {
-	//KSEventsCheckBoxDialog *_events_cb =
-		new KSEventsCheckBoxDialog(_data._pevt, this);
+	// TODO
+}
+
+void KsMainWindow::showEvents()
+{
+	KsCheckBoxDialog *events_cb = new KsEventsCheckBoxDialog(_data._pevt, true, this);
+	events_cb->setDefault(Qt::Checked);
+	connect(events_cb, SIGNAL(apply(QVector<int>)),
+		&_data, SLOT(applyPosEventFilter(QVector<int>)));
+}
+
+void KsMainWindow::showTasks()
+{
+	KsCheckBoxDialog *tasks_cb = new KsTasksCheckBoxDialog(_data._pevt, true, this);
+	tasks_cb->setDefault(Qt::Checked);
+	connect(tasks_cb, SIGNAL(apply(QVector<int>)),
+		&_data, SLOT(applyPosTaskFilter(QVector<int>)));
+}
+
+void KsMainWindow::hideTasks()
+{
+	KsCheckBoxDialog *tasks_cb = new KsTasksCheckBoxDialog(_data._pevt, false, this);
+	tasks_cb->setDefault(Qt::Unchecked);
+	connect(tasks_cb, SIGNAL(apply(QVector<int>)),
+		&_data, SLOT(applyNegTaskFilter(QVector<int>)));
 }
 
 void KsMainWindow::cpuSelect() {
-	KsCheckBoxDialog *cpus_cbd = new KSCpuCheckBoxDialog(_data._pevt, this);
-	connect(cpus_cbd, SIGNAL(apply(QVector<Qt::CheckState>)),
-		&_graph, SLOT(cpuReDraw(QVector<Qt::CheckState>)));
+	KsCheckBoxDialog *cpus_cbd = new KsCpuCheckBoxDialog(_data._pevt, true, this);
+	cpus_cbd->setDefault(Qt::Checked);
+	connect(cpus_cbd, SIGNAL(apply(QVector<int>)),
+		&_graph, SLOT(cpuReDraw(QVector<int>)));
 }
 
 void KsMainWindow::taskSelect() {
-	//KSTasksCheckBoxDialog *_tasks_cb =
-	new KSTasksCheckBoxDialog(_data._pevt, this);
+	KsCheckBoxDialog *tasks_cb = new KsTasksCheckBoxDialog(_data._pevt, true, this);
+	tasks_cb->setDefault(Qt::Unchecked);
+	connect(tasks_cb, SIGNAL(apply(QVector<int>)),
+		&_graph, SLOT(taskReDraw(QVector<int>)));
 }
 
 void KsMainWindow::aboutInfo() {

@@ -103,7 +103,9 @@ private slots:
 	void markEntry(size_t);
 	void selectReceived(int bin, bool mark);
 	void deselectReceived();
-	void cpuReDraw(QVector<Qt::CheckState>);
+	void cpuReDraw(QVector<int>);
+	void taskReDraw(QVector<int>);
+	void update();
 
 signals:
 	void select(int, bool);
@@ -123,13 +125,13 @@ private:
 	};
 
 	void addCpu(int cpu);
-	void drawGraphs(int nCpus, QVector<Qt::CheckState> cpuMask = {});
+	void drawGraphs(QVector<int> cpuMask, QVector<int> taskMask);
 	void updateGeom();
 	void updateGraphs(GraphActions action);
 	void setAxisX();
 
-	QToolBar 	_pointerBar;
-	QToolBar 	_navigationBar;
+	QToolBar	_pointerBar;
+	QToolBar	_navigationBar;
 	QPushButton	_scrollLeftButton;
 	QPushButton	_zoomInButton;
 	QPushButton	_zoomOutButton;
@@ -153,6 +155,8 @@ private:
 
 	size_t _posMousePress;
 	bool   _keyPressed;
+	QVector<int> _cpuMask;
+	QVector<int> _taskMask;
 };
 
 #endif // _KS_TRACEGRAPH_H

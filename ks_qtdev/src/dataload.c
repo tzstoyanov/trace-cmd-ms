@@ -12,7 +12,7 @@ int main(int argc, char **argv)
 	int cpu;
 	//char *comm, *event, *lat, *info;
 	struct kshark_context *ctx = NULL;
-	kshark_init(&ctx);
+	kshark_instance(&ctx);
 
 	handle = tracecmd_open(argv[1]);
 	n_rows = kshark_load_data_entries(handle, &rows);

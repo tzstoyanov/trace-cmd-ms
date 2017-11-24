@@ -25,6 +25,24 @@
 
 struct trace_seq KsViewModel::_seq;
 
+KsFilterProxyModel::(QObject *parent = nullptr)
+: QSortFilterProxyModel(parent)
+{}
+
+bool KsFilterProxyModel::filterAcceptsRow(int sourceRow,
+					  const QModelIndex &sourceParent) const
+{
+	if (_data[sourceRow]->visible)
+		return true;
+
+	return false;
+}
+
+void KsFilterProxyModel::fill(kshark_entry **rows)
+{
+	_data = rows;
+}
+
 KsViewModel::KsViewModel(QObject *parent)
 : QAbstractTableModel(parent),
 //: QStandardItemModel(parent),
@@ -107,7 +125,7 @@ QVariant KsViewModel::getValue(int column, int row) const
 		case TRACE_VIEW_COL_LAT: 
 		{
 			struct kshark_context *ctx = NULL;
-			kshark_init(&ctx);
+			kshark_instance(&ctx);
 
 			pevent_record *record = tracecmd_read_at(ctx->handle,
 								 _data[row]->offset,
@@ -134,7 +152,7 @@ QVariant KsViewModel::getValue(int column, int row) const
 		{
 			
 			struct kshark_context *ctx = NULL;
-			kshark_init(&ctx);
+			kshark_instance(&ctx);
 			pevent_record *record = tracecmd_read_at(ctx->handle,
 							      _data[row]->offset,
 							      NULL);
@@ -249,6 +267,12 @@ void KsViewModel::reset()
 {
 	beginResetModel();
 	_data.clear();
+	endResetModel();
+}
+
+void KsViewModel::update()
+{
+	beginResetModel();
 	endResetModel();
 }
 
@@ -650,6 +674,9 @@ void KsTimeMap::zoomIn(double r, size_t mark)
 	if (range < KS_GRAPH_N_BINS*0x4)
 		return;
 
+	if (r > .5)
+		r = .5;
+
 	double delta_tot =  range*r;
 	size_t delta_min = delta_tot*mark/KS_GRAPH_N_BINS;
 	size_t min = _min + delta_min;
@@ -750,7 +777,7 @@ bool KsTimeMap::isEmpty(int bin, int cpu) const
 	int64_t pos = this->at(bin);
 
 	for (size_t i = pos; i < pos + nEntries; ++i) {
-		if (_data[i]->cpu == cpu)
+		if (_data[i]->cpu == cpu && _data[i]->visible)
 			return true;
 	}
 

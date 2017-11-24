@@ -217,13 +217,21 @@ void KsTraceGraph::loadData(KsDataStore *data)
 {
 	hd_time t0 = GET_TIME;
 
-	int nCpus = data->_pevt->cpus;
+	_data = data;
+	int nCpus = _data->_pevt->cpus;
 	_model.reset();	
 	_model.setNCpus(nCpus);
- 	_model.fill(data->_pevt, data->_rows, data->size());
+ 	_model.fill(_data->_pevt, _data->_rows, _data->size());
 
-	drawGraphs(nCpus);
-	_data = data;
+	_cpuMask = {};
+	//_cpuMask.fill(Qt::Checked, nCpus);
+	for (int i = 0; i < nCpus; ++i) {
+		_cpuMask.append(i);
+	}
+
+	_taskMask = {};
+
+	drawGraphs(_cpuMask, _taskMask);
 
 	double time = GET_DURATION(t0);
 	qInfo() <<"Graph loading time: " << 1e3*time << " ms.";
@@ -237,9 +245,11 @@ void KsTraceGraph::setMarkerSM(KsDualMarkerSM *m)
 	_mState->placeInToolBar(&_navigationBar);
 }
 
-void KsTraceGraph::drawGraphs(int nCpus, QVector<Qt::CheckState> cpuMask)
+void KsTraceGraph::drawGraphs(QVector<int> cpuMask, QVector<int> taskMask)
 {
 	/* The Very first thing to do is to clean up. */
+	_mState->activeMarker().remove();
+
 	if (_drawWindow.layout()) {
 		QLayoutItem *child;
 		while ((child = _drawWindow.layout()->takeAt(0)) != 0) {
@@ -253,18 +263,18 @@ void KsTraceGraph::drawGraphs(int nCpus, QVector<Qt::CheckState> cpuMask)
 		_chartMap.clear();
 	}
 
-	/*Now start on a new layout. */
+	/* Now start on a new layout. */
 	_drawWindow.setLayout(new QVBoxLayout());
 	_drawWindow.layout()->setContentsMargins(0, 0, 0, 0);
 	_drawWindow.layout()->setSpacing(SCREEN_HEIGHT/400);
 
-	if (cpuMask.size() != nCpus)
-		cpuMask.fill(Qt::Checked, nCpus);
-
-	for (int cpu = 0; cpu <nCpus ; ++cpu) {
-		if (cpuMask[cpu] == Qt::Checked)
-			addCpu(cpu);
-	}
+	//int nCpus = _data->_pevt->cpus;
+	//for (int cpu = 0; cpu < nCpus; ++cpu) {
+		//if (cpuMask[cpu] == Qt::Checked)
+			//addCpu(cpu);
+	//}
+	for (auto const &cpu: cpuMask)
+		addCpu(cpu);
 
 	int margins = _drawWindow.layout()->contentsMargins().top() +
 		      _drawWindow.layout()->contentsMargins().bottom();
@@ -274,10 +284,17 @@ void KsTraceGraph::drawGraphs(int nCpus, QVector<Qt::CheckState> cpuMask)
 	updateGeom();
 }
 
-void KsTraceGraph::cpuReDraw(QVector<Qt::CheckState> cpuMask)
+void KsTraceGraph::cpuReDraw(QVector<int> cpuMask)
 {
-	int nCpus = _data->_pevt->cpus;
-	this->drawGraphs(nCpus, cpuMask);
+	_cpuMask = cpuMask;
+	this->drawGraphs(_cpuMask, _taskMask);
+}
+
+void KsTraceGraph::taskReDraw(QVector<int> tasks)
+{
+	_taskMask = tasks;
+	qInfo() << _taskMask;
+	this->drawGraphs(_cpuMask, _taskMask);
 }
 
 void KsTraceGraph::rangeBoundInit(int x, size_t posMC)
@@ -393,7 +410,6 @@ void KsTraceGraph::scrollRight()
 	updateGraphs(GraphActions::ScrollRight);
 }
 
-
 void KsTraceGraph::resetPointer()
 {
 	_mState->activeMarker().remove();
@@ -403,7 +419,7 @@ void KsTraceGraph::setPointerInfo(size_t i)
 {
 	kshark_entry *e = _data->_rows[i];
 	struct kshark_context *kshark_ctx = NULL;
-	kshark_init(&kshark_ctx);
+	kshark_instance(&kshark_ctx);
 
 	pevent_record *record = tracecmd_read_at(kshark_ctx->handle,
 						 e->offset,
@@ -431,8 +447,19 @@ void KsTraceGraph::setPointerInfo(size_t i)
 void KsTraceGraph::markEntry(size_t pos)
 {
 	_mState->activeMarker().remove();
-
 	int cpu = _data->_rows[pos]->cpu;
+
+	bool found = false;
+	for (auto const &c: _cpuMask) {
+		if (c == cpu) {
+			found = true;
+			break;
+		}
+	}
+
+	if (!found)
+		return;
+
 	_scrollArea.ensureVisible(0,
 				  CPU_GRAPH_HEIGHT/2 +
 				  cpu*(CPU_GRAPH_HEIGHT +
@@ -456,6 +483,11 @@ void KsTraceGraph::selectReceived(int pos, bool mark)
 void KsTraceGraph::deselectReceived()
 {
 	emit deselect();
+}
+
+void KsTraceGraph::update()
+{
+	_model.update();
 }
 
 void KsTraceGraph::updateGraphs(GraphActions action)

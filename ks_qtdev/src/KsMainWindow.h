@@ -42,9 +42,11 @@ private slots:
 	void open();
 	void importFilter();
 	void reload();
-// 	bool save();
+	 bool saveFilter();
 // 	bool saveAs();
-	void eventSelect();
+	void showEvents();
+	void showTasks();
+	void hideTasks();
 	void cpuSelect();
 	void taskSelect();
 	void aboutInfo();
@@ -71,15 +73,15 @@ private:
 	QAction _quitAction;
 
 	// Filter menu
-	QAction _eventSelectAction;
-	KsCheckBoxDialog *_events_cb;
+	QAction _taskSyncAction;
+	QAction _eventSyncAction;
+	QAction _showEventsAction;
+	QAction _showTasksAction;
+	QAction _hideTasksAction;
 
 	// Plots menu
 	QAction _cpuSelectAction;
-	KsCheckBoxDialog *_cpus_cb;
-
 	QAction _taskSelectAction;
-	KsCheckBoxDialog *_tasks_cb;
 
 	// Help menu
 	QAction _aboutAction;

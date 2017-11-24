@@ -1,12 +1,16 @@
-
+// C
 #define _GNU_SOURCE  
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
 #include <sys/time.h>    
 
-#include "libkshark.h"
+// trace-cmd
+#include "trace-hash.h"
 
+// Kernel shark
+#include "libkshark.h"
+#include "KsDeff.h"
 
 static __thread struct trace_seq seq;
 static struct kshark_context *kshark_context_handler = NULL;
@@ -17,7 +21,13 @@ static int kshark_default_context(struct kshark_context **context)
 
 	ctx = calloc(1, sizeof(*ctx));
 	if (!ctx)
-	return -1;
+		return -1;
+
+	ctx->show_task_filter = filter_task_hash_alloc();
+	ctx->hide_task_filter = filter_task_hash_alloc();
+
+	ctx->show_event_filter = filter_task_hash_alloc();
+	ctx->hide_event_filter = filter_task_hash_alloc();
 
 	if (*context && *context != kshark_context_handler) {
 		free(*context);
@@ -33,7 +43,24 @@ static int kshark_default_context(struct kshark_context **context)
 	return 0;
 }
 
-int kshark_init(struct kshark_context **context)
+void kshark_close(struct kshark_context *ctx)
+{
+	if (!ctx)
+		return;
+
+	filter_task_hash_free(ctx->show_task_filter);
+	filter_task_hash_free(ctx->hide_task_filter);
+
+	filter_task_hash_free(ctx->show_event_filter);
+	filter_task_hash_free(ctx->hide_event_filter);
+
+	if (ctx == kshark_context_handler)
+		kshark_context_handler = NULL;
+
+	free(ctx);
+}
+
+int kshark_instance(struct kshark_context **context)
 {
 	if (*context == NULL && kshark_context_handler == NULL) {
 		// No kshark_context exists. Create a default one.
@@ -60,9 +87,7 @@ char *kshark_get_latency(struct pevent *pe,
 			 struct pevent_record *record)
 {
 	trace_seq_reset(&seq);
-
 	pevent_data_lat_fmt(pe, &seq, record);
-
 	return seq.buffer;
 }
 
@@ -90,8 +115,53 @@ char *kshark_get_info(struct pevent *pe,
 		return NULL;
 
 	pevent_event_info(&seq, event, record);
-
 	return seq.buffer;
+}
+
+const char *kshark_get_task_lazy(int16_t pid)
+{
+	struct kshark_context *ctx = NULL;
+	kshark_instance(&ctx);
+	return pevent_data_comm_from_pid(ctx->pevt, pid);
+}
+
+char *kshark_get_latency_lazy(struct kshark_entry *entry)
+{
+	char *lat;
+	struct kshark_context *ctx = NULL;
+	kshark_instance(&ctx);
+
+	struct pevent_record *data =
+		tracecmd_read_at(ctx->handle,
+				 entry->offset,
+				 NULL);
+
+	lat = kshark_get_latency(ctx->pevt, data);
+	free_record(data);
+	return lat;
+}
+
+char *kshark_get_event_name_lazy(struct kshark_entry *entry)
+{
+	struct kshark_context *ctx = NULL;
+	kshark_instance(&ctx);
+
+	return kshark_get_event_name(ctx->pevt, entry);
+}
+char *kshark_get_info_lazy(struct kshark_entry *entry)
+{
+	char *info;
+	struct kshark_context *ctx = NULL;
+	kshark_instance(&ctx);
+
+	struct pevent_record *data =
+		tracecmd_read_at(ctx->handle,
+				 entry->offset,
+				 NULL);
+
+	info = kshark_get_info(ctx->pevt, data, entry);
+	free_record(data);
+	return info;
 }
 
 void kshark_set_entry_values(struct pevent *pe,
@@ -119,9 +189,8 @@ void kshark_set_entry_values(struct pevent *pe,
 
 char* kshark_dump_entry(struct kshark_entry *entry, int *size)
 {
-	struct kshark_context *ctx = kshark_context_handler;
-	if (!ctx)
-		return NULL;
+	struct kshark_context *ctx = NULL;
+	kshark_instance(&ctx);
 
 	char *tmp_str, *entry_str;
 	int size_tmp;
@@ -163,30 +232,184 @@ struct kshark_entry* kshark_get_entry(struct pevent *pe,
 	return e;
 }
 
-size_t kshark_load_data_entries(struct tracecmd_input *handle,
-				struct kshark_entry ***data_rows)
+static unsigned int get_task_hash_key(int pid)
 {
+	return trace_hash(pid) % TASK_HASH_SIZE;
+}
 
-	struct kshark_context *ctx = NULL;
-	kshark_init(&ctx);
+static struct task_list *find_task_hash(struct kshark_context *ctx,
+					int key, int pid)
+{
+	struct task_list *list;
 
+	for (list = ctx->tasks[key]; list; list = list->next) {
+		if (list->pid == pid)
+			return list;
+	}
+
+	return NULL;
+}
+
+static struct task_list *add_task_hash(struct kshark_context *ctx,
+				       int pid)
+{
+	struct task_list *list;
+	uint key = get_task_hash_key(pid);
+
+	list = find_task_hash(ctx, key, pid);
+	if (list)
+		return list;
+
+	list = malloc(sizeof(*list));
+	list->pid = pid;
+	list->next = ctx->tasks[key];
+	ctx->tasks[key] = list;
+
+	return list;
+}
+
+static void free_task_hash(struct kshark_context *ctx)
+{
+	struct task_list *list;
+	int i;
+
+	for (i = 0; i < TASK_HASH_SIZE; i++) {
+		while (ctx->tasks[i]) {
+			list = ctx->tasks[i];
+			ctx->tasks[i] = list->next;
+			free(list);
+		}
+	}
+}
+
+static void kshark_reset_file_context(struct tracecmd_input *handle,
+				      struct kshark_context *ctx)
+{
 	ctx->handle = handle;
 	ctx->pevt = tracecmd_get_pevent(handle);
+	free_task_hash(ctx);
+}
+
+static bool kshark_view_task(struct kshark_context *ctx, int pid)
+{
+	return (!ctx->show_task_filter ||
+		!filter_task_count(ctx->show_task_filter) ||
+		filter_task_find_pid(ctx->show_task_filter, pid)) &&
+		(!ctx->hide_task_filter ||
+		 !filter_task_count(ctx->hide_task_filter) ||
+		 !filter_task_find_pid(ctx->hide_task_filter, pid));
+}
+
+static bool kshark_view_event(struct kshark_context *ctx, int event_id)
+{
+	return (!ctx->show_event_filter ||
+		!filter_task_count(ctx->show_event_filter) ||
+		filter_task_find_pid(ctx->show_event_filter, event_id)) &&
+		(!ctx->hide_event_filter ||
+		 !filter_task_count(ctx->hide_event_filter) ||
+		 !filter_task_find_pid(ctx->hide_event_filter, event_id));
+}
+
+static bool kshark_show_entry(struct kshark_context *ctx, int pid, int event_id)
+{
+	if (kshark_view_task(ctx, pid) && kshark_view_event(ctx, event_id))
+		return true;
+
+	return false;
+}
+
+size_t kshark_load_data_records(struct tracecmd_input *handle,
+				struct pevent_record ***data_rows)
+{
+	int cpus = tracecmd_cpus(handle);
+	int cpu;
+	size_t count, total=0;
+	struct pevent_record *data;
+	struct kshark_context *ctx = NULL;
+	kshark_instance(&ctx);
+	kshark_reset_file_context(handle, ctx);
 
 	if (!seq.buffer)
 		trace_seq_init(&seq);
 
-	struct timeval t1, t2, t3;
-	double elapsedTime;
-	gettimeofday(&t1, NULL);
+	struct temp {
+		struct pevent_record	*rec;
+		struct temp		*next;
+	} **cpu_list, **temp_next, *temp_rec;
 
+	cpu_list = calloc(cpus, sizeof(struct temp *));
+
+	for (cpu = 0; cpu < cpus; ++cpu) {
+		count = 0;
+		cpu_list[cpu] = NULL;
+		temp_next = &cpu_list[cpu];
+
+		data = tracecmd_read_cpu_first(handle, cpu);
+		while (data) {
+			*temp_next = temp_rec = malloc(sizeof(*temp_rec));
+			assert(temp_rec != NULL);
+
+			add_task_hash(ctx, pevent_data_pid(ctx->pevt, data));
+			temp_rec->rec = data;
+			temp_rec->next = NULL;
+			temp_next = &(temp_rec->next);
+
+			++count;
+			data = tracecmd_read_data(handle, cpu);
+		}
+
+		total += count;
+	}
+
+	struct pevent_record **rows;
+	rows = calloc(total, sizeof(struct pevent_record *));
+
+	count = 0;
+	int next_cpu;
+	uint64_t ts;
+	while (count < total) {
+		ts=0;
+		next_cpu = -1;
+		for (cpu = 0; cpu < cpus; ++cpu) {
+			if (!cpu_list[cpu])
+				continue;
+
+			if (!ts || cpu_list[cpu]->rec->ts < ts) {
+				ts = cpu_list[cpu]->rec->ts;
+				next_cpu = cpu;
+			}
+		}
+
+		if (next_cpu >= 0) {
+			rows[count] = cpu_list[next_cpu]->rec;
+			temp_rec = cpu_list[next_cpu];
+			cpu_list[next_cpu] = cpu_list[next_cpu]->next;
+			free (temp_rec);
+		}
+		++count;
+	}
+
+	free(cpu_list);
+	*data_rows = rows;
+	return total;
+}
+
+size_t kshark_load_data_entries(struct tracecmd_input *handle,
+				struct kshark_entry ***data_rows)
+{
 	int cpus = tracecmd_cpus(handle);
 	int cpu;
 	size_t count, total = 0;
-	struct kshark_entry **cpu_list = calloc(cpus, sizeof(struct kshark_entry *));
-	struct kshark_entry *rec, **next;
-
 	struct pevent_record *data;
+	struct kshark_context *ctx = NULL;
+	kshark_instance(&ctx);
+	kshark_reset_file_context(handle, ctx);
+
+	if (!seq.buffer)
+		trace_seq_init(&seq);
+
+	struct kshark_entry *rec, **next;
+	struct kshark_entry **cpu_list = calloc(cpus, sizeof(struct kshark_entry *));
 
 	for (cpu = 0; cpu < cpus; ++cpu) {
 		count = 0;
@@ -199,6 +422,7 @@ size_t kshark_load_data_entries(struct tracecmd_input *handle,
 			assert(rec != NULL);
 
 			kshark_set_entry_values(ctx->pevt, data, rec);
+			add_task_hash(ctx, rec->pid);
 
 			rec->next = NULL;
 			next = &(rec->next);
@@ -209,11 +433,6 @@ size_t kshark_load_data_entries(struct tracecmd_input *handle,
 		}
 		total += count;
 	}
-
-	gettimeofday(&t2, NULL);
-	elapsedTime = (t2.tv_sec - t1.tv_sec) * 1000.0;      // sec to ms
-	elapsedTime += (t2.tv_usec - t1.tv_usec) / 1000.0;
-	fprintf(stderr, "tot: %zu  load time1: %f ms\n", total, elapsedTime);
 
 	struct kshark_entry **rows;
 	rows = calloc (total, sizeof(struct kshark_entry *));
@@ -243,64 +462,59 @@ size_t kshark_load_data_entries(struct tracecmd_input *handle,
 
 	free(cpu_list);
 	*data_rows = rows;
-
-	gettimeofday(&t3, NULL);
-	elapsedTime = (t3.tv_sec - t2.tv_sec) * 1000.0;      // sec to ms
-	elapsedTime += (t3.tv_usec - t2.tv_usec) / 1000.0;
-	fprintf(stderr, "load time2: %f ms\n", elapsedTime);
-
 	return total;
 }
 
-size_t kshark_load_data_records(struct tracecmd_input *handle,
-				struct pevent_record ***data_rows)
+size_t kshark_load_data_matrix(struct tracecmd_input *handle,
+			       uint64_t **offset_array,
+			       uint8_t **cpu_array,
+			       uint64_t **ts_array,
+			       uint16_t **pid_array,
+			       int **event_array,
+			       uint8_t **vis_array)
 {
-	struct timeval t1, t2, t3;
-	double elapsedTime;
-	gettimeofday(&t1, NULL);
+	int cpus = tracecmd_cpus(handle);
+	int cpu;
+	size_t count, total=0;
+	struct pevent_record *data;
+	struct kshark_context *ctx = NULL;
+	kshark_instance(&ctx);
+	kshark_reset_file_context(handle, ctx);
 
 	if (!seq.buffer)
 		trace_seq_init(&seq);
 
-	int cpus = tracecmd_cpus(handle), cpu;
-	size_t count, total=0;
-
-	struct temp {
-		struct pevent_record	*rec;
-		struct temp		*next;
-	} **cpu_list, **temp_next, *temp_rec;
-
-	cpu_list = calloc(cpus, sizeof(struct temp *));
-
-	struct pevent_record	*data;
+	struct kshark_entry *rec, **next;
+	struct kshark_entry **cpu_list = calloc(cpus, sizeof(struct kshark_entry *));
 
 	for (cpu = 0; cpu < cpus; ++cpu) {
 		count = 0;
 		cpu_list[cpu] = NULL;
-		temp_next = &cpu_list[cpu];
+		next = &cpu_list[cpu];
 
 		data = tracecmd_read_cpu_first(handle, cpu);
 		while (data) {
-			*temp_next = temp_rec = malloc(sizeof(*temp_rec));
+			*next = rec = malloc( sizeof(struct kshark_entry) );
+			assert(rec != NULL);
 
-			temp_rec->rec = data;
-			temp_rec->next = NULL;
-			temp_next = &(temp_rec->next);
+			kshark_set_entry_values(ctx->pevt, data, rec);
+			add_task_hash(ctx, rec->pid);
+			rec->next = NULL;
+			next = &(rec->next);
+			free_record(data);
 
 			++count;
 			data = tracecmd_read_data(handle, cpu);
 		}
-
 		total += count;
 	}
 
-	gettimeofday(&t2, NULL);
-	elapsedTime = (t2.tv_sec - t1.tv_sec) * 1000.0;      // sec to ms
-	elapsedTime += (t2.tv_usec - t1.tv_usec) / 1000.0;
-	fprintf(stderr, "load time1: %f ms\n", elapsedTime);
-
-	struct pevent_record **rows;
-	rows = calloc (total, sizeof(struct pevent_record *));
+	*offset_array	= calloc(total, sizeof(uint64_t));
+	*cpu_array	= calloc(total, sizeof(uint8_t));
+	*ts_array	= calloc(total, sizeof(uint64_t));
+	*pid_array	= calloc(total, sizeof(uint16_t));
+	*event_array	= calloc(total, sizeof(int));
+	*vis_array	= calloc(total, sizeof(uint8_t));
 
 	count = 0;
 	int next_cpu;
@@ -312,30 +526,48 @@ size_t kshark_load_data_records(struct tracecmd_input *handle,
 			if (!cpu_list[cpu])
 				continue;
 
-			if (!ts || cpu_list[cpu]->rec->ts < ts) {
-				ts = cpu_list[cpu]->rec->ts;
+			if (!ts || cpu_list[cpu]->ts < ts) {
+				ts = cpu_list[cpu]->ts;
 				next_cpu = cpu;
 			}
 		}
 
 		if (next_cpu >= 0) {
-			rows[count] = cpu_list[next_cpu]->rec;
-			temp_rec = cpu_list[next_cpu];
+			(*offset_array)[count] = cpu_list[next_cpu]->offset;
+			(*cpu_array)[count] = cpu_list[next_cpu]->cpu;
+			(*ts_array)[count] = cpu_list[next_cpu]->ts;
+			(*pid_array)[count] = cpu_list[next_cpu]->pid;
+			(*event_array)[count] = cpu_list[next_cpu]->event_id;
+			(*event_array)[count] = cpu_list[next_cpu]->event_id;
+			(*event_array)[count] = cpu_list[next_cpu]->event_id;
+
+			rec = cpu_list[next_cpu];
 			cpu_list[next_cpu] = cpu_list[next_cpu]->next;
-			free (temp_rec);
+			free(rec);
 		}
+
 		++count;
 	}
 
 	free(cpu_list);
-	*data_rows = rows;
-
-	gettimeofday(&t3, NULL);
-	elapsedTime = (t3.tv_sec - t2.tv_sec) * 1000.0;      // sec to ms
-	elapsedTime += (t3.tv_usec - t2.tv_usec) / 1000.0;
-	fprintf(stderr, "load time2: %f ms\n", elapsedTime);
-
 	return total;
+}
+
+size_t kshark_trace2matrix(const char *fname,
+			   uint64_t **offset_array,
+			   uint8_t **cpu_array,
+			   uint64_t **ts_array,
+			   uint16_t **pid_array,
+			   int **event_array,
+			   uint8_t **vis_array)
+{
+	struct tracecmd_input *handle = tracecmd_open(fname);
+	return kshark_load_data_matrix(handle, offset_array,
+					       cpu_array,
+					       ts_array,
+					       pid_array,
+					       event_array,
+					       vis_array);
 }
 
 uint32_t kshark_find_entry_row(uint64_t time,
@@ -380,4 +612,69 @@ uint32_t kshark_find_record_row(uint64_t time,
 	}
 
 	return h;
+}
+
+void kshark_filter_add_pid(struct kshark_context *ctx, int filter_id, int pid)
+{
+	switch (filter_id) {
+		case SHOW_EVENT_FILTER:
+			filter_task_add_pid(ctx->show_event_filter, pid);
+			break;
+
+		case HIDE_EVENT_FILTER:
+			filter_task_add_pid(ctx->hide_event_filter, pid);
+			break;
+
+		case SHOW_TASK_FILTER:
+			filter_task_add_pid(ctx->show_task_filter, pid);
+			break;
+
+		case HIDE_TASK_FILTER:
+			filter_task_add_pid(ctx->hide_task_filter, pid);
+			break;
+
+		default:
+			break;
+	}
+}
+
+void kshark_filter_clear(struct kshark_context *ctx, int filter_id)
+{
+	switch (filter_id) {
+		case SHOW_EVENT_FILTER:
+			filter_task_clear(ctx->show_event_filter);
+			break;
+
+		case HIDE_EVENT_FILTER:
+			filter_task_clear(ctx->hide_event_filter);
+			break;
+
+		case SHOW_TASK_FILTER:
+			filter_task_clear(ctx->show_task_filter);
+			break;
+
+		case HIDE_TASK_FILTER:
+			filter_task_clear(ctx->hide_task_filter);
+			break;
+
+		default:
+			break;
+	}
+}
+
+size_t kshark_filter_entries(struct kshark_context *ctx,
+			     struct kshark_entry **data_rows,
+			     size_t n_entries)
+{
+	int i, count = 0;
+	for (i = 0; i < n_entries; ++i) {
+		data_rows[i]->visible = false;
+
+		if (kshark_show_entry(ctx, data_rows[i]->pid, data_rows[i]->event_id)) {
+			data_rows[i]->visible = true;
+			++count;
+		}
+	}
+
+	return count;
 }

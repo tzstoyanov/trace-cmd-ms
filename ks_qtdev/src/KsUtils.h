@@ -76,21 +76,23 @@ class KsCheckBoxDialog : public QDialog
 {
 	Q_OBJECT
 public:
-	KsCheckBoxDialog(const QString &n = "", QWidget *parent = 0);
-	void cbResize(size_t n);
+	KsCheckBoxDialog(const QString &name = "", bool cond = true, QWidget *parent = 0);
+
+	void setDefault(bool);
 
 private slots:
-	void applyPress();
-	void chechAll(int);
+	virtual void applyPress() =0;
+	virtual void chechAll(bool) =0;
 
 signals:
-	void apply(QVector<Qt::CheckState>);
+	void apply(QVector<int>);
 
 protected:
 	void resizeEvent(QResizeEvent* event);
 
-	QCheckBox 	    _all_cb;
-	QVector<QCheckBox*> _cb;
+	bool	_positiveCond;
+	QCheckBox 	_all_cb;
+	QVector<int>    _id;
 
 	QVBoxLayout 	*_cb_layout;
 	QWidget     	*_cb_widget;
@@ -104,23 +106,63 @@ private:
 	QPushButton 	_apply_button;
 };
 
-struct KSCpuCheckBoxDialog : public KsCheckBoxDialog
+class KsCheckBoxTableDialog : public KsCheckBoxDialog
 {
-	KSCpuCheckBoxDialog(struct pevent *pe, QWidget *parent = 0);
+	Q_OBJECT
+public:
+	KsCheckBoxTableDialog(const QString &name = "", bool cond = true, QWidget *parent = 0);
+
+private slots:
+	void applyPress() override;
+	void chechAll(bool) override;
+	void update(bool);
+
+protected:
+	void initTable(QStringList headers, int size);
+	void adjustSize();
+
+	QTableWidget _table;
+	QVector<QCheckBox*> _cb;
 };
 
-struct KSTasksCheckBoxDialog : public KsCheckBoxDialog
+class KsCheckBoxTreeDialog : public KsCheckBoxDialog
 {
-	KSTasksCheckBoxDialog(struct pevent *pe, QWidget *parent = 0);
+	Q_OBJECT
+public:
+	KsCheckBoxTreeDialog(const QString &name = "", bool cond = true, QWidget *parent = 0);
+
+private slots:
+	void applyPress() override;
+	void chechAll(bool) override;
+	void update(QTreeWidgetItem *item, int column);
+
+protected:
+	void initTree();
+	void adjustSize(int count);
+
+	QTreeWidget _tree;
+	QVector<QTreeWidgetItem*> _cb;
 };
 
-struct KSEventsCheckBoxDialog : public KsCheckBoxDialog
+struct KsCpuCheckBoxDialog : public KsCheckBoxTreeDialog
 {
-	KSEventsCheckBoxDialog(struct pevent *pe, QWidget *parent = 0);
+	KsCpuCheckBoxDialog(struct pevent *pe, bool cond = true, QWidget *parent = 0);
 };
 
-class KsDataStore
+struct KsEventsCheckBoxDialog : public KsCheckBoxTreeDialog
 {
+	KsEventsCheckBoxDialog(struct pevent *pe, bool cond = true, QWidget *parent = 0);
+};
+
+struct KsTasksCheckBoxDialog : public KsCheckBoxTableDialog
+{
+	KsTasksCheckBoxDialog(struct pevent *pe, bool cond = true, QWidget *parent = 0);
+};
+
+class KsDataStore : public QObject
+{
+	Q_OBJECT
+
 	struct tracecmd_input *_handle;
 	size_t _data_size;
 
@@ -133,6 +175,17 @@ public:
 	void clear();
 	size_t size() const {return _data_size;}
 
+signals:
+	void updateView();
+	void updateGraph();
+
+private slots:
+	void applyPosTaskFilter(QVector<int>);
+	void applyNegTaskFilter(QVector<int>);
+	void applyPosEventFilter(QVector<int>);
+	void applyNegEventFilter(QVector<int>);
+
+public:
 	struct kshark_entry  **_rows;
 	//struct pevent_record **_rows;
 	pevent		      *_pevt;

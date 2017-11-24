@@ -32,10 +32,8 @@ configure_file( ${KS_DIR}/build/deff.h.cmake
 set(LIBRARY_OUTPUT_PATH    "${KS_DIR}/lib")
 set(EXECUTABLE_OUTPUT_PATH "${KS_DIR}/bin")
 
-set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -Wall -O3")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3 -std=c++11 -pthread")
-#set(CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE} -ldl")
-#set(CMAKE_C_LINK_EXECUTABLE "${CMAKE_C_LINK_EXECUTABLE} -ldl")
+set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -Wall -O2")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O2 -std=c++11 -pthread")
 
 include_directories( ${KS_DIR}/src/
                      ${KS_DIR}/build/src/
@@ -48,5 +46,7 @@ message(STATUS "Linker flags : " ${CMAKE_EXE_LINKER_FLAGS}\n)
 add_subdirectory(${KS_DIR}/src)
 
 IF (GTEST_FOUND)
+
     add_subdirectory(${KS_DIR}/tests)
+
 ENDIF (GTEST_FOUND)

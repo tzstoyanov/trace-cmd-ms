@@ -56,6 +56,7 @@ private slots:
 	void showRow(int r, bool mark);
 	void deselect();
 	void markSwitch();
+	void update();
 
 private:
 	void resizeToContents();
@@ -66,7 +67,8 @@ private:
 
 	QVBoxLayout 	_layout;
 	QTableView 	_view;
-	KsViewModel	_model;
+	KsViewModel		_model;
+	KsFilterProxyModel	_proxyModel;
 
 	QStringList 	_tableHeader;
 	QToolBar 	_toolbar;

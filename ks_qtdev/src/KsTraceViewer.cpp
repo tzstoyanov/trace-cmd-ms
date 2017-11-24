@@ -25,6 +25,7 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 : QWidget(parent),
   _view(this),
   _model(this),
+  _proxyModel(this),
   _tableHeader(_model.header()),
   _toolbar(this),
   //_labelPage("Page", this),
@@ -61,6 +62,7 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	_columnComboBox.addItems(_tableHeader);
 	connect(&_columnComboBox, SIGNAL(currentIndexChanged(int)),
 		this, SLOT(searchEditColumn(int)));
+
 	_toolbar.addWidget(&_columnComboBox);
 
 	_selectComboBox.addItem("contains");
@@ -116,7 +118,9 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	_view.setGeometry(QApplication::desktop()->screenGeometry());
 	_view.verticalHeader()->resizeSections(QHeaderView::ResizeToContents);
 	_view.verticalHeader()->setDefaultSectionSize(FONT_HEIGHT*1.25);
-	_view.setModel(&_model);
+
+	 _proxyModel.setSourceModel(&_model);
+	_view.setModel(&_proxyModel);
 
 	connect(&_view, SIGNAL(clicked(const QModelIndex&)),
 		this, SLOT(clicked(const QModelIndex&)));
@@ -132,6 +136,7 @@ void KsTraceViewer::loadData(KsDataStore *data)
 	hd_time t0 = GET_TIME;
 
 	_model.reset();
+	_proxyModel.fill(data->_rows);
 	_model.fill(data->_pevt, data->_rows, data->size());
 	this->resizeToContents();
 
@@ -162,6 +167,11 @@ void KsTraceViewer::setMarkerSM(KsDualMarkerSM *m)
 void KsTraceViewer::reset()
 {
 	_model.reset();
+}
+
+void KsTraceViewer::update()
+{
+	_model.update();
 }
 
 //void KsTraceViewer::pageChanged(int p)
@@ -298,8 +308,12 @@ void KsTraceViewer::prev()
 
 void KsTraceViewer::clicked(const QModelIndex& i)
 {
-	if (_graphFollows)
-		emit select((size_t) i.row()); // Send a signal to the Graph widget.
+	if (_graphFollows) {
+		/* Use the index of the proxy model to retrieve the value
+		 * of the row number in the base model. */
+		size_t row = _proxyModel.data(_proxyModel.index(i.row(), 0)).toInt();
+		emit select(row); // Send a signal to the Graph widget.
+	}
 }
 
 void KsTraceViewer::showRow(int r, bool mark)

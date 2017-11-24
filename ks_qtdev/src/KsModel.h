@@ -26,6 +26,7 @@
 
 // Qt
 #include <QAbstractTableModel>
+#include <QSortFilterProxyModel>
 
 // trace-cmd
 #include "trace-cmd.h"
@@ -39,6 +40,23 @@ typedef bool (*condition_func)(QString, QString);
 #define KS_GRAPH_N_BINS  2048
 
 enum class DualMarkerState;
+
+class KsFilterProxyModel : public QSortFilterProxyModel
+{
+	kshark_entry	**_data;
+
+public:
+	KsFilterProxyModel(QObject *parent = nullptr)
+	: QSortFilterProxyModel(parent) {}
+
+	bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const {
+		if (_data[sourceRow]->visible)
+			return true;
+		return false;
+	}
+
+	void fill(kshark_entry **rows) {_data = rows;}
+};
 
 class KsViewModel : public QAbstractTableModel
 {
@@ -62,9 +80,9 @@ class KsViewModel : public QAbstractTableModel
 		TRACE_VIEW_N_COLUMNS,
 	};
 
-public:
 	int _markA, _markB;
 
+public:
 	KsViewModel(QObject *parent = nullptr);
 	virtual ~KsViewModel();
 
@@ -77,6 +95,7 @@ public:
 	void fill(pevent *pevt, kshark_entry **entries, size_t n);
 	void selectRow(DualMarkerState state, int row);
 	void reset();
+	void update();
 
 	QStringList header() const {return _header;}
 	QVariant getValue(const QModelIndex &index) const;
@@ -92,7 +111,7 @@ class KsTimeMap {
 	/* All functionalities of the histogram class have to be rewritten in C.
 	 * The histogram code will be part of the C library (libkshark).
 	*/
-	//pevent_record  		**_data;
+	//pevent_record  	**_data;
 	kshark_entry  		**_data;
 	size_t 		 	  _dataSize;
 	std::vector<int64_t> 	  _map;
