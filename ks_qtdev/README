@@ -5,15 +5,17 @@ development of a Qt-based version of the KernelShark GUI.
 Third Party Software:
 ------------------------------------------------------------
 The external dependencies are listed below:
-1. Qt5Base, Qt5Charts, Python2.7 and GTest
+1. Qt5Base, Qt5Charts, Python2.7, NumPy and GTest
 
   In order to install the packages on Ubuntu do the following:
     sudo apt-get install build-essential git cmake -y
-    sudo apt-get install qtbase5-dev libqt5charts5-dev libpython2.7-dev libgtest-dev -y
+    sudo apt-get install qtbase5-dev libqt5charts5-dev 
+    sudo apt-get install libpython2.7-dev cython python-numpy libgtest-dev -y
 
   In order to install the packages on Fedora, as root do the following:
     dnf install gcc gcc-c++ git cmake -y
-    dnf install qt5-qtbase-devel qt5-qtcharts-devel python2-devel gtest-devel -y
+    dnf install qt5-qtbase-devel qt5-qtcharts-devel
+    dnf install python2-devel python-numpy gtest-devel -y
 
 
 Building:

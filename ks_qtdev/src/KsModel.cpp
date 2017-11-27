@@ -25,7 +25,7 @@
 
 struct trace_seq KsViewModel::_seq;
 
-KsFilterProxyModel::(QObject *parent = nullptr)
+KsFilterProxyModel::KsFilterProxyModel(QObject *parent)
 : QSortFilterProxyModel(parent)
 {}
 

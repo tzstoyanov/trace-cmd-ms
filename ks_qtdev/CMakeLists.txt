@@ -24,6 +24,8 @@ MESSAGE(STATUS "Found Qt5Widgets:  (version ${Qt5Widgets_VERSION})")
 
 find_package(Qt5Charts 5.9.1)
 find_package(PythonLibs)
+# find_package(Cython REQUIRED)
+# find_package(NumPy REQUIRED)
 find_package(GTest)
 
 configure_file( ${KS_DIR}/build/deff.h.cmake

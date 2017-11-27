@@ -183,7 +183,7 @@ void KsMainWindow::importFilter()
 	// TODO
 }
 
-bool KsMainWindow::saveFilter()
+void KsMainWindow::saveFilter()
 {
 	// TODO
 }
@@ -196,7 +196,7 @@ void KsMainWindow::reload()
 void KsMainWindow::showEvents()
 {
 	KsCheckBoxDialog *events_cb = new KsEventsCheckBoxDialog(_data._pevt, true, this);
-	events_cb->setDefault(Qt::Checked);
+	events_cb->setDefault(true);
 	connect(events_cb, SIGNAL(apply(QVector<int>)),
 		&_data, SLOT(applyPosEventFilter(QVector<int>)));
 }
@@ -204,7 +204,7 @@ void KsMainWindow::showEvents()
 void KsMainWindow::showTasks()
 {
 	KsCheckBoxDialog *tasks_cb = new KsTasksCheckBoxDialog(_data._pevt, true, this);
-	tasks_cb->setDefault(Qt::Checked);
+	tasks_cb->setDefault(true);
 	connect(tasks_cb, SIGNAL(apply(QVector<int>)),
 		&_data, SLOT(applyPosTaskFilter(QVector<int>)));
 }
@@ -212,21 +212,21 @@ void KsMainWindow::showTasks()
 void KsMainWindow::hideTasks()
 {
 	KsCheckBoxDialog *tasks_cb = new KsTasksCheckBoxDialog(_data._pevt, false, this);
-	tasks_cb->setDefault(Qt::Unchecked);
+	tasks_cb->setDefault(false);
 	connect(tasks_cb, SIGNAL(apply(QVector<int>)),
 		&_data, SLOT(applyNegTaskFilter(QVector<int>)));
 }
 
 void KsMainWindow::cpuSelect() {
 	KsCheckBoxDialog *cpus_cbd = new KsCpuCheckBoxDialog(_data._pevt, true, this);
-	cpus_cbd->setDefault(Qt::Checked);
+	cpus_cbd->setDefault(true);
 	connect(cpus_cbd, SIGNAL(apply(QVector<int>)),
 		&_graph, SLOT(cpuReDraw(QVector<int>)));
 }
 
 void KsMainWindow::taskSelect() {
 	KsCheckBoxDialog *tasks_cb = new KsTasksCheckBoxDialog(_data._pevt, true, this);
-	tasks_cb->setDefault(Qt::Unchecked);
+	tasks_cb->setDefault(false);
 	connect(tasks_cb, SIGNAL(apply(QVector<int>)),
 		&_graph, SLOT(taskReDraw(QVector<int>)));
 }

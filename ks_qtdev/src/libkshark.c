@@ -1,9 +1,9 @@
 // C
-#define _GNU_SOURCE  
+#define _GNU_SOURCE 1
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
-#include <sys/time.h>    
+#include <sys/time.h>
 
 // trace-cmd
 #include "trace-hash.h"

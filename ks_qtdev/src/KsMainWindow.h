@@ -42,7 +42,7 @@ private slots:
 	void open();
 	void importFilter();
 	void reload();
-	 bool saveFilter();
+	void saveFilter();
 // 	bool saveAs();
 	void showEvents();
 	void showTasks();

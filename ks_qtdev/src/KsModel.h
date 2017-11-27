@@ -46,16 +46,11 @@ class KsFilterProxyModel : public QSortFilterProxyModel
 	kshark_entry	**_data;
 
 public:
-	KsFilterProxyModel(QObject *parent = nullptr)
-	: QSortFilterProxyModel(parent) {}
+	KsFilterProxyModel(QObject *parent = nullptr);
 
-	bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const {
-		if (_data[sourceRow]->visible)
-			return true;
-		return false;
-	}
+	bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const;
 
-	void fill(kshark_entry **rows) {_data = rows;}
+	void fill(kshark_entry **rows);
 };
 
 class KsViewModel : public QAbstractTableModel
