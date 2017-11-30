@@ -323,7 +323,7 @@ size_t kshark_load_data_records(struct tracecmd_input *handle,
 {
 	int cpus = tracecmd_cpus(handle);
 	int cpu;
-	size_t count, total=0;
+	size_t count, total = 0;
 	struct pevent_record *data;
 	struct kshark_context *ctx = NULL;
 	kshark_instance(&ctx);
@@ -368,7 +368,7 @@ size_t kshark_load_data_records(struct tracecmd_input *handle,
 	int next_cpu;
 	uint64_t ts;
 	while (count < total) {
-		ts=0;
+		ts = 0;
 		next_cpu = -1;
 		for (cpu = 0; cpu < cpus; ++cpu) {
 			if (!cpu_list[cpu])
@@ -435,13 +435,13 @@ size_t kshark_load_data_entries(struct tracecmd_input *handle,
 	}
 
 	struct kshark_entry **rows;
-	rows = calloc (total, sizeof(struct kshark_entry *));
+	rows = calloc(total, sizeof(struct kshark_entry *));
 
 	count = 0;
 	int next_cpu;
 	uint64_t ts;
 	while (count < total) {
-		ts=0;
+		ts = 0;
 		next_cpu = -1;
 		for (cpu = 0; cpu < cpus; ++cpu) {
 			if (!cpu_list[cpu])
@@ -475,7 +475,7 @@ size_t kshark_load_data_matrix(struct tracecmd_input *handle,
 {
 	int cpus = tracecmd_cpus(handle);
 	int cpu;
-	size_t count, total=0;
+	size_t count, total = 0;
 	struct pevent_record *data;
 	struct kshark_context *ctx = NULL;
 	kshark_instance(&ctx);
@@ -520,7 +520,7 @@ size_t kshark_load_data_matrix(struct tracecmd_input *handle,
 	int next_cpu;
 	uint64_t ts;
 	while (count < total) {
-		ts=0;
+		ts = 0;
 		next_cpu = -1;
 		for (cpu = 0; cpu < cpus; ++cpu) {
 			if (!cpu_list[cpu])
@@ -614,23 +614,23 @@ uint32_t kshark_find_record_row(uint64_t time,
 	return h;
 }
 
-void kshark_filter_add_pid(struct kshark_context *ctx, int filter_id, int pid)
+void kshark_filter_add_id(struct kshark_context *ctx, int filter_id, int id)
 {
 	switch (filter_id) {
 		case SHOW_EVENT_FILTER:
-			filter_task_add_pid(ctx->show_event_filter, pid);
+			filter_task_add_pid(ctx->show_event_filter, id);
 			break;
 
 		case HIDE_EVENT_FILTER:
-			filter_task_add_pid(ctx->hide_event_filter, pid);
+			filter_task_add_pid(ctx->hide_event_filter, id);
 			break;
 
 		case SHOW_TASK_FILTER:
-			filter_task_add_pid(ctx->show_task_filter, pid);
+			filter_task_add_pid(ctx->show_task_filter, id);
 			break;
 
 		case HIDE_TASK_FILTER:
-			filter_task_add_pid(ctx->hide_task_filter, pid);
+			filter_task_add_pid(ctx->hide_task_filter, id);
 			break;
 
 		default:

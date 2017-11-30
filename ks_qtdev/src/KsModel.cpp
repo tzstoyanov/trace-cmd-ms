@@ -327,7 +327,7 @@ QVariant KsGraphModel::getValue(int column, int row) const
 
 	double val = 0.;
 	int cpu = column - 2;
-	if (_histo.isEmpty(row, cpu))
+	if (_histo.notEmpty(row, cpu))
 		val += .9;
 
 	return val;
@@ -760,26 +760,10 @@ size_t KsTimeMap::binCount(int bin, int cpu) const
 	return count;
 }
 
-bool KsTimeMap::isEmpty(int bin) const
+bool KsTimeMap::notEmpty(int bin) const
 {
-	if ( binCount(bin) > 0)
+	if (binCount(bin) > 0)
 		return true;
-
-	return false;
-}
-
-bool KsTimeMap::isEmpty(int bin, int cpu) const
-{
-	size_t nEntries = binCount(bin);
-	if (!nEntries)
-		return false;
-
-	int64_t pos = this->at(bin);
-
-	for (size_t i = pos; i < pos + nEntries; ++i) {
-		if (_data[i]->cpu == cpu && _data[i]->visible)
-			return true;
-	}
 
 	return false;
 }
@@ -801,4 +785,36 @@ int64_t KsTimeMap::at(int i) const
 int64_t KsTimeMap::operator[](int i) const
 {
 	return this->at(i);
+}
+
+bool KsTimeMap::notEmpty(int bin, int cpu) const
+{
+	size_t nEntries = binCount(bin);
+	if (!nEntries)
+		return false;
+
+	int64_t pos = this->at(bin);
+
+	for (size_t i = pos; i < pos + nEntries; ++i) {
+		if (_data[i]->cpu == cpu && _data[i]->visible)
+			return true;
+	}
+
+	return false;
+}
+
+int KsTimeMap::pid(int bin, int cpu) const
+{
+	size_t nEntries = binCount(bin);
+	if (!nEntries)
+		return false;
+
+	int64_t pos = this->at(bin);
+
+	for (size_t i = pos; i < pos + nEntries; ++i) {
+		if (_data[i]->cpu == cpu && _data[i]->visible)
+			return _data[i]->pid;
+	}
+
+	return -1;
 }

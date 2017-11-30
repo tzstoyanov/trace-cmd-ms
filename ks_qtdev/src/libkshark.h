@@ -129,7 +129,7 @@ enum kshark_filter_type {
 	HIDE_TASK_FILTER,
 };
 
-void kshark_filter_add_pid(struct kshark_context *ctx, int filter_id, int pid);
+void kshark_filter_add_id(struct kshark_context *ctx, int filter_id, int id);
 
 void kshark_filter_clear(struct kshark_context *ctx, int filter_id);
 

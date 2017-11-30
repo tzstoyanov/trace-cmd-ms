@@ -32,7 +32,8 @@ IF (Qt5Widgets_FOUND AND Qt5Charts_FOUND)
     set (ks-guiLib_hdr	KsMainWindow.h
 			KsTraceViewer.h
 			KsTraceGraph.h
-			KsUtils.h)
+			KsUtils.h
+			KsPlotTools.h)
 
     QT5_WRAP_CPP(ks-guiLib_hdr_moc ${ks-guiLib_hdr})
 
@@ -40,11 +41,14 @@ IF (Qt5Widgets_FOUND AND Qt5Charts_FOUND)
 								KsTraceViewer.cpp
 								KsTraceGraph.cpp
 								KsModel.cpp
-								KsUtils.cpp)
+								KsUtils.cpp
+								KsPlotTools.cpp)
 
-    target_link_libraries(kshark-gui ${TRACECMD_LIBRARY}	kshark
-								Qt5::Widgets
-								Qt5::Charts)
+    target_link_libraries(kshark-gui ${TRACECMD_LIBRARY}
+				     kshark
+				     GLU GL glut
+				     Qt5::Widgets
+				     Qt5::Charts)
 
     set_target_properties(kshark-gui  PROPERTIES  SUFFIX	".so.${KS_VERSION_STRING}")
 
@@ -52,6 +56,9 @@ IF (Qt5Widgets_FOUND AND Qt5Charts_FOUND)
     MESSAGE(STATUS "kernelshark")
     add_executable(kernelshark		kernelshark.cpp)
     target_link_libraries(kernelshark	kshark-gui)
+
+    add_executable(draw		draw.cpp)
+    target_link_libraries(draw	kshark-gui)
 
 ENDIF (Qt5Widgets_FOUND AND Qt5Charts_FOUND)
 

@@ -482,7 +482,7 @@ void KsDataStore::applyPosTaskFilter(QVector<int> vec)
 	kshark_filter_clear(ctx, SHOW_TASK_FILTER);
 	kshark_filter_clear(ctx, HIDE_TASK_FILTER);
 	for (auto const &pid: vec)
-		kshark_filter_add_pid(ctx, SHOW_TASK_FILTER, pid);
+		kshark_filter_add_id(ctx, SHOW_TASK_FILTER, pid);
 
 	kshark_filter_entries(ctx, _rows, _data_size);
 	emit updateView();
@@ -502,7 +502,7 @@ void KsDataStore::applyNegTaskFilter(QVector<int> vec)
 	kshark_filter_clear(ctx, SHOW_TASK_FILTER);
 	kshark_filter_clear(ctx, HIDE_TASK_FILTER);
 	for (auto const &pid: vec)
-		kshark_filter_add_pid(ctx, HIDE_TASK_FILTER, pid);
+		kshark_filter_add_id(ctx, HIDE_TASK_FILTER, pid);
 
 	kshark_filter_entries(ctx, _rows, _data_size);
 	emit updateView();
@@ -523,7 +523,7 @@ void KsDataStore::applyPosEventFilter(QVector<int> vec)
 	kshark_filter_clear(ctx, HIDE_EVENT_FILTER);
 
 	for (auto const &pid: vec)
-		kshark_filter_add_pid(ctx, SHOW_EVENT_FILTER, pid);
+		kshark_filter_add_id(ctx, SHOW_EVENT_FILTER, pid);
 
 	kshark_filter_entries(ctx, _rows, _data_size);
 	emit updateView();
@@ -543,7 +543,7 @@ void KsDataStore::applyNegEventFilter(QVector<int> vec)
 	kshark_filter_clear(ctx, SHOW_EVENT_FILTER);
 	kshark_filter_clear(ctx, HIDE_EVENT_FILTER);
 	for (auto const &pid: vec)
-		kshark_filter_add_pid(ctx, HIDE_EVENT_FILTER, pid);
+		kshark_filter_add_id(ctx, HIDE_EVENT_FILTER, pid);
 
 	kshark_filter_entries(ctx, _rows, _data_size);
 	emit updateView();

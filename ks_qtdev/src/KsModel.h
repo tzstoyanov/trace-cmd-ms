@@ -138,16 +138,16 @@ public:
 
 	size_t binCount(int bin) const;
 	size_t binCount(int bin, int cpu) const;
-	bool isEmpty(int bin) const;
-	bool isEmpty(int bin, int cpu) const;
-
+	bool notEmpty(int bin) const;
+	bool notEmpty(int bin, int cpu) const;
+	int pid(int bin, int cpu) const;
 	double binTime(size_t bin)  const {return (_min + bin*_binSize)*1e-9;}
 	uint64_t ts(size_t bin)     const {return (_min + bin*_binSize);}
 
 	int64_t operator[](int i) const;
 	int64_t at(int i) const;
 	int64_t at(int i, int cpu) const;
-	kshark_entry *dataAt(int i) const {return _data[i];}
+	kshark_entry *dataAt(int i) const {return _data[at(i)];}
 
 	void dump();
 
