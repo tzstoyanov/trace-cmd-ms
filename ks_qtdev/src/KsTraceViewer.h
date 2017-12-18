@@ -44,7 +44,6 @@ signals:
 	void select(size_t);
 
 private slots:
-	//void pageChanged(int);
 	void searchEditColumn(int);
 	void searchEditSelect(int);
 	void searchEditText(const QString &);
@@ -53,7 +52,7 @@ private slots:
 	void next();
 	void prev();
 	void clicked(const QModelIndex& i);
-	void showRow(int r, bool mark);
+	void showRow(size_t r, bool mark);
 	void deselect();
 	void markSwitch();
 	void update();
@@ -61,27 +60,25 @@ private slots:
 private:
 	void resizeToContents();
 	bool event(QEvent *event);
-	//void keyPressEvent(QKeyEvent *event);
 
 	size_t searchItems(int column, const QString &text, condition_func cond);
 
-	QVBoxLayout 	_layout;
-	QTableView 	_view;
+	QVBoxLayout	_layout;
+	QTableView	_view;
 	KsViewModel		_model;
 	KsFilterProxyModel	_proxyModel;
 
-	QStringList 	_tableHeader;
-	QToolBar 	_toolbar;
-	QLabel 		/*_labelPage,*/ _labelSearch, _labelGrFollows;
-	//QSpinBox 	_pageSpinBox;
-	QComboBox 	_columnComboBox;
-	QComboBox 	_selectComboBox;
-	QLineEdit 	_searchLineEdit;
+	QStringList	_tableHeader;
+	QToolBar	_toolbar;
+	QLabel		_labelSearch, _labelGrFollows;
+	QComboBox	_columnComboBox;
+	QComboBox	_selectComboBox;
+	QLineEdit	_searchLineEdit;
 	QPushButton	_prevButton, _nextButton;
-	QCheckBox 	_graphFollowsCheckBox;
+	QCheckBox	_graphFollowsCheckBox;
 
-	bool _searchDone;
-	bool _graphFollows;
+	bool 		_searchDone;
+	bool 		_graphFollows;
 
 	QList<size_t> _matchList;
 	QList<size_t>::iterator _it;
@@ -90,9 +87,9 @@ private:
 
 	enum Condition
 	{
-		Containes,
-		Match,
-		NotHave
+		Containes = 0,
+		Match = 1,
+		NotHave = 2
 	};
 };
 

@@ -1,82 +1,142 @@
+
+/*
+ * Copyright (C) 2017 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
+ *
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License (not later!)
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not,  see <http://www.gnu.org/licenses>
+ *
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ */
+
 #ifndef _GLWIDGET_H
 #define _GLWIDGET_H
 
+// Qt
 #include <QOpenGLWidget>
+#include <QColor>
+#include <QRubberBand>
+
+// Kernel Shark 2
+#include "KsModel.h"
+#include "KsUtils.h"
+
+class KsGLWidget;
 
 namespace KsPlot {
 
 struct Color
 {
 	Color();
-	Color(float r, float g, float b);
+	Color(uint8_t r, uint8_t g, uint8_t b);
+	Color(int rgb);
 
 	Color& operator ++();
+	Color& operator =(const QColor &c);
 
-	float r_, g_, b_;
+	uint8_t _r, _g, _b;
 };
 
-class Point
+struct Palette
 {
+	static Color &colot(size_t i) {return _colors[i];}
+	static Color _colors[20];
+};
+
+struct Shape
+{
+	Shape() : _visible(true) {}
+	void draw() {if (_visible) _draw(_color);}
+
+	bool	_visible;
+	Color	_color;
+
+private:
+	virtual void _draw(const Color &c) const = 0;
+};
+
+class Point : public Shape
+{
+	void _draw(const Color &c) const override;
+
 public:
 	Point();
 	Point(int x, int y);
+	virtual ~Point() {}
 
-	void reset();
-	void draw() const;
-	void draw(const Color &c) const;
-
-	/** Cartesian coordinates */
-	int x_, y_;
-
-	void print() const;
+	/** Cartesian coordinates. */
+	int _x, _y;
+	float _size;
 };
 
-class Line
+class Line : public Shape
 {
+	void _draw(const Color &c) const override;
+
 public:
 	Line();
 	Line(Point *a, Point *b);
+	virtual ~Line() {}
 
-	void draw() const;
-	void draw(const Color &c) const;
-
-	Point *a_, *b_;
+	Point *_a, *_b;
 };
 
-class Polygon
+class Polygon : public Shape
 {
 	Polygon() = delete;
 
+	void _draw(const Color &c) const override;
+	size_t	  _nPoints;
+	Point	*_points;
+
 public:
-	Polygon(size_t id, size_t n);
+	Polygon(size_t n);
 	virtual ~Polygon();
 
-	void set_point(size_t i, int x, int y);
-	void set_point(size_t i, const Point &p);
-	void order();
-	void make_lines();
+	void setPoint(size_t i, int x, int y);
+	void setPoint(size_t i, const Point &p);
+	size_t pointCount() {return _nPoints;}
+	void makeLines();
 
-	void draw() const;
-	void draw(const Color &c) const;
-
-	size_t	  n_points_;
-	Point	**points_;
-	Line	**lines_;
+	bool	  _drawContour;
 };
 
 class Triangle : public Polygon
 {
 public:
-	Triangle(size_t id) : Polygon(id, 3) {}
+	Triangle() : Polygon(3) {}
 };
 
 class Rectangle : public Polygon
 {
 public:
-	Rectangle(size_t id) : Polygon(id, 3) {}
+	Rectangle() : Polygon(4) {}
 };
 
-class Bin {
+class Mark : public Shape
+{
+	void _draw(const Color &c) const override;
+	Point *_a, *_b, *_cpu, *_task;
+
+public:
+	Mark();
+	virtual ~Mark();
+
+	void setMark(int bin, int cpuId, int taskId, KsGLWidget *w);
+};
+
+class Bin
+{
 public:
 	Bin();
 	Bin(size_t id);
@@ -84,50 +144,41 @@ public:
 	void drawLine();
 	void drawVal();
 
-	size_t	id_;
-	Color	color_;
-	Point	base_, val_;
+	int mod() {return _val._y - _base._y;}
+
+	size_t	_id;
+	Color	_color;
+	int 	_pid;
+	Point	_base, _val;
+// 	bool 	_isIdle;
 };
 
-class Graph {
+class Graph
+{
 	Graph() = delete;
+	size_t	 _size;
+	int	 _hMargin;
+
 public:
 	Graph(size_t s);
 	~Graph();
 
 	size_t size();
-	void setBase(int b);
-	void setBinValue(size_t bin, int val);
-	void setBinColor(size_t bin, const Color &c);
-
 	void draw();
 
-private:
-	Bin	*bins_;
-	size_t	 size_;
-	int	 hMargin_, vMargin_;
+	void setBase(int b);
+	void setBinValue(size_t bin, int val);
+	void setBinPid(size_t bin, int pid);
+	void setBinColor(size_t bin, const Color &c);
+	void setBinIdle(size_t bin, bool idle);
+	void setBin(size_t bin, int pid, const Color &c);
+	void deriveBin(int bin);
+
+	void setHMargin(int hMargin);
+
+	Bin	*_bins;
 };
 
 }; // KsPlot
-
-class KsGLWidget : public QOpenGLWidget
-{
-	Q_OBJECT
-public:
-	KsGLWidget(QWidget *parent = NULL);
-// 	virtual ~KsGLWidget() {}
-
-protected:
-	void initializeGL() override;
-	void resizeGL(int w, int h) override;
-	void paintGL() override;
-
-	void mousePressEvent(QMouseEvent *event) {}
-	void mouseMoveEvent(QMouseEvent *event) {}
-	void keyPressEvent(QKeyEvent *event) {}
-
-public:
-	QVector<KsPlot::Graph*> _graphs;
-};
 
 #endif  /* _GLWIDGET_H */

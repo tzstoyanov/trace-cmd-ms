@@ -71,10 +71,14 @@ KsMainWindow::KsMainWindow(QWidget *parent)
 	connect(&_mState, SIGNAL(markSwitch()), &_view, SLOT(markSwitch()));
 
 	_graph.setMarkerSM(&_mState);
+	_mState.markerA().setGLWidget(_graph.glPtr());
+	_mState.markerB().setGLWidget(_graph.glPtr());
 
+	connect(&_mState, SIGNAL(showInGraph(size_t)), &_graph, SLOT(markEntry(size_t)));
+	connect(&_mState, SIGNAL(updateView(size_t, bool)), &_view, SLOT(showRow(size_t, bool)));
 	connect(&_view, SIGNAL(select(size_t)), &_graph, SLOT(markEntry(size_t)));
-	connect(&_graph, SIGNAL(select(int, bool)), &_view, SLOT(showRow(int, bool)));
-	connect(&_graph, SIGNAL(deselect()), &_view, SLOT(deselect()));
+	connect(_graph.glPtr(), SIGNAL(updateView(size_t, bool)), &_view, SLOT(showRow(size_t, bool)));
+	connect(_graph.glPtr(), SIGNAL(deselect()), &_view, SLOT(deselect()));
 	connect(&_data, SIGNAL(updateView()), &_view, SLOT(update()));
 	connect(&_data, SIGNAL(updateGraph()), &_graph, SLOT(update()));
 }
@@ -246,13 +250,15 @@ void KsMainWindow::loadFile(const QString& fileName) {
 	qInfo() << "Loading " << fileName;
 	int ret = stat(fileName.toStdString().c_str(), &st);
 	if (ret != 0) {
+		_mState.reset();
 		_view.reset();
 		_graph.reset();
-		QString text("Unable to find file \n");
+		QString text("Unable to find file ");
 		text.append(fileName);
 		text.append("\n");
 		KsMessageDialog *message = new KsMessageDialog(text);
 		message->setWindowFlags(Qt::WindowStaysOnTopHint);
+		message->setMinimumWidth(STRING_WIDTH(text) + FONT_WIDTH*3);
 		message->show();
 		qCritical() << "ERROR Opening file " << fileName;
 		return;
@@ -260,13 +266,15 @@ void KsMainWindow::loadFile(const QString& fileName) {
 
 	_data.loadData(fileName);
 	if (!_data.size()) {
+		_mState.reset();
 		_view.reset();
 		_graph.reset();
-		QString text("File \n");
+		QString text("File ");
 		text.append(fileName);
-		text.append("\ncontains no data.\n");
+		text.append(" contains no data.\n");
 		KsMessageDialog *message = new KsMessageDialog(text);
 		message->setWindowFlags(Qt::WindowStaysOnTopHint);
+		message->setMinimumWidth(STRING_WIDTH(text) + FONT_WIDTH*3);
 		message->show();
 		return;
 	}

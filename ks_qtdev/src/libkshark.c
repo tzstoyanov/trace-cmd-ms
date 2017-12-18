@@ -678,3 +678,9 @@ size_t kshark_filter_entries(struct kshark_context *ctx,
 
 	return count;
 }
+
+void kshark_convert_nano(uint64_t time, uint64_t *sec, uint64_t *usec)
+{
+	*sec = time / 1000000000ULL;
+	*usec = (time / 1000) % 1000000;
+}

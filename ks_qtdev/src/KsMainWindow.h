@@ -52,19 +52,19 @@ private slots:
 	void aboutInfo();
 
 private:
-	/** Data manager */
+	/** Data manager. */
 	KsDataStore	_data;
 
-	// Widget for reading searching in the trace data */
+	/** Widget for reading and searching in the trace data. */
 	KsTraceViewer	_view;
 
-	/** Widget for graphical visualization of the trace data */
+	/** Widget for graphical visualization of the trace data. */
 	KsTraceGraph	_graph;
 
-	/** Dual Marker State Machine */
+	/** Dual Marker State Machine. */
 	KsDualMarkerSM  _mState;
 
-	// File menu
+	// File menu.
 	QAction _openAction;
 	QAction _importFilterAction;
 	QAction _saveFilterAction;
@@ -72,18 +72,18 @@ private:
 	QAction _exportFilterAction;
 	QAction _quitAction;
 
-	// Filter menu
+	// Filter menu.
 	QAction _taskSyncAction;
 	QAction _eventSyncAction;
 	QAction _showEventsAction;
 	QAction _showTasksAction;
 	QAction _hideTasksAction;
 
-	// Plots menu
+	// Plots menu.
 	QAction _cpuSelectAction;
 	QAction _taskSelectAction;
 
-	// Help menu
+	// Help menu.
 	QAction _aboutAction;
 
 	void resizeEvent(QResizeEvent* event);

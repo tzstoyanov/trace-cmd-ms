@@ -24,6 +24,7 @@
 // Kernel Shark 2
 #include "KsDeff.h"
 #include "KsUtils.h"
+#include "KsPlotTools.h"
 #include "KsTraceGraph.h"
 
 KsMessageDialog::KsMessageDialog(QString message, QWidget *parent)
@@ -31,10 +32,10 @@ KsMessageDialog::KsMessageDialog(QString message, QWidget *parent)
   _text(message, this),
   _close_button("Close", this)
 {
-	this->resize(SCREEN_WIDTH/10, SCREEN_HEIGHT/5);
+	this->resize(SCREEN_WIDTH/10, FONT_HEIGHT*8);
 	_layout.addWidget(&_text);
 	_layout.addWidget(&_close_button);
-	connect(&_close_button,  SIGNAL(pressed()), this, SLOT(close()));
+	connect(&_close_button, SIGNAL(pressed()), this, SLOT(close()));
 
 	this->setLayout(&_layout);
 }
@@ -431,8 +432,7 @@ void KsDataStore::loadData(const QString &file)
 
 	/* The handle should have loaded the file by now.
 	 * Try to turn off function trace indent and turn on show parent
-	 * if possible.
-	 */
+	 * if possible. */
 	trace_util_add_option("ftrace:parent", "1");
 	trace_util_add_option("ftrace:indent", "0");
 
@@ -554,68 +554,80 @@ void KsDataStore::applyNegEventFilter(QVector<int> vec)
 }
 
 KsGraphMark::KsGraphMark(DualMarkerState s)
-: _state(s), _bin(-1), _pos(0), _color(Qt::darkGreen), _mark(nullptr), _graph(nullptr)
-{}
+: _state(s), _isSet(false), _bin(-1), _cpu(-1), _task(-1), _pos(0), _color(Qt::darkGreen)
+{
+	_mark = new KsPlot::Mark;
+	_mark->_color = _color;
+}
 
 KsGraphMark::KsGraphMark(DualMarkerState s, QColor col)
-: _state(s), _bin(-1), _pos(0), _color(col), _mark(nullptr), _graph(nullptr)
-{}
-
-bool KsGraphMark::set(const KsDataStore &data, const  KsTimeMap &histo, size_t pos)
+: _state(s), _isSet(false), _bin(-1), _cpu(-1), _task(-1), _pos(0), _color(col)
 {
+	_mark = new KsPlot::Mark;
+	_mark->_color = _color;
+}
+
+void KsGraphMark::reset()
+{
+	_isSet = false;
+	_mark->_visible = false;
+	_bin = -1;
+	_pos = 0;
+	_cpu = -1;
+	_task = -1;
+}
+
+bool KsGraphMark::set(const KsDataStore &data, const  KsTimeMap &histo, size_t pos, int grCpu, int grTask)
+{
+	_isSet = true;
 	_pos = pos;
+	_cpu = grCpu;
+	_task = grTask;
 	size_t ts = data._rows[_pos]->ts;
 	if (ts > histo._max || ts < histo._min) {
 		_bin = -1;
+		_mark->_visible = false;
 		return false;
 	}
-		
+	
 	_bin = (ts - histo._min)/histo._binSize;
 	return true;
 }
 
-bool KsGraphMark::reset(const KsDataStore &data, const KsTimeMap &histo)
+bool KsGraphMark::update(const KsDataStore &data, const KsTimeMap &histo)
 {
-	return set(data, histo, this->_pos);
+	if (!_isSet)
+		return false;
+
+	return set(data, histo, this->_pos, this->_cpu, this->_task);
 }
 
 bool KsGraphMark::isSet()
 {
-	if (_mark)
-		return true;
-
-	return false;
+	return _isSet;
 }
 
-void KsGraphMark::draw(KsChartView *graph)
+bool KsGraphMark::isVisible()
 {
-	_graph = graph;
-	QPointF p0 = _graph->chart()->mapToPosition(QPoint(_bin, 4));
-	QPointF p1 = _graph->chart()->mapToPosition(QPoint(_bin, -3));
+	return _mark->_visible;
+}
 
-	QPen pen(_color);
-	if (SCREEN_HEIGHT < 2000)
-		pen.setWidthF(2);
-	else
-		pen.setWidthF(4.5);
-
-	_mark = new QGraphicsLineItem(p0.x(), p0.y(), p1.x(), p1.y());
-	_mark->setPen(pen);
-	_graph->scene()->addItem(_mark);
+void KsGraphMark::draw(KsGLWidget *gl)
+{
+	_gl = gl;
+	_mark->setMark(_bin, _cpu, _task, _gl);
+	_mark->_visible = true;
 }
 
 void KsGraphMark::draw()
 {
-	draw(this->_graph);
+	draw(this->_gl);
 }
 
 void KsGraphMark::remove()
 {
-	if (_mark) {
-		_graph->scene()->removeItem(_mark);
-		delete _mark;
-		_mark = nullptr;
-	}
+	_isSet = false;
+	_mark->_visible = false;
 }
 
 DualMarkerState operator !(const DualMarkerState &state)
@@ -642,20 +654,28 @@ KsDualMarkerSM::KsDualMarkerSM(QWidget *parent)
 	for (auto const &l: {&_labelMA, &_labelMB, &_labelDelta}) {
 		l->setFrameStyle(QFrame::Panel | QFrame::Sunken);
 		l->setStyleSheet("QLabel {background-color : white;}");
+		l->setTextInteractionFlags(Qt::TextSelectableByMouse);
 		l->setFixedHeight(FONT_HEIGHT*1.2);
 		l->setFixedWidth(FONT_WIDTH*16);
 	}
+
+	QString styleSheetA = "background : " +
+			      _markA._color.name() +
+			      "; color : white";
 
 	_stateA = new QState;
 	_stateA->setObjectName("A");
 	_stateA->assignProperty(&_buttonA,
 				"styleSheet",
-				"background : darkGreen; color : white");
+				styleSheetA);
 
 	_stateA->assignProperty(&_buttonB,
 				"styleSheet",
 				"color : rgb(70, 70, 70)");
 
+	QString styleSheetB = "background : " +
+			      _markB._color.name() +
+			      "; color : white";
 	_stateB = new QState;
 	_stateB->setObjectName("B");
 	_stateB->assignProperty(&_buttonA,
@@ -664,7 +684,7 @@ KsDualMarkerSM::KsDualMarkerSM(QWidget *parent)
 
 	_stateB->assignProperty(&_buttonB,
 				"styleSheet",
-				"background : darkCyan; color : white");
+				styleSheetB);
 
 	_stateB->addTransition(&_buttonA, SIGNAL(clicked()), _stateA);
 	connect(&_buttonA, SIGNAL(clicked()), this, SLOT(setStateA()));
@@ -679,16 +699,34 @@ KsDualMarkerSM::KsDualMarkerSM(QWidget *parent)
 	_machine.start();
 }
 
-void KsDualMarkerSM::setStateA()
+void KsDualMarkerSM::reset()
 {
-	_markState = DualMarkerState::A;
-	emit markSwitch();
+	_markA.reset();
+	_markB.reset();
+	_labelMA.setText("");
+	_labelMB.setText(""); 
+	_labelDelta.setText("");
 }
 
+void KsDualMarkerSM::setStateA()
+{
+	if (_markState !=  DualMarkerState::A) {
+		_markState = DualMarkerState::A;
+		emit markSwitch();
+	} else if (activeMarker().isSet()) {
+		emit updateView(activeMarker().row(), true);
+		emit showInGraph(activeMarker().row());
+	}
+}
 void KsDualMarkerSM::setStateB()
 {
-	_markState = DualMarkerState::B;
-	emit markSwitch();
+	if (_markState !=  DualMarkerState::B) {
+		_markState = DualMarkerState::B;
+		emit markSwitch();
+	} else if (activeMarker().isSet()) {
+		emit updateView(activeMarker().row(), true);
+		emit showInGraph(activeMarker().row());
+	}
 }
 
 KsGraphMark &KsDualMarkerSM::getMarker(DualMarkerState s)
@@ -730,17 +768,11 @@ void KsDualMarkerSM::placeInToolBar(QToolBar *tb)
 
 void KsDualMarkerSM::updateMarkers(const KsDataStore &data, const KsTimeMap &histo)
 {
-	if (_markA.isSet()) {
-		_markA.remove();
-		if(_markA.reset(data, histo))
-			_markA.draw();
-	}
+	if(_markA.update(data, histo))
+		_markA.draw();
 
-	if (_markB.isSet()) {
-		_markB.remove();
-		if(_markB.reset(data, histo))
-			_markB.draw();
-	}
+	if(_markB.update(data, histo))
+		_markB.draw();
 }
 
 void KsDualMarkerSM::updateLabels(const KsTimeMap &histo)

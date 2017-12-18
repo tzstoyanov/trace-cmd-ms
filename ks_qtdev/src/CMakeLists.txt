@@ -27,13 +27,12 @@ IF (PYTHONLIBS_FOUND)
 
 ENDIF (PYTHONLIBS_FOUND)
 
-IF (Qt5Widgets_FOUND AND Qt5Charts_FOUND)
+IF (Qt5Widgets_FOUND)
 
     set (ks-guiLib_hdr	KsMainWindow.h
 			KsTraceViewer.h
 			KsTraceGraph.h
-			KsUtils.h
-			KsPlotTools.h)
+			KsUtils.h)
 
     QT5_WRAP_CPP(ks-guiLib_hdr_moc ${ks-guiLib_hdr})
 
@@ -47,8 +46,7 @@ IF (Qt5Widgets_FOUND AND Qt5Charts_FOUND)
     target_link_libraries(kshark-gui ${TRACECMD_LIBRARY}
 				     kshark
 				     GLU GL glut
-				     Qt5::Widgets
-				     Qt5::Charts)
+				     Qt5::Widgets)
 
     set_target_properties(kshark-gui  PROPERTIES  SUFFIX	".so.${KS_VERSION_STRING}")
 
@@ -60,7 +58,7 @@ IF (Qt5Widgets_FOUND AND Qt5Charts_FOUND)
     add_executable(draw		draw.cpp)
     target_link_libraries(draw	kshark-gui)
 
-ENDIF (Qt5Widgets_FOUND AND Qt5Charts_FOUND)
+ENDIF (Qt5Widgets_FOUND)
 
 add_executable(dload		dataload.c)
 target_link_libraries(dload	kshark)

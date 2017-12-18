@@ -137,6 +137,8 @@ size_t kshark_filter_entries(struct kshark_context *ctx,
 			     struct kshark_entry **data_rows,
 			     size_t n_entries);
 
+void kshark_convert_nano(uint64_t time, uint64_t *sec, uint64_t *usec);
+
 #ifdef __cplusplus
 }
 #endif

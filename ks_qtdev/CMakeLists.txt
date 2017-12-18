@@ -19,10 +19,9 @@ ProcessorCount(N_CPUS)
 
 include(${KS_DIR}/build/FindTraceCmd.cmake)
 
-find_package(Qt5Widgets 5.9.1)
+find_package(Qt5Widgets 5.7.1)
 MESSAGE(STATUS "Found Qt5Widgets:  (version ${Qt5Widgets_VERSION})")
 
-find_package(Qt5Charts 5.9.1)
 find_package(PythonLibs)
 # find_package(Cython REQUIRED)
 # find_package(NumPy REQUIRED)

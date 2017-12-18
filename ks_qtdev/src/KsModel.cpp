@@ -73,10 +73,10 @@ QVariant KsViewModel::data(const QModelIndex &index, int role) const
 
 	if (role == Qt::BackgroundRole) {
 		if (index.row() == _markA)
-			return QVariant::fromValue(QColor(Qt::darkGreen));
+			return QVariant::fromValue(QColor(_colorMarkA));
 
 		if (index.row() == _markB)
-			return QVariant::fromValue(QColor(Qt::darkCyan));
+			return QVariant::fromValue(QColor(_colorMarkB));
 	}
 		
 	if (role == Qt::DisplayRole)
@@ -110,10 +110,8 @@ QVariant KsViewModel::getValue(int column, int row) const
 			char time[32];
 			uint64_t secs, usecs;
 			usecs = _data[row]->ts;
-			usecs /= 1000;
-			secs = usecs / 1000000ULL;
-			usecs -= secs * 1000000ULL;
-			sprintf(time, "%llu.%06llu", (long long)secs, (long long)usecs);
+			kshark_convert_nano(_data[row]->ts, &secs, &usecs);
+			sprintf(time, "%llu.%06llu", (unsigned long long)secs, (unsigned long long)usecs);
 			return time;
 
 		case TRACE_VIEW_COL_COMM:
@@ -309,35 +307,15 @@ KsGraphModel::KsGraphModel(int cpus, QObject *parent)
 KsGraphModel::~KsGraphModel()
 {}
 
-QVariant KsGraphModel::getValue(int column, int row) const
-{
-	switch (column) {
-		case 0:
-			return row;
-
-		case 1:
-		{
-			const kshark_entry *e = _histo.dataAt(row);
-			return e->pid;
-		}
-
-		default:
-			break;
-	}
-
-	double val = 0.;
-	int cpu = column - 2;
-	if (_histo.notEmpty(row, cpu))
-		val += .9;
-
-	return val;
-}
-
 QVariant KsGraphModel::getValue(const QModelIndex &index) const
 {
-	size_t row = index.row();
-	size_t column = index.column();
-	return getValue(column, row);
+	int bin = index.row();
+	int cpu = index.column();
+	int val = 0;
+	if (_histo.notEmpty(bin, cpu))
+		val += 1;
+
+	return val;
 }
 
 QVariant KsGraphModel::data(const QModelIndex &index, int role) const
@@ -345,18 +323,18 @@ QVariant KsGraphModel::data(const QModelIndex &index, int role) const
 	if (role != Qt::DisplayRole)
 		return {};
 
-	QVariant val = this->getValue(index.column(), index.row());
+	QVariant val = this->getValue(index);
 	return val;
 }
 
 //void KsGraphModel::fill(pevent *pevt, pevent_record **entries, size_t n, bool defaultMap)
-void KsGraphModel::fill(pevent *pevt, kshark_entry **entries, size_t n, bool defaultMap)
+void KsGraphModel::fill(pevent *pevt, kshark_entry **entries, size_t n)
 {
 	_pevt = pevt;
 	beginResetModel();
 	
-	if (defaultMap)
-		_histo.setBining(KS_GRAPH_N_BINS,
+	if (_histo.size() == 0)
+		_histo.setBining(KS_DEFAULT_NBUNS,
 				  entries[0]->ts,
 				  entries[n-1]->ts);
 
@@ -393,7 +371,7 @@ void KsGraphModel::zoomOut(double r)
 	endResetModel();
 }
 
-void KsGraphModel::zoomIn(double r, size_t mark)
+void KsGraphModel::zoomIn(double r, int mark)
 {
 	beginResetModel();
 	_histo.zoomIn(r, mark);
@@ -468,7 +446,7 @@ void KsTimeMap::setBining(size_t n, uint64_t min, uint64_t max)
 void KsTimeMap::resetBins(size_t first, size_t last)
 {
 	for (size_t r = first; r <= last; ++r) {
-		_map[r] = -1;
+		_map[r] = KS_EMPTY_BIN;
 		_binCount[r] = 0;
 	}
 }
@@ -481,13 +459,13 @@ size_t KsTimeMap::setLowerEdge()
 		_map[_nBins + 1] = 0;
 		_binCount[_nBins + 1] = row;
 	}  else {
-		_map[_nBins + 1] = -1;
+		_map[_nBins + 1] = KS_EMPTY_BIN;
 	}
 
 	if (_data[row]->ts  < _min + _binSize)
 		_map[0] = row;
 	else
-		_map[0] = -1;
+		_map[0] = KS_EMPTY_BIN;
 
 	return row;
 }
@@ -501,7 +479,7 @@ size_t KsTimeMap::setUpperhEdge()
 		_binCount[_nBins] = _dataSize - row;
 		
 	}  else {
-		_map[_nBins] = -1;
+		_map[_nBins] = KS_EMPTY_BIN;
 	}
 
 	return row;
@@ -515,7 +493,7 @@ void KsTimeMap::setNextBinEdge(size_t prevBin)
 	size_t row = kshark_find_entry_row(time, _data, 0, _dataSize - 1);
 
 	if (_data[row]->ts  >= time + _binSize) {
-		_map[bin] = -1;
+		_map[bin] = KS_EMPTY_BIN;
 		return;
 	}
 
@@ -526,7 +504,7 @@ void KsTimeMap::setBinCounts()
 {
 	size_t i = 0, prevNotEmpty;
 
-	if (_map[_nBins + 1] != -1) {
+	if (_map[_nBins + 1] != KS_EMPTY_BIN) {
 		prevNotEmpty = _nBins + 1;
 	} else {
 		while (_map[i] < 0) {++i;}
@@ -534,14 +512,14 @@ void KsTimeMap::setBinCounts()
 	}
 
 	while (i < _nBins) {
-		if (_map[i] != -1) {
+		if (_map[i] != KS_EMPTY_BIN) {
 			_binCount[prevNotEmpty] = _map[i] - _map[prevNotEmpty];
 			prevNotEmpty = i;
 		}
 		++i;
 	}
 
-	if (_map[_nBins] == -1) 
+	if (_map[_nBins] == KS_EMPTY_BIN) 
 		_binCount[prevNotEmpty] = _dataSize - _map[prevNotEmpty];
 	else
 		_binCount[prevNotEmpty] = _map[_nBins] - _map[prevNotEmpty];
@@ -553,8 +531,10 @@ void KsTimeMap::fill(struct kshark_entry **data, size_t n)
 	_data = data;
 	_dataSize = n;
 
-	if (_nBins == 0 || _binSize == 0)
+	if (_nBins == 0 || _binSize == 0 || _dataSize == 0) {
+		clear();
 		return;
+	}
 
 	setLowerEdge();
 	size_t bin = 0;
@@ -569,6 +549,8 @@ void KsTimeMap::fill(struct kshark_entry **data, size_t n)
 
 void KsTimeMap::shiftForward(size_t n)
 {
+// 	hd_time t0 = GET_TIME;
+
 	if (binCount(OverflowBin::Upper) == 0)
 		return;
 
@@ -603,6 +585,9 @@ void KsTimeMap::shiftForward(size_t n)
 
 	setUpperhEdge();
 	setBinCounts();
+
+// 	double time = GET_DURATION(t0);
+// 	qInfo() <<"shiftForward time: " << 1e3*time << " ms.";
 }
 
 void KsTimeMap::shiftBackward(size_t n)
@@ -650,12 +635,15 @@ void KsTimeMap::shiftBackward(size_t n)
 
 void KsTimeMap::zoomOut(double r)
 {
+	if (!_dataSize)
+		return;
+
 	size_t range = _max - _min;
 	size_t delta = (size_t) range*r;
-	if (delta < KS_GRAPH_N_BINS)
-		delta = KS_GRAPH_N_BINS;
 
-	size_t min = _min - delta/2, max = _max + delta/2;
+	size_t min = _min - delta/2;
+	size_t max = _max + delta/2;
+
 	if (min < _data[0]->ts)
 		min = _data[0]->ts;
 
@@ -668,17 +656,17 @@ void KsTimeMap::zoomOut(double r)
 	return;
 }
 
-void KsTimeMap::zoomIn(double r, size_t mark)
+void KsTimeMap::zoomIn(double r, int mark)
 {
 	size_t range = _max - _min;
-	if (range < KS_GRAPH_N_BINS*0x4)
+	if (range < _nBins*0x4)
 		return;
 
-	if (r > .5)
-		r = .5;
+	if (mark < 0)
+		mark = _nBins/2;
 
 	double delta_tot =  range*r;
-	size_t delta_min = delta_tot*mark/KS_GRAPH_N_BINS;
+	size_t delta_min = delta_tot*mark/_nBins;
 	size_t min = _min + delta_min;
 	size_t max = _max - (size_t) delta_tot + delta_min;
 
@@ -715,18 +703,56 @@ void KsTimeMap::shiftTo(size_t ts)
 	fill(this->_data, this->_dataSize);
 }
 
-int64_t KsTimeMap::at(int bin, int cpu) const
+int64_t KsTimeMap::at(int i) const
 {
+	if (i >= 0 && i < (int)_nBins)
+		return _map[i];
+
+	if (i == OverflowBin::Upper)
+		return _map[_nBins];
+
+	if (i == OverflowBin::Lower)
+		return _map[_nBins + 1];
+
+	return KS_EMPTY_BIN;
+}
+
+int64_t KsTimeMap::atCpu(int bin, int cpu) const
+{
+	size_t found = KS_EMPTY_BIN;
 	size_t nEntries = binCount(bin);
 	if (!nEntries)
-		return -1;
+		return found;
 
 	int64_t pos = _map[bin];
-	for (size_t i = pos; i < pos + nEntries; ++i)
-		if (_data[i]->cpu == cpu)
-			return i;
+	for (size_t i = pos; i < pos + nEntries; ++i) {
+		if (_data[i]->cpu == cpu) {
+			if (_data[i]->visible)
+				return i;
+			else
+				found = KS_FILTERED_BIN;
+		}
+	}
+	return found;
+}
 
-	return -1;
+int64_t KsTimeMap::atPid(int bin, int pid) const
+{
+	size_t found = KS_EMPTY_BIN;
+	size_t nEntries = binCount(bin);
+	if (!nEntries)
+		return found;
+
+	int64_t pos = _map[bin];
+	for (size_t i = pos; i < pos + nEntries; ++i) {
+		if (_data[i]->pid == pid) {
+			if (_data[i]->visible)
+				return i;
+			else
+				found = KS_FILTERED_BIN;
+		}
+	}
+	return found;
 }
 
 size_t KsTimeMap::binCount(int bin) const
@@ -768,53 +794,91 @@ bool KsTimeMap::notEmpty(int bin) const
 	return false;
 }
 
-int64_t KsTimeMap::at(int i) const
-{
-	if (i >= 0 && i < (int)_nBins)
-		return _map[i];
-
-	if (i == OverflowBin::Upper)
-		return _map[_nBins];
-
-	if (i == OverflowBin::Lower)
-		return _map[_nBins + 1];
-
-	return -1;
-}
-
 int64_t KsTimeMap::operator[](int i) const
 {
 	return this->at(i);
 }
 
-bool KsTimeMap::notEmpty(int bin, int cpu) const
+bool KsTimeMap::notEmpty(int bin, int cpu, int *pid) const
 {
-	size_t nEntries = binCount(bin);
-	if (!nEntries)
+	int val = getPid(bin, cpu, true);
+	if (pid)
+		*pid = val;
+
+	if (val < 0)
 		return false;
 
-	int64_t pos = this->at(bin);
-
-	for (size_t i = pos; i < pos + nEntries; ++i) {
-		if (_data[i]->cpu == cpu && _data[i]->visible)
-			return true;
-	}
-
-	return false;
+	return true;
 }
 
-int KsTimeMap::pid(int bin, int cpu) const
+int KsTimeMap::getPid(int bin, int cpu, bool visOnly) const
 {
+	size_t pos;
+	int pid = KS_EMPTY_BIN;
 	size_t nEntries = binCount(bin);
 	if (!nEntries)
-		return false;
+		return pid;
 
-	int64_t pos = this->at(bin);
-
-	for (size_t i = pos; i < pos + nEntries; ++i) {
-		if (_data[i]->cpu == cpu && _data[i]->visible)
-			return _data[i]->pid;
+	if (bin == OverflowBin::Lower) {
+		/* Set the position at the end of the Lower Overflow bin and
+		 * go backwards. */
+		pos = binCount(OverflowBin::Lower) - 1;
+		for (size_t i = pos; i > 0; --i) {
+			if (_data[i]->cpu == cpu) {
+				if(visOnly && !_data[i]->visible)
+					return KS_FILTERED_BIN;
+				else
+					return _data[i]->pid;
+			}
+		}
+	} else {
+		/* Set the position at the begining of the bin and go forward. */
+		pos = this->at(bin);
+		for (size_t i = pos; i < pos + nEntries; ++i)
+			if (_data[i]->cpu == cpu) {
+				if(visOnly && !_data[i]->visible)
+					pid = KS_FILTERED_BIN;
+				else
+					return _data[i]->pid;
+			}
 	}
 
-	return -1;
+	return pid;
+}
+
+int KsTimeMap::getCpu(int bin, int pid, bool visOnly) const
+{
+	size_t pos;
+	size_t nEntries = binCount(bin);
+	
+	int cpu = KS_EMPTY_BIN;
+	if (!nEntries)
+		return cpu;
+
+	if (bin == OverflowBin::Lower) {
+		/* Set the position at the end of the Lower Overflow bin and go
+		 * backwards. */
+		pos = binCount(bin) - 1;
+		for (size_t i = pos; i > 0; --i) {
+			if (_data[i]->pid == pid) {
+				if(_data[i]->visible)
+					return _data[i]->cpu;
+				else
+					return KS_FILTERED_BIN;
+			}
+		}
+	} else {
+		/* Set the position at the begining of the bin and go forward. */
+		pos = this->at(bin);
+		for (size_t i = pos; i < pos + nEntries; ++i) {
+			if (_data[i]->pid == pid) {
+				if(_data[i]->visible)
+					return _data[i]->cpu;
+				else
+					cpu = KS_FILTERED_BIN;
+			}
+		}
+	}
+
+	return cpu;
 }

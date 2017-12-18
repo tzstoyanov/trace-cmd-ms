@@ -23,76 +23,108 @@
 
 // Qt
 #include <QRubberBand>
-#include <QtCharts>
-using namespace QtCharts;
-QT_CHARTS_USE_NAMESPACE
 
 // Kernel Shark 2
 #include "KsUtils.h"
+#include "KsPlotTools.h"
 #include "KsModel.h"
 
-class KsChartView : public QChartView
+class KsGLWidget : public QOpenGLWidget
 {
 	Q_OBJECT
 public:
-	KsChartView(QWidget *parent = 0);
-	KsChartView(QChart *chart, QWidget *parent = 0);
+	KsGLWidget(QWidget *parent = NULL);
+// 	virtual ~KsGLWidget() {}
 
-	int cpu() {return _cpuId;}
+	void loadData(KsDataStore *data);
+	void setMarkerSM(KsDualMarkerSM *m);
+
+	size_t chartCount() {return _cpuList.count() + _taskList.count();}
+	int height() {return (_cpuList.count() + _taskList.count())*(CPU_GRAPH_HEIGHT + _vSpacing) + _vMargin*2;}
 
 signals:
-	void rangeBoundInit(int x, size_t);
-	void rangeBoundStretched(int x, size_t);
-	void rangeChanged(size_t, size_t);
+	void found(size_t pos);
 	void zoomIn();
 	void zoomOut();
 	void scrollLeft();
 	void scrollRight();
 	void stopUpdating();
-	void resetPointer();
-	void select(int pos, bool mark);
+	void select(size_t pos);
+	void updateView(size_t pos, bool mark);
 	void deselect();
-	void found(size_t);
 
 protected:
+	void initializeGL() override;
+	void resizeGL(int w, int h) override;
+	void paintGL() override;
+
 	void mousePressEvent(QMouseEvent *event);
 	void mouseMoveEvent(QMouseEvent *event);
 	void mouseReleaseEvent(QMouseEvent *event);
 	void mouseDoubleClickEvent(QMouseEvent *event);
+	void wheelEvent(QWheelEvent * event);
 	void keyPressEvent(QKeyEvent *event);
 	void keyReleaseEvent(QKeyEvent *event);
 
-private:
-	QGraphicsLineItem *_pointer;
+	void updateGraphs();
+	void drawAxisX();
+	void drawGraphs(QVector<int> cpuMask, QVector<int> taskMask);
+	void addCpu(int cpu);
+	void addTask(int pid);
 
-	void init();
-	QPointF mapToValue(QMouseEvent *event);
-	bool find(QMouseEvent *event, size_t variance, size_t *row);
+	int posInRange(int x);
+	int getCpu(int y);
+	int getPid(int y);
+
+	void rangeBoundInit(int x);
+	void rangeBoundStretched(int x);
+	void rangeChanged(int binMin, int binMax);
+
+	bool find(QMouseEvent *event, int variance, size_t *row);
 	bool findAndSelect(QMouseEvent *event);
-
-	int _posMousePress;
-
 public:
-	int		 _cpuId;
-	KsGraphModel	*_model;
+	QVector<KsPlot::Graph*> _graphs;
+	QVector<KsPlot::Shape*> _shapes;
+
+	int		_hMargin, _vMargin;
+	unsigned int	_vSpacing;
+
+// private:
+	KsDualMarkerSM	*_mState;
+	KsDataStore 	*_data;
+	KsGraphModel	_model;
+	QRubberBand 	_rubberBand;
+	QPoint 		_rubberBandOrigin;
+
+	size_t		_posMousePress;
+	bool		_keyPressed;
+
+	QVector<int>	_cpuList;
+	QVector<int>	_taskList;
 };
 
+class KsGraphScrollArea : public QScrollArea {
+public:
+	KsGraphScrollArea(QWidget *parent = 0)
+	: QScrollArea(parent) {}
+
+	void wheelEvent(QWheelEvent *evt) {
+		evt->ignore();
+	}
+};
 
 class KsTraceGraph : public QWidget
 {
 	Q_OBJECT
 public:
 	KsTraceGraph(QWidget *parent = 0);
-	virtual ~KsTraceGraph();
 
 	void loadData(KsDataStore *data);
 	void setMarkerSM(KsDualMarkerSM *m);
+	KsGLWidget *glPtr() {return &_glWindow;}
 	void reset();
 
 private slots:
-	void rangeBoundInit(int x, size_t);
-	void rangeBoundStretched(int x, size_t);
-	void rangeChanged(size_t , size_t);
 	void zoomIn();
 	void zoomOut();
 	void scrollLeft();
@@ -101,21 +133,16 @@ private slots:
 	void resetPointer();
 	void setPointerInfo(size_t);
 	void markEntry(size_t);
-	void selectReceived(int bin, bool mark);
-	void deselectReceived();
 	void cpuReDraw(QVector<int>);
 	void taskReDraw(QVector<int>);
 	void update();
-
-signals:
-	void select(int, bool);
-	void deselect();
-
-//protected:
-	//bool eventFilter(QObject *obj, QEvent *event);
+	void updateGraphLegends();
+	void updateTimeLegends();
+	void updateGeom();
 
 private:
 	void resizeEvent(QResizeEvent* event);
+	bool eventFilter(QObject* obj, QEvent* evt);
 
 	enum class GraphActions {
 		ZoomIn,
@@ -124,9 +151,6 @@ private:
 		ScrollRight
 	};
 
-	void addCpu(int cpu);
-	void drawGraphs(QVector<int> cpuMask, QVector<int> taskMask);
-	void updateGeom();
 	void updateGraphs(GraphActions action);
 	void setAxisX();
 
@@ -140,23 +164,18 @@ private:
 	QLabel	_labelP1, _labelP2,				  // Pointer
 		_labelI1, _labelI2, _labelI3, _labelI4, _labelI5; // Process Info
 
-	QScrollArea	_scrollArea;
-	QWidget		_drawWindow;
-
-	KsGraphModel		_model;
-	QMap<int, KsChartView*> _chartMap;
+	KsGraphScrollArea	_scrollArea;
+	QWidget			_drawWindow;
+	QWidget			_legendWindow;
+	QWidget			_legendAxisX;
+	QLabel			_labelXMin, _labelXMid, _labelXMax;
+	KsGLWidget		_glWindow;
+	
 	QVBoxLayout		_layout;
 
 	KsDualMarkerSM	*_mState;
 	KsDataStore 	*_data;
-	QVXYModelMapper	*_mapper;
-	QRubberBand 	 _rubberBand;
-	QPoint 		 _rubberBandOrigin;
-
-	size_t _posMousePress;
-	bool   _keyPressed;
-	QVector<int> _cpuMask;
-	QVector<int> _taskMask;
+	bool		 _keyPressed;
 };
 
 #endif // _KS_TRACEGRAPH_H

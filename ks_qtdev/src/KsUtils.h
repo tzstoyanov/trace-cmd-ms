@@ -32,9 +32,12 @@
 
 // Kernel Shark 2
 #include "libkshark.h"
+// #include "KsPlotTools.h"
 
 #define SCREEN_HEIGHT  QApplication::desktop()->screenGeometry().height()
 #define SCREEN_WIDTH   QApplication::desktop()->screenGeometry().width()
+
+#define CPU_GRAPH_HEIGHT (SCREEN_HEIGHT/35)
 
 auto fontHeight = [] ()
 {
@@ -192,7 +195,11 @@ public:
 };
 
 class KsTimeMap;
-class KsChartView;
+class KsGLWidget;
+
+namespace KsPlot {
+	class Mark;
+};
 
 enum class DualMarkerState
 {
@@ -208,27 +215,42 @@ public:
 	KsGraphMark(DualMarkerState s);
 	KsGraphMark(DualMarkerState s, QColor col);
 
+	void reset();
 	const DualMarkerState _state;
 
-	bool set(const KsDataStore &data, const KsTimeMap &histo, size_t pos);
-	bool reset(const KsDataStore &data, const KsTimeMap &histo);
+	KsPlot::Mark *markPtr() {return _mark;}
+
+	void setGLWidget(KsGLWidget *gl) {_gl = gl;}
+	bool set(const KsDataStore &data,
+		 const KsTimeMap &histo,
+		 size_t pos,
+		 int grCpu,
+		 int grTask);
+
+	bool update(const KsDataStore &data, const KsTimeMap &histo);
 	bool isSet();
+	bool isVisible();
 
 	int bin() const {return _bin;}
-	int row() const {return _pos;}
-	void draw(KsChartView *graph);
+	size_t row() const {return _pos;}
+	void draw(KsGLWidget *gl);
 	void draw();
 	void remove();
 
 signals:
 	void update(KsTimeMap *histo);
 
-private:
-	int			 _bin;
-	size_t		 	 _pos;
-	QColor 			 _color;
-	QGraphicsLineItem	*_mark;
-	KsChartView 		*_graph;
+// private:
+public:
+	bool	_isSet;
+	int	_bin;
+	int	_cpu;
+	int	_task;
+	size_t	_pos;
+	QColor	_color;
+
+	KsPlot::Mark	*_mark;
+	KsGLWidget	*_gl;
 };
 
 DualMarkerState operator !(const DualMarkerState &state);
@@ -238,7 +260,7 @@ class KsDualMarkerSM : public QWidget
 	Q_OBJECT
 public:
 	KsDualMarkerSM(QWidget *parent = 0);
-	
+	void reset();
 	void placeInToolBar(QToolBar *tb);
 
 	DualMarkerState getState() const {return _markState;}
@@ -256,6 +278,8 @@ public:
 
 signals:
 	void markSwitch();
+	void updateView(size_t pos, bool mark);
+	void showInGraph(size_t pos);
 
 private slots:
 	void setStateA();

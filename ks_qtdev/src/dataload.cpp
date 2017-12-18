@@ -20,9 +20,7 @@ int main(int argc, char **argv)
 		//std::cout << i << "  map: " << map[i] << "  " << map.binCount(i) << std::endl;
 
 	KsGraphModel model(8);
-	model._visMap.setBining(	13,
-							data._rows[15000]->ts,
-							data._rows[41000]->ts);
+	model._visMap.setBining(13, data._rows[15000]->ts, data._rows[41000]->ts);
 
 	model.fill(data._pevt, data._rows, n, false);
 	//std::cout << "fill done " <<  data._rows[40000]->ts - data._rows[15000]->ts << "  " <<  (data._rows[40000]->ts - data._rows[15000]->ts)/3 << std::endl;
