@@ -4,5 +4,6 @@ rm cmake_install.cmake
 rm Makefile
 rm -rf CMakeFiles/
 rm -rf src/
-rm py/pybuild.log
+rm -rf tests/
+rm -f py/pybuild.log
 rm -rf py/build

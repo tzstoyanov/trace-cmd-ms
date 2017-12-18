@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 2.8.11 FATAL_ERROR)
 project(kernelshark)
 
 set(KS_VERSION_MAJOR 0)
-set(KS_VERSION_MINOR 3)
+set(KS_VERSION_MINOR 4)
 set(KS_VERSION_PATCH 0)
 set(KS_VERSION_STRING ${KS_VERSION_MAJOR}.${KS_VERSION_MINOR}.${KS_VERSION_PATCH})
 
@@ -19,12 +19,16 @@ ProcessorCount(N_CPUS)
 
 include(${KS_DIR}/build/FindTraceCmd.cmake)
 
-find_package(Qt5Widgets 5.7.1)
+find_package(Qt5Widgets 5.5.1)
 MESSAGE(STATUS "Found Qt5Widgets:  (version ${Qt5Widgets_VERSION})")
+
+find_package(OpenGL)
+find_package(GLUT)
 
 find_package(PythonLibs)
 # find_package(Cython REQUIRED)
 # find_package(NumPy REQUIRED)
+
 find_package(GTest)
 
 configure_file( ${KS_DIR}/build/deff.h.cmake

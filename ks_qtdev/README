@@ -9,13 +9,20 @@ The external dependencies are listed below:
 
   In order to install the packages on Ubuntu do the following:
     sudo apt-get install build-essential git cmake -y
-    sudo apt-get install qtbase5-dev libqt5charts5-dev -y
-    sudo apt-get install libpython2.7-dev cython python-numpy libgtest-dev -y
+    sudo apt-get install qtbase5-dev freeglut3-dev -y
+    sudo apt-get install libpython2.7-dev cython python-numpy -y
+
+  In order to be able to run the tests on Ubuntu do the following:
+    sudo apt-get libgtest-dev -y
+    cd /usr/src/gtest
+    sudo cmake .
+    sudo make
+    sudo cp *.a /usr/lib
 
   In order to install the packages on Fedora, as root do the following:
     dnf install gcc gcc-c++ git cmake -y
-    dnf install qt5-qtbase-devel qt5-qtcharts-devel freeglut3-dev -y
-    dnf install python2-devel python-numpy gtest-devel -y
+    dnf install qt5-qtbase-devel freeglut-devel redhat-rpm-config -y
+    dnf install python2-devel python2-Cython python-numpy gtest-devel -y
 
 
 Building:

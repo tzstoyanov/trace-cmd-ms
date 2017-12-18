@@ -73,7 +73,7 @@ TEST_F(KsTimeMapTest, SetBiningInit)
 
 TEST_F(KsTimeMapTest, SetBiningWrong)
 {
-	map->setBining(KS_GRAPH_N_BINS, data[0]->ts, data[999]->ts);
+	map->setBining(2048, data[0]->ts, data[999]->ts);
 	EXPECT_EQ(map->_nBins, 0);
 	EXPECT_EQ(map->_binSize, 0);
 	EXPECT_EQ(map->_min, 0);
