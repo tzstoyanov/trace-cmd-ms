@@ -126,13 +126,14 @@ public:
 	virtual ~KsTimeMap();
 
 	void setBining(size_t n, uint64_t min, uint64_t max);
+	void setBiningInRange(size_t n, uint64_t min, uint64_t max);
 	//void fill(struct pevent_record **data, size_t n);
 	void fill(struct kshark_entry **data, size_t n);
 
 	void shiftForward(size_t n);
 	void shiftBackward(size_t n);
 	void shiftTo(size_t ts);
-	void zoomOut(double r);
+	void zoomOut(double r, int mark);
 	void zoomIn(double r, int mark);
 
 	size_t size() const {return _nBins;}
@@ -142,7 +143,8 @@ public:
 	size_t binCount(int bin, int cpu) const;
 	bool notEmpty(int bin) const;
 	bool notEmpty(int bin, int cpu, int *pid = nullptr) const;
-	int getPid(int bin, int cpu, bool visOnly) const;
+	int getPidFront(int bin, int cpu, bool visOnly) const;
+	int getPidBack(int bin, int cpu, bool visOnly) const;
 	int getCpu(int bin, int pid, bool visOnly) const;
 
 	double binTime(size_t bin)  const {return (_min + bin*_binSize)*1e-9;}
@@ -181,9 +183,7 @@ public:
 	int columnCount(const QModelIndex &) const override {return _cpus;}
 	QVariant data(const QModelIndex &index, int role) const override;
 
-	const KsTimeMap &histo() {return _histo;}
-	KsTimeMap *histoPtr()    {return &_histo;}
-
+	KsTimeMap *histo() {return &_histo;}
 	void setNCpus(int n) {_cpus = n;}
 
 	//void fill(pevent *pevt, pevent_record **entries, size_t n);
@@ -192,7 +192,7 @@ public:
 	void shiftForward(size_t n);
 	void shiftBackward(size_t n);
 	void shiftTo(size_t ts);
-	void zoomOut(double r);
+	void zoomOut(double r, int mark = -1);
 	void zoomIn(double r, int mark = -1);
 
 	void reset();

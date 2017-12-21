@@ -102,8 +102,6 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	_view.setEditTriggers(QAbstractItemView::NoEditTriggers);
 	_view.setSelectionBehavior(QAbstractItemView::SelectRows);
 	_view.setSelectionMode(QAbstractItemView::SingleSelection);
- 	//_view.setShowGrid(false);
-// 	_view.setStyleSheet("QTableView {selection-background-color: green;}");
 	_view.setGeometry(QApplication::desktop()->screenGeometry());
 	_view.verticalHeader()->resizeSections(QHeaderView::ResizeToContents);
 	_view.verticalHeader()->setDefaultSectionSize(FONT_HEIGHT*1.25);
@@ -136,13 +134,13 @@ void KsTraceViewer::loadData(KsDataStore *data)
 void KsTraceViewer::setMarkerSM(KsDualMarkerSM *m)
 {
 	_mState = m;
-	_model.setColors(_mState->markerA()._color, _mState->markerB()._color);
+	_model.setColors(_mState->markerA().color(), _mState->markerB().color());
 
 	/* Assign a property to State A of the Dual marker state machine.
 	 * When the marker is in State A the background color of the selected
 	 * row will be the same as the color of Marker A. */
 	QString styleSheetA = "selection-background-color : " +
-			      _mState->markerA()._color.name() + ";";
+			      _mState->markerA().color().name() + ";";
 
 	_mState->stateAPtr()->assignProperty(&_view, "styleSheet", styleSheetA);
 
@@ -150,7 +148,7 @@ void KsTraceViewer::setMarkerSM(KsDualMarkerSM *m)
 	 * the background color of the selected row will be the same as
 	 * the color of Marker B. */
 	QString styleSheetB = "selection-background-color : " +
-			      _mState->markerB()._color.name() + ";";
+			      _mState->markerB().color().name() + ";";
 
 	_mState->stateBPtr()->assignProperty(&_view, "styleSheet", styleSheetB);
 }
@@ -337,12 +335,12 @@ void KsTraceViewer::markSwitch()
 
 	/* First deal with the passive marker. */
 	if (_mState->getMarker(!state).isSet()) {
-		/* The passive marker is set. 
+		/* The passive marker is set.
 		 * Use the model to color the row of the passive marker. */
 		_model.selectRow(!state, _mState->getMarker(!state).row());
 	}
 	else {
-		/* The passive marker is not set. 
+		/* The passive marker is not set.
 		 * Make sure that the model colors nothing. */
 		_model.selectRow(!state, -1);
 	}
@@ -391,8 +389,23 @@ size_t KsTraceViewer::searchItems(int column,
 	int count = _model.search(column, searchText, cond, &_matchList);
 	_searchDone = true;
 
-	// Move the iterator to the the beginning of the match list.
-	_view.clearSelection();
-	_it = _matchList.begin();
+	QItemSelectionModel *sm = _view.selectionModel();
+	if (sm->hasSelection()) {
+		/* Only one row at the time can be selected. */
+		size_t row = sm->selectedRows()[0].row();
+		_view.clearSelection();
+		_it = _matchList.begin();
+		/* Move the iterator to the first element of the match list after
+		 * the selected one. */
+		while (*_it <= row)
+			++_it;
+			
+		
+		
+	} else {
+		// Move the iterator to the beginning of the match list.
+		_view.clearSelection();
+		_it = _matchList.begin();
+	}
 	return count;
 }

@@ -48,7 +48,6 @@ KsViewModel::KsViewModel(QObject *parent)
 //: QStandardItemModel(parent),
   _header({"#", "CPU", "Time Stamp", "Task", "PID", "Latency", "Event", "Info"}),
   _pevt(nullptr),
-  //_page(0),
   _markA(-1),
   _markB(-1)
 {
@@ -291,7 +290,6 @@ size_t KsViewModel::search(int column,
 	return matchList->count();
 }
 
-
 //////////////////////////////////////////////////////////////////////////////////////
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -331,6 +329,10 @@ QVariant KsGraphModel::data(const QModelIndex &index, int role) const
 void KsGraphModel::fill(pevent *pevt, kshark_entry **entries, size_t n)
 {
 	_pevt = pevt;
+
+	if (n == 0)
+		return;
+
 	beginResetModel();
 	
 	if (_histo.size() == 0)
@@ -364,10 +366,10 @@ void KsGraphModel::shiftTo(size_t ts)
 	endResetModel();
 }
 
-void KsGraphModel::zoomOut(double r)
+void KsGraphModel::zoomOut(double r, int mark)
 {
 	beginResetModel();
-	_histo.zoomOut(r);
+	_histo.zoomOut(r, mark);
 	endResetModel();
 }
 
@@ -394,15 +396,12 @@ void KsGraphModel::update()
 KsTimeMap::KsTimeMap(size_t n, uint64_t min, uint64_t max)
 :_data(nullptr), _dataSize(0)
 {
-	_dataSize = 0;
-	_data = nullptr;
 	setBining(n, min, max);
 }
 
 KsTimeMap::KsTimeMap()
+:_data(nullptr), _dataSize(0)
 {
-	_dataSize = 0;
-	_data = nullptr;
 	this->clear();
 }
 
@@ -421,20 +420,55 @@ void KsTimeMap::clear()
 void KsTimeMap::setBining(size_t n, uint64_t min, uint64_t max)
 {
 	this->clear();
-
-	if (n == 0 || n > ( max - min))
+	uint64_t range = max - min;
+	if (n == 0 || n > range)
 		return;
 
-	_nBins 	= n;
-	if ((max - min)%(_nBins) == 0) {
+	_nBins = n;
+	if (range%(_nBins) == 0) {
 		_min = min;
 		_max = max;
-		_binSize = (max - min)/(_nBins);
+		_binSize = range/_nBins;
 	} else {
-		_binSize = (max - min)/_nBins + 1;
-		size_t deltaRange = _nBins*_binSize - (max - min);
+		_binSize = range/_nBins + 1;
+		size_t deltaRange = _nBins*_binSize - range;
 		_min = min - deltaRange/2;
 		_max = _min + _nBins*_binSize;
+	}
+
+	_map.resize(_nBins + 2);
+	_binCount.resize(_nBins + 2);
+
+	resetBins(0, _nBins + 1);
+	
+}
+
+
+void KsTimeMap::setBiningInRange(size_t n, uint64_t min, uint64_t max)
+{
+	this->clear();
+
+	uint64_t range = max - min;
+	if (n == 0 || n > range)
+		return;
+
+	_nBins = n;
+	if (range%(_nBins) == 0) {
+		_min = min;
+		_max = max;
+		_binSize = range/_nBins;
+	} else {
+		_binSize = range/_nBins + 1;
+		size_t deltaRange = _nBins*_binSize - range;
+		_min = min - deltaRange/2;
+		_max = _min + _nBins*_binSize;
+		if (_min < _data[0]->ts) {
+			_min = _data[0]->ts;
+			_max = _min + _nBins*_binSize;
+		} else if (_max > _data[_dataSize - 1]->ts) {
+			_max = _data[_dataSize - 1]->ts;
+			_min = _max - _nBins*_binSize;
+		}
 	}
 
 	_map.resize(_nBins + 2);
@@ -492,6 +526,9 @@ void KsTimeMap::setNextBinEdge(size_t prevBin)
 
 	size_t row = kshark_find_entry_row(time, _data, 0, _dataSize - 1);
 
+	if (bin == _nBins - 1) 
+		++time;
+
 	if (_data[row]->ts  >= time + _binSize) {
 		_map[bin] = KS_EMPTY_BIN;
 		return;
@@ -527,7 +564,7 @@ void KsTimeMap::setBinCounts()
 
 //void KsTimeMap::fill(struct pevent_record **data, size_t n)
 void KsTimeMap::fill(struct kshark_entry **data, size_t n)
-{	
+{
 	_data = data;
 	_dataSize = n;
 
@@ -633,16 +670,20 @@ void KsTimeMap::shiftBackward(size_t n)
 	setBinCounts();
 }
 
-void KsTimeMap::zoomOut(double r)
+void KsTimeMap::zoomOut(double r, int mark)
 {
 	if (!_dataSize)
 		return;
 
-	size_t range = _max - _min;
-	size_t delta = (size_t) range*r;
+	if (mark < 0)
+		mark = _nBins/2;
 
-	size_t min = _min - delta/2;
-	size_t max = _max + delta/2;
+	size_t range = _max - _min;
+	double delta_tot = range*r;
+	size_t delta_min = delta_tot*mark/_nBins;
+
+	size_t min = _min - delta_min;
+	size_t max = _max + (size_t) delta_tot - delta_min;
 
 	if (min < _data[0]->ts)
 		min = _data[0]->ts;
@@ -650,7 +691,7 @@ void KsTimeMap::zoomOut(double r)
 	if (max > _data[_dataSize - 1]->ts)
 		max = _data[_dataSize - 1]->ts;
 
-	setBining(this->_nBins, min, max);
+	setBiningInRange(this->_nBins, min, max);
 	fill(this->_data, this->_dataSize);
 
 	return;
@@ -658,37 +699,50 @@ void KsTimeMap::zoomOut(double r)
 
 void KsTimeMap::zoomIn(double r, int mark)
 {
-	size_t range = _max - _min;
-	if (range < _nBins*0x4)
+	if (!_dataSize)
 		return;
 
 	if (mark < 0)
 		mark = _nBins/2;
 
+	size_t range = _max - _min;
+
+	/* Avoid overzooming. */
+	if (range < _nBins*4)
+		return;
+
 	double delta_tot =  range*r;
-	size_t delta_min = delta_tot*mark/_nBins;
+	size_t delta_min;
+	if (mark == (int)_nBins - 1)
+		delta_min = delta_tot;
+	else if (mark == 0)
+		delta_min = 0;
+	else
+		delta_min = delta_tot*mark/_nBins;
+
 	size_t min = _min + delta_min;
 	size_t max = _max - (size_t) delta_tot + delta_min;
 
-	setBining(this->_nBins, min, max);
+	setBiningInRange(this->_nBins, min, max);
 	fill(this->_data, this->_dataSize);
 
 	return;
 }
 
+// #include <iostream>
 void KsTimeMap::dump()
 {
-	//std::cerr << "\n\n of < " << at(-2) << "  " << binCount(-2) << std::endl;
-
-	//for (size_t i=0; i<50; ++i)
-		//std::cerr << i << " " << at(i) << "  " << binCount(i) << std::endl;
-
-	//std::cerr << "....\n";
-
-	//for (size_t i=_nBins-5; i<_nBins; ++i)
-		//std::cerr << i << " " << at(i) << "  " << binCount(i) << std::endl;
-
-	//std::cerr << " of > " << at(-1) << "  " << binCount(-1) << std::endl;
+// 	std::cerr << "\n\n of < " << at(-2) << "  " << binCount(-2) << std::endl;
+// 
+// 	for (size_t i=0; i<50; ++i)
+// 		std::cerr << i << " " << at(i) << "  " << binCount(i) << std::endl;
+// 
+// 	std::cerr << "....\n";
+// 
+// 	for (size_t i=_nBins-25; i<_nBins; ++i)
+// 		std::cerr << i << " " << at(i) << "  " << binCount(i) << std::endl;
+// 
+// 	std::cerr << " of > " << at(-1) << "  " << binCount(-1) << std::endl;
 }
 
 void KsTimeMap::shiftTo(size_t ts)
@@ -697,6 +751,12 @@ void KsTimeMap::shiftTo(size_t ts)
 		return;
 
 	size_t min = ts - _nBins*_binSize/2;
+	if (min < _data[0]->ts)
+		min = _data[0]->ts;
+
+	if (min > _data[_dataSize - 1]->ts - _nBins*_binSize)
+		min = _data[_dataSize - 1]->ts - _nBins*_binSize;
+
 	size_t max = min + _nBins*_binSize;
 
 	setBining(this->_nBins, min, max);
@@ -733,6 +793,7 @@ int64_t KsTimeMap::atCpu(int bin, int cpu) const
 				found = KS_FILTERED_BIN;
 		}
 	}
+
 	return found;
 }
 
@@ -752,6 +813,7 @@ int64_t KsTimeMap::atPid(int bin, int pid) const
 				found = KS_FILTERED_BIN;
 		}
 	}
+
 	return found;
 }
 
@@ -801,7 +863,7 @@ int64_t KsTimeMap::operator[](int i) const
 
 bool KsTimeMap::notEmpty(int bin, int cpu, int *pid) const
 {
-	int val = getPid(bin, cpu, true);
+	int val = getPidFront(bin, cpu, true);
 	if (pid)
 		*pid = val;
 
@@ -811,7 +873,7 @@ bool KsTimeMap::notEmpty(int bin, int cpu, int *pid) const
 	return true;
 }
 
-int KsTimeMap::getPid(int bin, int cpu, bool visOnly) const
+int KsTimeMap::getPidFront(int bin, int cpu, bool visOnly) const
 {
 	size_t pos;
 	int pid = KS_EMPTY_BIN;
@@ -819,28 +881,37 @@ int KsTimeMap::getPid(int bin, int cpu, bool visOnly) const
 	if (!nEntries)
 		return pid;
 
-	if (bin == OverflowBin::Lower) {
-		/* Set the position at the end of the Lower Overflow bin and
-		 * go backwards. */
-		pos = binCount(OverflowBin::Lower) - 1;
-		for (size_t i = pos; i > 0; --i) {
-			if (_data[i]->cpu == cpu) {
-				if(visOnly && !_data[i]->visible)
-					return KS_FILTERED_BIN;
-				else
-					return _data[i]->pid;
-			}
+	/* Set the position at the begining of the bin and go forward. */
+	pos = this->at(bin);
+	for (size_t i = pos; i < pos + nEntries; ++i) {
+		if (_data[i]->cpu == cpu) {
+			if(visOnly && !_data[i]->visible)
+				pid = KS_FILTERED_BIN;
+			else
+				return _data[i]->pid;
 		}
-	} else {
-		/* Set the position at the begining of the bin and go forward. */
-		pos = this->at(bin);
-		for (size_t i = pos; i < pos + nEntries; ++i)
-			if (_data[i]->cpu == cpu) {
-				if(visOnly && !_data[i]->visible)
-					pid = KS_FILTERED_BIN;
-				else
-					return _data[i]->pid;
-			}
+	}
+
+	return pid;
+}
+
+int KsTimeMap::getPidBack(int bin, int cpu, bool visOnly) const
+{
+	size_t pos;
+	int pid = KS_EMPTY_BIN;
+	size_t nEntries = binCount(bin);
+	if (!nEntries)
+		return pid;
+
+	/* Set the position at the end of the bin and go backwards. */
+	pos = this->at(bin);
+	for (size_t i = pos + nEntries; i > pos; --i) {	// "i" is unsigned.
+		if (_data[i - 1]->cpu == cpu) {		// We don't want to do i < 0
+			if(visOnly && !_data[i - 1]->visible)
+				pid = KS_FILTERED_BIN;
+			else
+				return _data[i - 1]->pid;
+		}
 	}
 
 	return pid;

@@ -37,7 +37,13 @@
 #define SCREEN_HEIGHT  QApplication::desktop()->screenGeometry().height()
 #define SCREEN_WIDTH   QApplication::desktop()->screenGeometry().width()
 
-#define CPU_GRAPH_HEIGHT (SCREEN_HEIGHT/35)
+auto graph_height = [] (int scale)
+{
+	int h = (SCREEN_HEIGHT < SCREEN_WIDTH)? SCREEN_HEIGHT : SCREEN_WIDTH;
+	return scale*h/35;
+};
+
+#define CPU_GRAPH_HEIGHT (graph_height(1))
 
 auto fontHeight = [] ()
 {
@@ -61,6 +67,8 @@ typedef std::chrono::high_resolution_clock::time_point  hd_time;
 #define GET_TIME std::chrono::high_resolution_clock::now()
 #define GET_DURATION(t0) std::chrono::duration_cast<std::chrono::duration<double>>( \
 std::chrono::high_resolution_clock::now()-t0).count()
+
+int getPidList(QVector<int> *pids);
 
 class KsMessageDialog : public QDialog
 {
@@ -94,19 +102,19 @@ protected:
 	void resizeEvent(QResizeEvent* event);
 
 	bool	_positiveCond;
-	QCheckBox 	_all_cb;
+	QCheckBox	_all_cb;
 	QVector<int>    _id;
 
-	QVBoxLayout 	*_cb_layout;
-	QWidget     	*_cb_widget;
-	QVBoxLayout 	 _top_layout;
-	QHBoxLayout 	 _button_layout;
-	QScrollArea 	 _scrollArea;
+	QVBoxLayout	*_cb_layout;
+	QWidget		*_cb_widget;
+	QVBoxLayout	 _top_layout;
+	QHBoxLayout	 _button_layout;
+	QScrollArea	 _scrollArea;
 
 private:
-	QString 	_name;
-	QPushButton 	_cansel_button;
-	QPushButton 	_apply_button;
+	QString		_name;
+	QPushButton	_cansel_button;
+	QPushButton	_apply_button;
 };
 
 class KsCheckBoxTableDialog : public KsCheckBoxDialog
@@ -124,8 +132,8 @@ protected:
 	void initTable(QStringList headers, int size);
 	void adjustSize();
 
-	QTableWidget _table;
-	QVector<QCheckBox*> _cb;
+	QTableWidget		_table;
+	QVector<QCheckBox*>	_cb;
 };
 
 class KsCheckBoxTreeDialog : public KsCheckBoxDialog
@@ -143,8 +151,8 @@ protected:
 	void initTree();
 	void adjustSize(int count);
 
-	QTreeWidget _tree;
-	QVector<QTreeWidgetItem*> _cb;
+	QTreeWidget			_tree;
+	QVector<QTreeWidgetItem*>	_cb;
 };
 
 struct KsCpuCheckBoxDialog : public KsCheckBoxTreeDialog
@@ -231,8 +239,10 @@ public:
 	bool isSet();
 	bool isVisible();
 
-	int bin() const {return _bin;}
-	size_t row() const {return _pos;}
+	int bin()	const {return _bin;}
+	size_t row()	const {return _pos;}
+	const QColor &color()	const {return _color;}
+
 	void draw(KsGLWidget *gl);
 	void draw();
 	void remove();
@@ -240,8 +250,7 @@ public:
 signals:
 	void update(KsTimeMap *histo);
 
-// private:
-public:
+private:
 	bool	_isSet;
 	int	_bin;
 	int	_cpu;
@@ -286,16 +295,16 @@ private slots:
 	void setStateB();
 
 private:
-	QPushButton 	 _buttonA;
-	QPushButton 	 _buttonB;
+	QPushButton	 _buttonA;
+	QPushButton	 _buttonB;
 	QLabel		 _labelMA, _labelMB, _labelDelta;
 	QLabel		 _labelDeltaDescr;
 	QState		*_stateA;
 	QState		*_stateB;
-	QStateMachine 	 _machine;
+	QStateMachine	 _machine;
 
 	DualMarkerState	 _markState;
-	KsGraphMark 	 _markA, _markB;
+	KsGraphMark	 _markA, _markB;
 };
 
 #endif

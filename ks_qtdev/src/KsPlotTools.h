@@ -23,9 +23,7 @@
 #define _GLWIDGET_H
 
 // Qt
-#include <QOpenGLWidget>
 #include <QColor>
-#include <QRubberBand>
 
 // Kernel Shark 2
 #include "KsModel.h"
@@ -44,6 +42,8 @@ struct Color
 	Color& operator ++();
 	Color& operator =(const QColor &c);
 
+	void nice();
+	void setRainbowsColor(int n);
 	uint8_t _r, _g, _b;
 };
 
@@ -148,9 +148,8 @@ public:
 
 	size_t	_id;
 	Color	_color;
-	int 	_pid;
+	int 	_pidFront, _pidBack;
 	Point	_base, _val;
-// 	bool 	_isIdle;
 };
 
 class Graph
@@ -164,14 +163,14 @@ public:
 	~Graph();
 
 	size_t size();
-	void draw();
+	void draw(const QHash<int, KsPlot::Color> &pidColors);
 
 	void setBase(int b);
 	void setBinValue(size_t bin, int val);
-	void setBinPid(size_t bin, int pid);
+	void setBinPid(size_t bin, int pidF, int pidB);
 	void setBinColor(size_t bin, const Color &c);
 	void setBinIdle(size_t bin, bool idle);
-	void setBin(size_t bin, int pid, const Color &c);
+	void setBin(size_t bin, int pidF, int pidB, const Color &c);
 	void deriveBin(int bin);
 
 	void setHMargin(int hMargin);

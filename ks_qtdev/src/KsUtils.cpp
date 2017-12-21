@@ -305,16 +305,20 @@ void KsCheckBoxTreeDialog::applyPress()
 KsCpuCheckBoxDialog::KsCpuCheckBoxDialog(struct pevent *pe, bool cond, QWidget *parent)
 : KsCheckBoxTreeDialog("CPUs", cond, parent)
 {
-	int n = pe->cpus;
-	if (!n)
+	int nCpus = pe->cpus;
+	if (!nCpus)
 		return;
 
-	initTree();
-	_id.resize(n);
-	_cb.resize(n);
+	_tree.setStyleSheet(QString("QTreeView::item { height: %1 ;}").arg(FONT_HEIGHT*1.5));
 
-	for (int i = 0; i < n; ++i) {
+	initTree();
+
+	_id.resize(nCpus);
+	_cb.resize(nCpus);
+
+	for (int i = 0; i < nCpus; ++i) {
 		QTreeWidgetItem *cpuItem = new QTreeWidgetItem;
+// 		cpuItem->setMinimumHeight(FONT_HEIGHT*1.3);
 		cpuItem->setText(0, QString("CPU %1").arg(i));
 		cpuItem->setCheckState(0, Qt::Checked);
 		_tree.addTopLevelItem(cpuItem);
@@ -322,7 +326,7 @@ KsCpuCheckBoxDialog::KsCpuCheckBoxDialog(struct pevent *pe, bool cond, QWidget *
 		_cb[i] = cpuItem;
 	}
 
-	adjustSize(n);
+	adjustSize(nCpus);
 }
 
 KsEventsCheckBoxDialog::KsEventsCheckBoxDialog(struct pevent *pe, bool cond, QWidget *parent)
@@ -366,8 +370,7 @@ KsEventsCheckBoxDialog::KsEventsCheckBoxDialog(struct pevent *pe, bool cond, QWi
 	adjustSize(n);
 }
 
-KsTasksCheckBoxDialog::KsTasksCheckBoxDialog(struct pevent *pe, bool cond, QWidget *parent)
-: KsCheckBoxTableDialog("Tasks", cond, parent)
+int getPidList(QVector<int> *pids)
 {
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
@@ -377,16 +380,21 @@ KsTasksCheckBoxDialog::KsTasksCheckBoxDialog(struct pevent *pe, bool cond, QWidg
 	for (int i = 0; i < TASK_HASH_SIZE; ++i) {
 		list = kshark_ctx->tasks[i];
 		while (list) {
-			_id.append(list->pid);
+			pids->append(list->pid);
 			list = list->next;
 		}
 	}
 
-	int n = _id.size();
-	if (!n)
-		return;
+	qSort(*pids);
+	return pids->size();
+}
 
-	qSort(_id);
+KsTasksCheckBoxDialog::KsTasksCheckBoxDialog(struct pevent *pe, bool cond, QWidget *parent)
+: KsCheckBoxTableDialog("Tasks", cond, parent)
+{
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+	int n = getPidList(&_id);
 
 	QStringList headers;
 	if (_positiveCond)
@@ -396,6 +404,7 @@ KsTasksCheckBoxDialog::KsTasksCheckBoxDialog(struct pevent *pe, bool cond, QWidg
 
 	initTable(headers, n);
 
+	KsPlot::Color pidCol;
 	for (int i = 0; i < n; ++i) {
 		QTableWidgetItem *pidItem
 			= new QTableWidgetItem(tr("%1").arg(_id[i]));
@@ -403,7 +412,12 @@ KsTasksCheckBoxDialog::KsTasksCheckBoxDialog(struct pevent *pe, bool cond, QWidg
 		QTableWidgetItem *comItem
 			= new QTableWidgetItem(tr(pevent_data_comm_from_pid(kshark_ctx->pevt,
 									    _id[i])));
+		pidItem->setBackgroundColor(QColor(pidCol._r, pidCol._g, pidCol._b));
+		if (_id[i] == 0)
+			pidItem->setTextColor(Qt::white);
 		_table.setItem(i, 2, comItem);
+// 		++pidCol;
+		pidCol.setRainbowsColor(i);
 	}
 
 	adjustSize();
@@ -660,7 +674,7 @@ KsDualMarkerSM::KsDualMarkerSM(QWidget *parent)
 	}
 
 	QString styleSheetA = "background : " +
-			      _markA._color.name() +
+			      _markA.color().name() +
 			      "; color : white";
 
 	_stateA = new QState;
@@ -674,7 +688,7 @@ KsDualMarkerSM::KsDualMarkerSM(QWidget *parent)
 				"color : rgb(70, 70, 70)");
 
 	QString styleSheetB = "background : " +
-			      _markB._color.name() +
+			      _markB.color().name() +
 			      "; color : white";
 	_stateB = new QState;
 	_stateB->setObjectName("B");

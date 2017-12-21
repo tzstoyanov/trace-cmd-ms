@@ -32,6 +32,7 @@ IF (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
     set (ks-guiLib_hdr	KsMainWindow.h
 			KsTraceViewer.h
 			KsTraceGraph.h
+			KsGLWidget.h
 			KsUtils.h)
 
     QT5_WRAP_CPP(ks-guiLib_hdr_moc ${ks-guiLib_hdr})
@@ -41,7 +42,8 @@ IF (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
 								KsTraceGraph.cpp
 								KsModel.cpp
 								KsUtils.cpp
-								KsPlotTools.cpp)
+								KsPlotTools.cpp
+								KsGLWidget.cpp)
 
     target_link_libraries(kshark-gui ${TRACECMD_LIBRARY}
 				     kshark

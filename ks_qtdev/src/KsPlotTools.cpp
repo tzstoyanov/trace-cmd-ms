@@ -55,10 +55,11 @@ Color& Color::operator ++()
 	rgb |= _r;
 	rgb |= (_g << 8);
 	rgb |= (_b << 16);
-	rgb = (214013*rgb+2531011);
+	rgb = (217013*rgb+1531011);
 	rgb = (rgb >> 7) & 0xFFFFFF;
 
 	*this = Color(rgb);
+	this->nice();
 	return *this;
 }
 
@@ -69,6 +70,24 @@ Color& Color::operator =(const QColor &c)
 	_b = c.blue();
 
 	return *this;
+}
+
+void Color::nice()
+{
+	int sum = _r + _g + _b;
+	while (sum < 350 || sum > 650) {
+		++(*this);
+		sum = _r + _g + _b;
+	}
+}
+
+void Color::setRainbowsColor(int n)
+{
+	float frequency = .3;
+
+	_r = sin(frequency*n + 0) * 127 + 128;
+	_g = sin(frequency*n + 2) * 127 + 128;
+	_b = sin(frequency*n + 4) * 127 + 128;
 }
 
 Color Palette::_colors[20];
@@ -195,7 +214,7 @@ void Mark::setMark(int b, int cpuhId, int taskId, KsGLWidget *w)
 	_cpu->_x = _a->_x;
 	_task->_x = _a->_x;
 
-	_a->_y = w->_vMargin/2;
+	_a->_y = w->_vMargin/2 + 2;
 	_b->_y = w->height() - w->_vMargin;
 
 	if (cpuhId >= 0) {
@@ -211,8 +230,6 @@ void Mark::setMark(int b, int cpuhId, int taskId, KsGLWidget *w)
 	} else {
 		_task->_visible = false;
 	}
-	qInfo() << "cpu: " << _cpu->_y << " " << _cpu->_visible
-		<< "task: " << _task->_y << " " << _task->_visible;
 }
 
 void Mark::_draw(const Color &col) const
@@ -225,11 +242,11 @@ void Mark::_draw(const Color &col) const
 }
 
 Bin::Bin()
-: _id(0), _color(), _pid(-1)
+: _id(0), _color(), _pidFront(-1), _pidBack(-1)
 {}
 
 Bin::Bin(size_t id)
-: _id(id), _color(), _pid(-1)
+: _id(id), _color(), _pidFront(-1), _pidBack(-1)
 {}
 
 void Bin::drawLine()
@@ -298,9 +315,10 @@ void Graph::setBinValue(size_t bin, int val)
 	_bins[bin]._val._y = _bins[bin]._base._y - val;
 }
 
-void Graph::setBinPid(size_t bin, int pid)
+void Graph::setBinPid(size_t bin, int pidF, int pidB)
 {
-	_bins[bin]._pid = pid;
+	_bins[bin]._pidFront = pidF;
+	_bins[bin]._pidBack = pidB;
 }
 
 void Graph::setBinColor(size_t bin, const Color &c)
@@ -308,73 +326,93 @@ void Graph::setBinColor(size_t bin, const Color &c)
 	_bins[bin]._color = c;
 }
 
-void Graph::setBin(size_t bin, int pid, const Color &c)
+void Graph::setBin(size_t bin, int pidF, int pidB, const Color &c)
 {
-	setBinPid(bin, pid);
+	setBinPid(bin, pidF, pidB);
 	setBinValue(bin, CPU_GRAPH_HEIGHT*.7);
 	setBinColor(bin, c);
 }
 
-void Graph::draw()
+void Graph::draw(const QHash<int, KsPlot::Color> &pidColors)
 {
+	/* Start by drawing a line between the base points of the first
+	 * and the last bin. */
 	Line l(&_bins[0]._base, &_bins[_size - 1]._base);
 	l.draw();
 
+	/* Draw as lines all bins containing data. */
 	for (size_t i = 0; i < _size; ++i)
-		if (_bins[i]._pid >= 0)
+		if (_bins[i]._pidFront >= 0)
 			_bins[i].drawLine();
 
+	/* Draw colored boxes.
+	 * First find the first bin, which contains data and determine its Pid. */
 	int lastPid = 0;
 	Rectangle rec;
-
 	size_t b = 0;
 	while (b < _size) {
-		if (_bins[b]._pid > 0) {
-			lastPid = _bins[b]._pid;
-			rec._color = Color(lastPid*0xae0d);
+		if (_bins[b]._pidBack > 0) {
+			lastPid = _bins[b]._pidFront;
+			/* Initialize a box starting from this bin.
+			 * The color of the box corresponds to the Pid
+			 * of the process. */
+			rec._color = Color(pidColors[lastPid]);
 			rec.setPoint(0, _bins[b]._base._x,
 					_bins[b]._base._y - CPU_GRAPH_HEIGHT*.3);
 			rec.setPoint(1, _bins[b]._base._x,
 					_bins[b]._base._y);
 			break;
 		}
+
 		++b;
 	}
-	
+
 	while (b < _size) {
-		if (_bins[b]._pid == KS_EMPTY_BIN) {
+		if (_bins[b]._pidFront == KS_EMPTY_BIN) {
+			/* This bin is empty. If a colored box is already initialized,
+			 * it will be extended. */
 			++b;
 			continue;
 		}
 
-		if (_bins[b]._pid != lastPid) {
-			if (lastPid > 0) {
-				rec.setPoint(3, _bins[b-1]._base._x,
-						_bins[b-1]._base._y - CPU_GRAPH_HEIGHT*.3);
-				rec.setPoint(2, _bins[b-1]._base._x,
-					_bins[b-1]._base._y);
+		if ((_bins[b]._pidFront != _bins[b]._pidBack) ||
+		    (lastPid != _bins[b]._pidFront)) {
+			/* A new process starts here. */
+			if (lastPid > 0 && b > 0) {
+				/* There is another process running up to this point. Close
+				 * its colored box here and draw. */
+				rec.setPoint(3, _bins[b - 1]._base._x,
+						_bins[b - 1]._base._y - CPU_GRAPH_HEIGHT*.3);
+				rec.setPoint(2, _bins[b - 1]._base._x,
+						_bins[b - 1]._base._y);
 				rec.draw();
 			}
 
-			if (_bins[b]._pid > 0) {
-				rec._color = Color(_bins[b]._pid*0xae0d);
+			if (_bins[b]._pidBack > 0) {
+				/* This is a regular process. Initialize colored box
+				 * starting from this bin. */
+				rec._color = Color(pidColors[_bins[b]._pidBack]);
 				rec.setPoint(0, _bins[b]._base._x,
 						_bins[b]._base._y - CPU_GRAPH_HEIGHT*.3);
 				rec.setPoint(1, _bins[b]._base._x,
 						_bins[b]._base._y);
 			}
 
-			lastPid = _bins[b]._pid;
+			lastPid = _bins[b]._pidBack;
 		}
 		++b;
 	}
-	
-	rec.setPoint(3, _bins[_size - 1]._base._x,
-			_bins[_size - 1]._base._y - CPU_GRAPH_HEIGHT*.3);
-	rec.setPoint(2, _bins[_size - 1]._base._x,
-			_bins[_size - 1]._base._y);
-	if (lastPid > 0)
+
+	if (lastPid > 0) {
+		/* This is the end of the Graph and we have a process running.
+		 * Close its colored box and draw. */
+		rec.setPoint(3, _bins[_size - 1]._base._x,
+				_bins[_size - 1]._base._y - CPU_GRAPH_HEIGHT*.3);
+		rec.setPoint(2, _bins[_size - 1]._base._x,
+				_bins[_size - 1]._base._y);
+
 		rec.draw();
+	}
 }
 
 }; // KsPlot
