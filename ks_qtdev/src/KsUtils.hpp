@@ -37,14 +37,6 @@
 #define SCREEN_HEIGHT  QApplication::desktop()->screenGeometry().height()
 #define SCREEN_WIDTH   QApplication::desktop()->screenGeometry().width()
 
-auto graph_height = [] (int scale)
-{
-	int h = (SCREEN_HEIGHT < SCREEN_WIDTH)? SCREEN_HEIGHT : SCREEN_WIDTH;
-	return scale*h/35;
-};
-
-#define CPU_GRAPH_HEIGHT (graph_height(1))
-
 auto fontHeight = [] ()
 {
 	QFont font;
@@ -63,12 +55,37 @@ auto stringWidth = [](QString s)
 #define FONT_WIDTH  stringWidth("4")
 #define STRING_WIDTH(s)  stringWidth(s)
 
+auto graph_height = [] (int scale)
+{
+	int h = (SCREEN_HEIGHT < SCREEN_WIDTH)? SCREEN_HEIGHT : SCREEN_WIDTH;
+	return scale*h/35;
+};
+
+// #define CPU_GRAPH_HEIGHT (graph_height(1))
+#define CPU_GRAPH_HEIGHT (FONT_HEIGHT*2)
+
+#define KS_VIEW_FILTER_MASK   0x1
+#define KS_GRAPH_FILTER_MASK  0x2
+
 typedef std::chrono::high_resolution_clock::time_point  hd_time;
 #define GET_TIME std::chrono::high_resolution_clock::now()
 #define GET_DURATION(t0) std::chrono::duration_cast<std::chrono::duration<double>>( \
 std::chrono::high_resolution_clock::now()-t0).count()
 
 int getPidList(QVector<int> *pids);
+
+class KsDataProgressBar : public QWidget {
+	Q_OBJECT
+
+	QStatusBar	_sb;
+	QProgressBar	_pb;
+
+public:
+	KsDataProgressBar(QWidget *parent = 0);
+
+public slots:
+	void setValue(int i);
+};
 
 class KsMessageDialog : public QDialog
 {
@@ -90,6 +107,7 @@ public:
 	KsCheckBoxDialog(const QString &name = "", bool cond = true, QWidget *parent = 0);
 
 	void setDefault(bool);
+	virtual void set(QVector<bool> v) =0;
 
 private slots:
 	virtual void applyPress() =0;
@@ -101,7 +119,7 @@ signals:
 protected:
 	void resizeEvent(QResizeEvent* event);
 
-	bool	_positiveCond;
+	bool		_positiveCond;
 	QCheckBox	_all_cb;
 	QVector<int>    _id;
 
@@ -123,6 +141,8 @@ class KsCheckBoxTableDialog : public KsCheckBoxDialog
 public:
 	KsCheckBoxTableDialog(const QString &name = "", bool cond = true, QWidget *parent = 0);
 
+	void set(QVector<bool> v) override;
+
 private slots:
 	void applyPress() override;
 	void chechAll(bool) override;
@@ -141,6 +161,8 @@ class KsCheckBoxTreeDialog : public KsCheckBoxDialog
 	Q_OBJECT
 public:
 	KsCheckBoxTreeDialog(const QString &name = "", bool cond = true, QWidget *parent = 0);
+
+	void set(QVector<bool> v) override;
 
 private slots:
 	void applyPress() override;
@@ -175,16 +197,17 @@ class KsDataStore : public QObject
 	Q_OBJECT
 
 	struct tracecmd_input *_handle;
-	size_t _data_size;
+	size_t _dataSize;
 
 public:
 	KsDataStore();
 	~KsDataStore();
 
 	void loadData(struct tracecmd_input *handle);
-	void loadData(const QString& file);
+	void loadData(const QString &file);
+// 	void loadData(const QList<QString> &file);
 	void clear();
-	size_t size() const {return _data_size;}
+	size_t size() const {return _dataSize;}
 
 signals:
 	void updateView();
@@ -239,12 +262,12 @@ public:
 	bool isSet();
 	bool isVisible();
 
-	int bin()	const {return _bin;}
-	size_t row()	const {return _pos;}
+	int bin()		const {return _bin;}
+	size_t row()		const {return _pos;}
 	const QColor &color()	const {return _color;}
 
-	void draw(KsGLWidget *gl);
-	void draw();
+	void makeVisible(KsGLWidget *gl);
+	void makeVisible();
 	void remove();
 
 signals:

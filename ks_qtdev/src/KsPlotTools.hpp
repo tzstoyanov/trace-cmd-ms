@@ -24,10 +24,11 @@
 
 // Qt
 #include <QColor>
+#include <QList>
 
 // Kernel Shark 2
-#include "KsModel.h"
-#include "KsUtils.h"
+#include "KsModel.hpp"
+#include "KsUtils.hpp"
 
 class KsGLWidget;
 
@@ -47,27 +48,26 @@ struct Color
 	uint8_t _r, _g, _b;
 };
 
-struct Palette
-{
-	static Color &colot(size_t i) {return _colors[i];}
-	static Color _colors[20];
-};
-
 struct Shape
 {
-	Shape() : _visible(true) {}
-	void draw() {if (_visible) _draw(_color);}
+	Shape() : _visible(true), _size(2.) {}
+	virtual ~Shape() {}
+
+	void draw() const {if (_visible) _draw(_color, _size);}
 
 	bool	_visible;
 	Color	_color;
+	float	_size;
 
 private:
-	virtual void _draw(const Color &c) const = 0;
+	virtual void _draw(const Color &c, float s) const = 0;
 };
+
+typedef QList<KsPlot::Shape*> ShapeList;
 
 class Point : public Shape
 {
-	void _draw(const Color &c) const override;
+	void _draw(const Color &c, float s = 1.) const override;
 
 public:
 	Point();
@@ -76,12 +76,11 @@ public:
 
 	/** Cartesian coordinates. */
 	int _x, _y;
-	float _size;
 };
 
 class Line : public Shape
 {
-	void _draw(const Color &c) const override;
+	void _draw(const Color &c, float s = 1.) const override;
 
 public:
 	Line();
@@ -95,7 +94,7 @@ class Polygon : public Shape
 {
 	Polygon() = delete;
 
-	void _draw(const Color &c) const override;
+	void _draw(const Color &, float s = 1.) const override;
 	size_t	  _nPoints;
 	Point	*_points;
 
@@ -125,14 +124,15 @@ public:
 
 class Mark : public Shape
 {
-	void _draw(const Color &c) const override;
-	Point *_a, *_b, *_cpu, *_task;
+	void _draw(const Color &c, float s = 1.) const override;
+	Point *_a, *_b;
+	Point _cpu, _task;
 
 public:
 	Mark();
 	virtual ~Mark();
 
-	void setMark(int bin, int cpuId, int taskId, KsGLWidget *w);
+	void setMark(int bin, int cpuId, int taskId, KsGLWidget *w, int dpr);
 };
 
 class Bin
@@ -141,8 +141,8 @@ public:
 	Bin();
 	Bin(size_t id);
 
-	void drawLine();
-	void drawVal();
+	void drawLine(float size = 1.);
+	void drawVal(float size = 2.);
 
 	int mod() {return _val._y - _base._y;}
 
@@ -163,7 +163,9 @@ public:
 	~Graph();
 
 	size_t size();
-	void draw(const QHash<int, KsPlot::Color> &pidColors);
+	void draw(const QHash<int, KsPlot::Color> &pidColors, float s = 1);
+	QList<KsPlot::Shape*> schedSwitchPluginDraw(KsTimeMap *histo, int pid);
+	QList<KsPlot::Shape*> schedWakeupPluginDraw(KsTimeMap *histo, int pid);
 
 	void setBase(int b);
 	void setBinValue(size_t bin, int val);

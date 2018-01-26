@@ -25,9 +25,9 @@
 #include <QRubberBand>
 
 // Kernel Shark 2
-#include "KsUtils.h"
-#include "KsPlotTools.h"
-#include "KsModel.h"
+#include "KsUtils.hpp"
+#include "KsPlotTools.hpp"
+#include "KsModel.hpp"
 
 class KsGLWidget : public QOpenGLWidget
 {
@@ -42,7 +42,7 @@ public:
 	
 	size_t chartCount() {return _cpuList.count() + _taskList.count();}
 	int height() {return (_cpuList.count() + _taskList.count())*(CPU_GRAPH_HEIGHT + _vSpacing) + _vMargin*2;}
-
+	int dpr() const {return _dpr;}
 signals:
 	void found(size_t pos);
 	void zoomIn();
@@ -69,7 +69,7 @@ protected:
 
 	void updateGraphs();
 	void drawAxisX();
-	void drawGraphs(QVector<int> cpuMask, QVector<int> taskMask);
+	void makeGraphs(QVector<int> cpuMask, QVector<int> taskMask);
 	void addCpu(int cpu);
 	void addTask(int pid);
 
@@ -86,10 +86,10 @@ protected:
 
 public:
 	QVector<KsPlot::Graph*>		_graphs;
-	QVector<KsPlot::Shape*>		_shapes;
+	KsPlot::ShapeList		_shapes;
 	QVector<int>			_cpuList;
 	QVector<int>			_taskList;
-	QHash<int, KsPlot::Color> 	_pidColors;
+	QHash<int, KsPlot::Color>	_pidColors;
 
 	int		_hMargin, _vMargin;
 	unsigned int	_vSpacing;
@@ -104,6 +104,7 @@ private:
 
 	size_t		_posMousePress;
 	bool		_keyPressed;
+	int 		_dpr;
 };
 
 #endif

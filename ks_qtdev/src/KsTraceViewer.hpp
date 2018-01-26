@@ -25,8 +25,8 @@
 #include <QTableView>
 
 // Kernel Shark 2
-#include "KsUtils.h"
-#include "KsModel.h"
+#include "KsUtils.hpp"
+#include "KsModel.hpp"
 
 typedef bool (*condition_func)(QString, QString);
 

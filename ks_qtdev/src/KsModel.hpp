@@ -38,18 +38,6 @@
 typedef bool (*condition_func)(QString, QString);
 enum class DualMarkerState;
 
-class KsFilterProxyModel : public QSortFilterProxyModel
-{
-	kshark_entry	**_data;
-
-public:
-	KsFilterProxyModel(QObject *parent = nullptr);
-
-	bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const;
-
-	void fill(kshark_entry **rows);
-};
-
 class KsViewModel : public QAbstractTableModel
 {
 	//QList<pevent_record*>	_data;
@@ -72,7 +60,7 @@ class KsViewModel : public QAbstractTableModel
 	};
 
 	int _markA, _markB;
-	QColor  _colorMarkA, _colorMarkB;
+	QColor _colorMarkA, _colorMarkB;
 
 public:
 	KsViewModel(QObject *parent = nullptr);
@@ -100,9 +88,27 @@ public:
 		      QList<size_t>	*matchList);
 };
 
+class KsFilterProxyModel : public QSortFilterProxyModel
+{
+	kshark_entry	**_data;
+	KsViewModel	 *_source;
+
+public:
+	KsFilterProxyModel(QObject *parent = nullptr);
+
+	bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const;
+
+	void fill(kshark_entry **rows);
+
+	void setSource(KsViewModel *s);
+
+	size_t search(int		 column,
+		      const QString	&searchText,
+		      condition_func	 cond,
+		      QList<size_t>	*matchList);
+};
+
 #define KS_DEFAULT_NBUNS	1024
-#define KS_EMPTY_BIN		-1
-#define KS_FILTERED_BIN		-2
 
 class KsTimeMap {
 	/* All functionalities of the histogram class have to be rewritten in C.
@@ -145,19 +151,28 @@ public:
 	bool notEmpty(int bin, int cpu, int *pid = nullptr) const;
 	int getPidFront(int bin, int cpu, bool visOnly) const;
 	int getPidBack(int bin, int cpu, bool visOnly) const;
+	kshark_entry *getEntryFront(int bin, int pid, bool visOnly) const;
+	kshark_entry *getEntryFront(int bin, int pid, bool visOnly,
+				   matching_condition_func checkPidFunc) const;
+
+	kshark_entry *getEntryBack(int bin, int pid, bool visOnly) const;
+	kshark_entry *getEntryBack(int bin, int pid, bool visOnly,
+				   matching_condition_func checkPidFunc) const;
+
 	int getCpu(int bin, int pid, bool visOnly) const;
 
-	double binTime(size_t bin)  const {return (_min + bin*_binSize)*1e-9;}
-	uint64_t ts(size_t bin)     const {return (_min + bin*_binSize);}
+	double binTime(int bin)  const {return (_min + bin*_binSize)*1e-9;}
+	uint64_t ts(int bin)     const {return (_min + bin*_binSize);}
 
 	int64_t operator[](int i) const;
 	int64_t at(int i) const;
 	int64_t atCpu(int i, int cpu) const;
 	int64_t atPid(int i, int pid) const;
+	bool isVisible(size_t row) const;
 
 	kshark_entry *dataAt(int i) const {return _data[at(i)];}
 
-	void dump();
+	void dump() const;
 
 	uint64_t _min, _max, _binSize;
 	size_t _nBins;

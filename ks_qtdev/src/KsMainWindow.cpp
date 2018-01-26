@@ -20,6 +20,10 @@
 
 // C
 #include <sys/stat.h>
+#include <unistd.h>
+
+// C++11
+#include <thread>
 
 // Qt
 #include <QMenu>
@@ -28,7 +32,8 @@
 #include <QLabel>
 
 // Kernel Shark 2
-#include "KsMainWindow.h"
+#include "libkshark.h"
+#include "KsMainWindow.hpp"
 #include "KsDeff.h"
 
 using namespace std;
@@ -44,8 +49,8 @@ KsMainWindow::KsMainWindow(QWidget *parent)
   _saveFilterAsAction(tr("Save Filter As"), parent),
   _exportFilterAction(tr("Export Filter"), parent),
   _quitAction(tr("Quit"), parent),
-  _taskSyncAction(tr("Sync Graph and List task filters"), parent),
-  _eventSyncAction(tr("Sync Graph and List event filters"), parent),
+  _graphFilterSyncAction(/*tr("Apply filters to Graph"),*/ parent),
+  _listFilterSyncAction(/*tr("Apply filters to List"),*/ parent),
   _showEventsAction(tr("Show events"), parent),
   _showTasksAction(tr("Show tasks"), parent),
   _hideTasksAction(tr("Hide tasks"), parent),
@@ -53,14 +58,9 @@ KsMainWindow::KsMainWindow(QWidget *parent)
   _taskSelectAction(tr("Tasks"), parent),
   _aboutAction(tr("About"), parent)
 {
-	this->setWindowTitle("Kernel Shark");
-
-	int height = SCREEN_HEIGHT*.8;
-	int width = SCREEN_WIDTH*.8;	
-	this->resize(width, height);
-
-	this->createActions();
-	this->createMenus();
+	setWindowTitle("Kernel Shark");
+	createActions();
+	createMenus();
 
 	QSplitter *splitter = new QSplitter(Qt::Vertical);
 	splitter->addWidget(&_graph);
@@ -112,12 +112,12 @@ void KsMainWindow::createActions()
 	_saveFilterAsAction.setIcon(QIcon(iconsPath + "save-as.png"));
 	_saveFilterAsAction.setShortcut(tr("Shift+Ctrl+S"));
 	_saveFilterAsAction.setStatusTip(tr("Save a filter as"));
-	connect(&_saveFilterAsAction, SIGNAL(triggered()), this, SLOT(importFilter()));
+	connect(&_saveFilterAsAction, SIGNAL(triggered()), this, SLOT(saveFilter()));
 
 	_exportFilterAction.setIcon(QIcon(iconsPath + "export.png"));
 	_exportFilterAction.setShortcut(tr("Ctrl+L"));
 	_exportFilterAction.setStatusTip(tr("Export a filter"));
-	connect(&_exportFilterAction, SIGNAL(triggered()), this, SLOT(importFilter()));
+	connect(&_exportFilterAction, SIGNAL(triggered()), this, SLOT(saveFilter()));
 
 	_quitAction.setIcon(QIcon(iconsPath + "quit.png"));
 	_quitAction.setShortcut(tr("Ctrl+Q"));
@@ -125,6 +125,7 @@ void KsMainWindow::createActions()
 
 	connect(&_quitAction, SIGNAL(triggered()), this, SLOT(close()));
 	//connect(QApplication::desktop(), SIGNAL(resized(int)), this, SLOT(reset(int));
+	connect(&_listFilterSyncAction, SIGNAL(toggled(bool)), this, SLOT(listFilterSync(bool)));
 	connect(&_showEventsAction, SIGNAL(triggered()), this, SLOT(showEvents()));
 	connect(&_showTasksAction, SIGNAL(triggered()), this, SLOT(showTasks()));
 	connect(&_hideTasksAction, SIGNAL(triggered()), this, SLOT(hideTasks()));
@@ -146,14 +147,24 @@ void KsMainWindow::createMenus()
 
 	/* Filter menu */
 	QMenu *filter = menuBar()->addMenu("Filter");
-	_taskSyncAction.setCheckable(true);
-	_taskSyncAction.setChecked(true);
-	filter->addAction(&_taskSyncAction);
 
-	_eventSyncAction.setCheckable(true);
-	_eventSyncAction.setChecked(true);
-	filter->addAction(&_eventSyncAction);
+	auto make_cb_action = [&] (QWidgetAction *action, QString name)
+	{
+		QWidget  *containerWidget = new QWidget(filter);
+		containerWidget->setLayout(new QHBoxLayout());
+		containerWidget->layout()->setContentsMargins(FONT_WIDTH, FONT_HEIGHT/5, FONT_WIDTH, FONT_HEIGHT/5);
+		QCheckBox *checkBox = new QCheckBox(name, filter);
+		checkBox->setChecked(true);
+		connect(checkBox, SIGNAL(toggled(bool)), this, SLOT(graphFilterSync(bool)));
+		containerWidget->layout()->addWidget(checkBox);
+		action->setDefaultWidget(containerWidget);
+	};
 
+	make_cb_action(&_graphFilterSyncAction, tr("Apply filters to Graph"));
+	make_cb_action(&_listFilterSyncAction, tr("Apply filters to List"));
+
+	filter->addAction(&_graphFilterSyncAction);
+	filter->addAction(&_listFilterSyncAction);
 	filter->addAction(&_showEventsAction);
 	filter->addAction(&_showTasksAction);
 	filter->addAction(&_hideTasksAction);
@@ -173,12 +184,16 @@ void KsMainWindow::createMenus()
 
 void KsMainWindow::open()
 {
-	QString fileName =
-	QFileDialog::getOpenFileName(this,
-				     tr("Open File"),
-				     KS_DIR,
-				     tr("trace-cmd files (*.dat);;All files (*)"));
-	if (!fileName.isEmpty())
+	QFileDialog* fileDlg = new QFileDialog(this,
+					       "Open File",
+					       KS_DIR,
+					       "trace-cmd files (*.dat);;All files (*)");
+	int status = fileDlg->exec();
+	QApplication::processEvents();
+
+	QString fileName = fileDlg->selectedFiles().first();
+
+	if (status && !fileName.isEmpty())
 		loadFile(fileName);
 }
 
@@ -197,6 +212,28 @@ void KsMainWindow::reload()
 	// TODO
 }
 
+void KsMainWindow::listFilterSync(bool state)
+{
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+	if (state) {
+		kshark_ctx->filter_mask &= ~KS_VIEW_FILTER_MASK;
+	} else {
+		kshark_ctx->filter_mask |= KS_VIEW_FILTER_MASK;
+	}
+}
+
+void KsMainWindow::graphFilterSync(bool state)
+{
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+	if (state) {
+		kshark_ctx->filter_mask &= ~KS_GRAPH_FILTER_MASK;
+	} else {
+		kshark_ctx->filter_mask |= KS_GRAPH_FILTER_MASK;
+	}
+}
+
 void KsMainWindow::showEvents()
 {
 	KsCheckBoxDialog *events_cb = new KsEventsCheckBoxDialog(_data._pevt, true, this);
@@ -207,31 +244,96 @@ void KsMainWindow::showEvents()
 
 void KsMainWindow::showTasks()
 {
-	KsCheckBoxDialog *tasks_cb = new KsTasksCheckBoxDialog(_data._pevt, true, this);
-	tasks_cb->setDefault(true);
-	connect(tasks_cb, SIGNAL(apply(QVector<int>)),
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+
+	KsCheckBoxDialog *tasks_cbd = new KsTasksCheckBoxDialog(_data._pevt, true, this);
+	if (!kshark_ctx->show_task_filter ||
+	    !filter_task_count(kshark_ctx->show_task_filter)) {
+		tasks_cbd->setDefault(true);
+	} else {
+		QVector<int> pids;
+		int nPids = getPidList(&pids);
+		QVector<bool> v(nPids, false);
+		for (int i = 0; i < nPids; ++i) {
+			if (kshark_filter_task_find_pid(kshark_ctx->show_task_filter,
+							pids[i]))
+				v[i] = true;
+		}
+
+		tasks_cbd->set(v);
+	}
+
+	connect(tasks_cbd, SIGNAL(apply(QVector<int>)),
 		&_data, SLOT(applyPosTaskFilter(QVector<int>)));
 }
 
 void KsMainWindow::hideTasks()
 {
-	KsCheckBoxDialog *tasks_cb = new KsTasksCheckBoxDialog(_data._pevt, false, this);
-	tasks_cb->setDefault(false);
-	connect(tasks_cb, SIGNAL(apply(QVector<int>)),
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+
+	KsCheckBoxDialog *tasks_cbd = new KsTasksCheckBoxDialog(_data._pevt, false, this);
+	if (!kshark_ctx->hide_task_filter ||
+	    !filter_task_count(kshark_ctx->hide_task_filter)) {
+		tasks_cbd->setDefault(false);
+	} else {
+		QVector<int> pids;
+		int nPids = getPidList(&pids);
+		QVector<bool> v(nPids, false);
+		for (int i = 0; i < nPids; ++i) {
+			if (kshark_filter_task_find_pid(kshark_ctx->hide_task_filter,
+							pids[i]))
+				v[i] = true;
+		}
+
+		tasks_cbd->set(v);
+	}
+
+	connect(tasks_cbd, SIGNAL(apply(QVector<int>)),
 		&_data, SLOT(applyNegTaskFilter(QVector<int>)));
 }
 
-void KsMainWindow::cpuSelect() {
+void KsMainWindow::cpuSelect()
+{
 	KsCheckBoxDialog *cpus_cbd = new KsCpuCheckBoxDialog(_data._pevt, true, this);
-	cpus_cbd->setDefault(true);
+	int nCpus = _data._pevt->cpus;
+	if (nCpus == _graph.glPtr()->_cpuList.count()) {
+		cpus_cbd->setDefault(true);
+	} else {
+		QVector<bool> v(nCpus, false);
+		for (auto const &cpu: _graph.glPtr()->_cpuList)
+			v[cpu] = true;
+
+		cpus_cbd->set(v);
+	}
+
 	connect(cpus_cbd, SIGNAL(apply(QVector<int>)),
 		&_graph, SLOT(cpuReDraw(QVector<int>)));
 }
 
-void KsMainWindow::taskSelect() {
-	KsCheckBoxDialog *tasks_cb = new KsTasksCheckBoxDialog(_data._pevt, true, this);
-	tasks_cb->setDefault(false);
-	connect(tasks_cb, SIGNAL(apply(QVector<int>)),
+void KsMainWindow::taskSelect()
+{
+	KsCheckBoxDialog *tasks_cbd = new KsTasksCheckBoxDialog(_data._pevt, true, this);
+
+	QVector<int> pids;
+	int nPids = getPidList(&pids);
+	if (nPids == _graph.glPtr()->_taskList.count()) {
+		tasks_cbd->setDefault(true);
+	} else {
+		QVector<bool> v(nPids, false);
+		for (int i = 0; i < nPids; ++i) {
+			for (auto const &pid: _graph.glPtr()->_taskList) {
+				if (pids[i] == pid) {
+					v[i] = true;
+					break;
+				}
+			}
+		}
+
+		tasks_cbd->set(v);
+	}
+	connect(tasks_cbd, SIGNAL(apply(QVector<int>)),
 		&_graph, SLOT(taskReDraw(QVector<int>)));
 }
 
@@ -245,14 +347,21 @@ void KsMainWindow::aboutInfo() {
 	message->show();
 }
 
-void KsMainWindow::loadFile(const QString& fileName) {
-	struct stat st;
+void KsMainWindow::loadFile(const QString& fileName)
+{
 	qInfo() << "Loading " << fileName;
+	_mState.reset();
+	_view.reset();
+	_graph.reset();
+
+	setWindowTitle("Kernel Shark");
+	KsDataProgressBar pb;
+	QApplication::processEvents();
+
+	struct stat st;
 	int ret = stat(fileName.toStdString().c_str(), &st);
 	if (ret != 0) {
-		_mState.reset();
-		_view.reset();
-		_graph.reset();
+		this->resize(SCREEN_WIDTH*.8, FONT_HEIGHT*3);
 		QString text("Unable to find file ");
 		text.append(fileName);
 		text.append("\n");
@@ -260,15 +369,30 @@ void KsMainWindow::loadFile(const QString& fileName) {
 		message->setWindowFlags(Qt::WindowStaysOnTopHint);
 		message->setMinimumWidth(STRING_WIDTH(text) + FONT_WIDTH*3);
 		message->show();
-		qCritical() << "ERROR Opening file " << fileName;
+		qCritical() << "ERROR: " << text;
 		return;
 	}
 
-	_data.loadData(fileName);
+	bool loadDone = false;
+	auto job = [&] (KsDataStore *d) {
+		d->loadData(fileName);
+		loadDone = true;
+	};
+	std::thread t1(job, &_data);
+
+	for (int i = 0; i < 160; ++i) {
+		if (loadDone)
+			break;
+
+		pb.setValue(i);
+		usleep(150000);
+		QApplication::processEvents();
+	}
+
+	t1.join();
+
 	if (!_data.size()) {
-		_mState.reset();
-		_view.reset();
-		_graph.reset();
+		this->resize(SCREEN_WIDTH*.8, FONT_HEIGHT*3);
 		QString text("File ");
 		text.append(fileName);
 		text.append(" contains no data.\n");
@@ -276,12 +400,27 @@ void KsMainWindow::loadFile(const QString& fileName) {
 		message->setWindowFlags(Qt::WindowStaysOnTopHint);
 		message->setMinimumWidth(STRING_WIDTH(text) + FONT_WIDTH*3);
 		message->show();
+		qCritical() << "ERROR: " << text;
 		return;
 	}
 
+	pb.setValue(165);
 	_view.loadData(&_data);
+
 	//auto viewJob = [&] {_view.loadData(&_data);};
 	//std::thread t1(viewJob);
+
+	pb.setValue(180);
 	_graph.loadData(&_data);
-	//t1.join();
+	pb.setValue(195);
+	setWindowTitle("Kernel Shark (" + fileName + ")");
+
+// 	t1.join();
 }
+
+void KsMainWindow::loadFiles(const QList<QString> &files)
+{
+	for (auto const &f: files)
+		qInfo() << " loadFile " << f;
+}
+

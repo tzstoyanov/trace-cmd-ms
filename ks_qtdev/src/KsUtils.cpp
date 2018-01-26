@@ -23,9 +23,30 @@
 
 // Kernel Shark 2
 #include "KsDeff.h"
-#include "KsUtils.h"
-#include "KsPlotTools.h"
-#include "KsTraceGraph.h"
+#include "KsUtils.hpp"
+#include "KsPlotTools.hpp"
+#include "KsTraceGraph.hpp"
+
+KsDataProgressBar::KsDataProgressBar(QWidget *parent)
+: QWidget(parent), _sb(this), _pb(&_sb) {
+	this->resize(FONT_WIDTH*45, FONT_HEIGHT*5);
+	this->setWindowTitle("Loading data");
+	this->setLayout(new QVBoxLayout);
+	_pb.setOrientation(Qt::Horizontal);
+	_pb.setTextVisible(false);
+	_pb.setRange(0, 200);
+	_pb.setValue(1);
+	_sb.addPermanentWidget(&_pb, 1);
+	this->layout()->addWidget(new QLabel("Loadong trace data ..."));
+	this->layout()->addWidget(&_sb);
+	setWindowFlags(Qt::WindowStaysOnTopHint);
+	this->show();
+}
+
+void KsDataProgressBar::setValue(int i) {
+	_pb.setValue(i);
+	QApplication::processEvents();
+}
 
 KsMessageDialog::KsMessageDialog(QString message, QWidget *parent)
 : QDialog(parent),
@@ -108,6 +129,23 @@ KsCheckBoxTableDialog::KsCheckBoxTableDialog(const QString &name, bool cond, QWi
   _table(this)
 {}
 
+
+void KsCheckBoxTableDialog::set(QVector<bool> v)
+{
+	int n = (v.size() <=  _cb.size())? v.size() : _cb.size();
+	Qt::CheckState state;
+	_all_cb.setCheckState(Qt::Checked);
+	for (int i = 0; i < n; ++i) {
+		if (v[i]) {
+			state = Qt::Checked;
+		} else {
+			state = Qt::Unchecked;
+			_all_cb.setCheckState(state);
+		}
+		_cb[i]->setCheckState(state);
+	}
+}
+
 void KsCheckBoxTableDialog::initTable(QStringList headers, int size)
 {
 	_table.setColumnCount(headers.count());
@@ -115,6 +153,7 @@ void KsCheckBoxTableDialog::initTable(QStringList headers, int size)
 	_table.setShowGrid(false);
 	_table.setHorizontalHeaderLabels(headers);
 	_table.horizontalHeader()->setStretchLastSection(true);
+	_table.setSelectionBehavior(QAbstractItemView::SelectRows);
 	_table.setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	_table.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	_table.verticalHeader()->setVisible(false);
@@ -193,11 +232,28 @@ KsCheckBoxTreeDialog::KsCheckBoxTreeDialog(const QString &name, bool cond, QWidg
   _tree(this)
 {}
 
+void KsCheckBoxTreeDialog::set(QVector<bool> v)
+{
+	int n = (v.size() <=  _cb.size())? v.size() : _cb.size();
+	Qt::CheckState state;
+	_all_cb.setCheckState(Qt::Checked);
+	for (int i = 0; i < n; ++i) {
+		if (v[i]) {
+			state = Qt::Checked;
+		} else {
+			state = Qt::Unchecked;
+			_all_cb.setCheckState(state);
+		}
+		_cb[i]->setCheckState(0, state);
+	}
+}
+
 void KsCheckBoxTreeDialog::initTree()
 {
-	_tree.setColumnCount(1);
+	_tree.setColumnCount(2);
 	_tree.setHeaderHidden(true);
 	_tree.setSelectionMode(QAbstractItemView::SingleSelection);
+	_tree.setSelectionBehavior(QAbstractItemView::SelectRows);
 	_tree.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
 	connect(&_tree, SIGNAL(itemClicked(QTreeWidgetItem*, int)),
@@ -256,7 +312,7 @@ void KsCheckBoxTreeDialog::adjustSize(int size)
 			_top_layout.contentsMargins().right());
 }
 
-void update_r(QTreeWidgetItem *item, Qt::CheckState state)
+static void update_r(QTreeWidgetItem *item, Qt::CheckState state)
 {
 	item->setCheckState(0, state);
 
@@ -316,11 +372,14 @@ KsCpuCheckBoxDialog::KsCpuCheckBoxDialog(struct pevent *pe, bool cond, QWidget *
 	_id.resize(nCpus);
 	_cb.resize(nCpus);
 
+	KsPlot::Color cpuCol;
 	for (int i = 0; i < nCpus; ++i) {
+		cpuCol.setRainbowsColor(1 + i*2);
 		QTreeWidgetItem *cpuItem = new QTreeWidgetItem;
-// 		cpuItem->setMinimumHeight(FONT_HEIGHT*1.3);
-		cpuItem->setText(0, QString("CPU %1").arg(i));
+		cpuItem->setText(0, "  ");
+		cpuItem->setText(1, QString("CPU %1").arg(i));
 		cpuItem->setCheckState(0, Qt::Checked);
+		cpuItem->setBackgroundColor(0, QColor(cpuCol._r, cpuCol._g, cpuCol._b));
 		_tree.addTopLevelItem(cpuItem);
 		_id[i] = i;
 		_cb[i] = cpuItem;
@@ -357,6 +416,7 @@ KsEventsCheckBoxDialog::KsEventsCheckBoxDialog(struct pevent *pe, bool cond, QWi
 			QTreeWidgetItem *evtItem = new QTreeWidgetItem;
 			QString evtName(pe->events[i]->name);
 			evtItem->setText(0, evtName);
+// 			evtItem->setText(1, QString::number(pe->events[i]->id);
 			evtItem->setFlags(evtItem->flags() | Qt::ItemIsUserCheckable);
 			evtItem->setCheckState(0, Qt::Checked);
 			sysItem->addChild(evtItem);
@@ -424,7 +484,7 @@ KsTasksCheckBoxDialog::KsTasksCheckBoxDialog(struct pevent *pe, bool cond, QWidg
 }
 
 KsDataStore::KsDataStore()
-: _handle(nullptr), _data_size(0), _rows(nullptr), _pevt(nullptr)
+: _handle(nullptr), _dataSize(0), _rows(nullptr), _pevt(nullptr)
 {}
 
 KsDataStore::~KsDataStore()
@@ -456,26 +516,31 @@ void KsDataStore::loadData(const QString &file)
 	loadData(_handle);
 
 	double time = GET_DURATION(t0);
-	qInfo() <<"Data loading time: " << 1e3*time << " ms.   entries: " << _data_size;
+	qInfo() <<"Data loading time: " << 1e3*time << " ms.   entries: " << _dataSize;
 }
+
+// void KsDataStore::loadData(const QList<QString> &file)
+// {
+// 
+// }
 
 void KsDataStore::loadData(struct tracecmd_input *handle)
 {
-	//_data_size = kshark_load_data_records(handle, &_rows);
-	_data_size = kshark_load_data_entries(handle, &_rows);
+	//_dataSize = kshark_load_data_records(handle, &_rows);
+	_dataSize = kshark_load_data_entries(handle, &_rows);
 	_pevt = tracecmd_get_pevent(handle);
 }
 
 void KsDataStore::clear()
 {
-	if (_data_size) {
-		for (size_t r = 0; r < _data_size; ++r)
+	if (_dataSize) {
+		for (size_t r = 0; r < _dataSize; ++r)
 			//free_record(_rows[r]);
 			free(_rows[r]);
 
 		free(_rows);
 		_rows = nullptr;
-		_data_size = 0;
+		_dataSize = 0;
 	}
 
 	_pevt = nullptr;
@@ -498,7 +563,7 @@ void KsDataStore::applyPosTaskFilter(QVector<int> vec)
 	for (auto const &pid: vec)
 		kshark_filter_add_id(ctx, SHOW_TASK_FILTER, pid);
 
-	kshark_filter_entries(ctx, _rows, _data_size);
+	kshark_filter_entries(ctx, _rows, _dataSize);
 	emit updateView();
 	emit updateGraph();
 
@@ -518,7 +583,7 @@ void KsDataStore::applyNegTaskFilter(QVector<int> vec)
 	for (auto const &pid: vec)
 		kshark_filter_add_id(ctx, HIDE_TASK_FILTER, pid);
 
-	kshark_filter_entries(ctx, _rows, _data_size);
+	kshark_filter_entries(ctx, _rows, _dataSize);
 	emit updateView();
 	emit updateGraph();
 
@@ -539,7 +604,7 @@ void KsDataStore::applyPosEventFilter(QVector<int> vec)
 	for (auto const &pid: vec)
 		kshark_filter_add_id(ctx, SHOW_EVENT_FILTER, pid);
 
-	kshark_filter_entries(ctx, _rows, _data_size);
+	kshark_filter_entries(ctx, _rows, _dataSize);
 	emit updateView();
 	emit updateGraph();
 
@@ -559,7 +624,7 @@ void KsDataStore::applyNegEventFilter(QVector<int> vec)
 	for (auto const &pid: vec)
 		kshark_filter_add_id(ctx, HIDE_EVENT_FILTER, pid);
 
-	kshark_filter_entries(ctx, _rows, _data_size);
+	kshark_filter_entries(ctx, _rows, _dataSize);
 	emit updateView();
 	emit updateGraph();
 
@@ -626,16 +691,16 @@ bool KsGraphMark::isVisible()
 	return _mark->_visible;
 }
 
-void KsGraphMark::draw(KsGLWidget *gl)
+void KsGraphMark::makeVisible(KsGLWidget *gl)
 {
 	_gl = gl;
-	_mark->setMark(_bin, _cpu, _task, _gl);
+	_mark->setMark(_bin, _cpu, _task, _gl, _gl->dpr());
 	_mark->_visible = true;
 }
 
-void KsGraphMark::draw()
+void KsGraphMark::makeVisible()
 {
-	draw(this->_gl);
+	makeVisible(this->_gl);
 }
 
 void KsGraphMark::remove()
@@ -661,15 +726,15 @@ KsDualMarkerSM::KsDualMarkerSM(QWidget *parent)
   _markB(DualMarkerState::B, Qt::darkCyan)
 {
 	_buttonA.setFixedWidth(STRING_WIDTH(" Marker A "));
-	_buttonA.setFixedHeight(FONT_HEIGHT*1.2);
+// 	_buttonA.setFixedHeight(FONT_HEIGHT*1.5);
 	_buttonB.setFixedWidth(STRING_WIDTH(" Marker B "));
-	_buttonB.setFixedHeight(FONT_HEIGHT*1.2);
+// 	_buttonB.setFixedHeight(FONT_HEIGHT*1.5);
 
 	for (auto const &l: {&_labelMA, &_labelMB, &_labelDelta}) {
 		l->setFrameStyle(QFrame::Panel | QFrame::Sunken);
 		l->setStyleSheet("QLabel {background-color : white;}");
 		l->setTextInteractionFlags(Qt::TextSelectableByMouse);
-		l->setFixedHeight(FONT_HEIGHT*1.2);
+// 		l->setFixedHeight(FONT_HEIGHT*1.5);
 		l->setFixedWidth(FONT_WIDTH*16);
 	}
 
@@ -783,10 +848,10 @@ void KsDualMarkerSM::placeInToolBar(QToolBar *tb)
 void KsDualMarkerSM::updateMarkers(const KsDataStore &data, const KsTimeMap &histo)
 {
 	if(_markA.update(data, histo))
-		_markA.draw();
+		_markA.makeVisible();
 
 	if(_markB.update(data, histo))
-		_markB.draw();
+		_markB.makeVisible();
 }
 
 void KsDualMarkerSM::updateLabels(const KsTimeMap &histo)

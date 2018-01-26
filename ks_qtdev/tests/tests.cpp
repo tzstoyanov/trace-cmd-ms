@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "KsModel.h"
+#include "KsModel.hpp"
 
 TEST(KsTimeMapInitTest, Init)
 {

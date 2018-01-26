@@ -4,10 +4,10 @@
 
 #include <QOpenGLWidget>
 
-#include "KsPlotTools.h"
-#include "KsUtils.h"
-#include "KsModel.h"
-#include "KsTraceGraph.h"
+#include "KsPlotTools.hpp"
+#include "KsUtils.hpp"
+#include "KsModel.hpp"
+#include "KsTraceGraph.hpp"
 
 int main(int argc, char **argv)
 {

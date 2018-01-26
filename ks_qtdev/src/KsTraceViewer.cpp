@@ -19,7 +19,7 @@
  */
 
 // Kernel Shark 2
-#include "KsTraceViewer.h"
+#include "KsTraceViewer.hpp"
 
 KsTraceViewer::KsTraceViewer(QWidget *parent)
 : QWidget(parent),
@@ -30,7 +30,6 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
   _toolbar(this),
   _labelSearch("Search: Column", this),
   _labelGrFollows("Graph follows", this),
-  //_pageSpinBox(this),
   _columnComboBox(this),
   _selectComboBox(this),
   _searchLineEdit(this),
@@ -41,11 +40,11 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
   _graphFollows(true),
   _mState(nullptr)
 {
-	this->setMinimumHeight(SCREEN_HEIGHT/5);
 	this->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
 
 	/* Make a search toolbar. */
 	_toolbar.setOrientation(Qt::Horizontal);
+	_toolbar.setMaximumHeight(FONT_HEIGHT*1.75);
 
 	/* On the toolbar make two Combo boxes for the search settings. */
 	_toolbar.addWidget(&_labelSearch);
@@ -58,6 +57,7 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	_selectComboBox.addItem("contains");
 	_selectComboBox.addItem("full match");
 	_selectComboBox.addItem("does not have");
+
 	connect(&_selectComboBox, SIGNAL(currentIndexChanged(int)),
 		this, SLOT(searchEditSelect(int)));
 	_toolbar.addWidget(&_selectComboBox);
@@ -75,7 +75,7 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	_toolbar.addSeparator();
 
 	/* On the toolbar, add Prev & Next buttons. */
-	int bWidth = STRING_WIDTH("  Next  ");
+	int bWidth = FONT_WIDTH*6;
 
 	_nextButton.setFixedWidth(bWidth);
 	_toolbar.addWidget(&_nextButton);
@@ -97,16 +97,15 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	_toolbar.addWidget(&_labelGrFollows);
 
 	/* Initialize the trace viewer. */
-	_view.horizontalHeader()->setStretchLastSection(true);
+// 	_view.horizontalHeader()->setStretchLastSection(true);
+	_view.horizontalHeader()->setDefaultAlignment(Qt::AlignLeft);
 	_view.verticalHeader()->setVisible(false);
 	_view.setEditTriggers(QAbstractItemView::NoEditTriggers);
 	_view.setSelectionBehavior(QAbstractItemView::SelectRows);
 	_view.setSelectionMode(QAbstractItemView::SingleSelection);
-	_view.setGeometry(QApplication::desktop()->screenGeometry());
-	_view.verticalHeader()->resizeSections(QHeaderView::ResizeToContents);
 	_view.verticalHeader()->setDefaultSectionSize(FONT_HEIGHT*1.25);
 
-	 _proxyModel.setSourceModel(&_model);
+	 _proxyModel.setSource(&_model);
 	_view.setModel(&_proxyModel);
 
 	connect(&_view, SIGNAL(clicked(const QModelIndex&)),
@@ -126,6 +125,8 @@ void KsTraceViewer::loadData(KsDataStore *data)
 	_proxyModel.fill(data->_rows);
 	_model.fill(data->_pevt, data->_rows, data->size());
 	this->resizeToContents();
+
+	this->setMinimumHeight(SCREEN_HEIGHT/5);
 
 	double time = GET_DURATION(t0);
 	qInfo() <<"View loading time: " << 1e3*time << " ms.";
@@ -155,7 +156,9 @@ void KsTraceViewer::setMarkerSM(KsDualMarkerSM *m)
 
 void KsTraceViewer::reset()
 {
+	this->setMinimumHeight(FONT_HEIGHT*10);
 	_model.reset();
+	resizeToContents();
 }
 
 void KsTraceViewer::update()
@@ -301,25 +304,22 @@ void KsTraceViewer::clicked(const QModelIndex& i)
 
 void KsTraceViewer::showRow(size_t r, bool mark)
 {
-	/* Use the index of the proxy model to retrieve the value
-	 * of the row number in the base model. This works because 
-	 * the row number is shown in column "0". */
-	size_t row = _proxyModel.data(_proxyModel.index(r, 0)).toInt();
-
+	/* Use the index in the source model to retrieve the value
+	 * of the row number in the of the proxy model. */
+	QModelIndex index = _proxyModel.mapFromSource(_model.index(r, 0));
 	if (mark) { // The row will be selected (colored).
 		// Get the first and the last visible row of the table.
-		size_t visiTot = _view.indexAt(_view.rect().topLeft()).row();
-		size_t visiBottom = _view.indexAt(_view.rect().bottomLeft()).row() - 2;
+		int visiTot = _view.indexAt(_view.rect().topLeft()).row();
+		int visiBottom = _view.indexAt(_view.rect().bottomLeft()).row() - 2;
 		// Scroll only if the row to be shown in not vizible.
-		if (r < visiTot || r > visiBottom)
-			_view.scrollTo(_proxyModel.index(row, 1),
-				       QAbstractItemView::PositionAtCenter);
+		if (index.row() < visiTot || index.row() > visiBottom)
+			_view.scrollTo(index, QAbstractItemView::PositionAtCenter);
 
-		_view.selectRow(row);
+		_view.selectRow(index.row());
 	} else {
 		/* Just make sure that the row is visible.
 		 * It will show up at the top of the visible part of the table. */
-		_view.scrollTo(_proxyModel.index(row, 1), QAbstractItemView::PositionAtTop);
+		_view.scrollTo(index, QAbstractItemView::PositionAtTop);
 	}
 }
 
@@ -386,7 +386,7 @@ size_t KsTraceViewer::searchItems(int column,
 				  const QString &searchText,
 				  condition_func cond)
 {
-	int count = _model.search(column, searchText, cond, &_matchList);
+	int count = _proxyModel.search(column, searchText, cond, &_matchList);
 	_searchDone = true;
 
 	QItemSelectionModel *sm = _view.selectionModel();

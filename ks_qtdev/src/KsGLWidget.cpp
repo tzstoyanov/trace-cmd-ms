@@ -23,8 +23,8 @@
 #include <GL/gl.h>
 
 // Kernel Shark 2
-#include "KsGLWidget.h"
-#include "KsUtils.h"
+#include "KsGLWidget.hpp"
+#include "KsUtils.hpp"
 
 KsGLWidget::KsGLWidget(QWidget *parent)
 : QOpenGLWidget(parent),
@@ -34,30 +34,29 @@ KsGLWidget::KsGLWidget(QWidget *parent)
   _mState(nullptr),
   _data(nullptr),
   _rubberBand(QRubberBand::Rectangle, this),
-  _rubberBandOrigin(0, 0)
+  _rubberBandOrigin(0, 0),
+  _dpr(1)
 {
-// 	printf("KsGLWidget \n");
 	setMouseTracking(true);
 	connect(&_model, SIGNAL(modelReset()), this, SLOT(update()));
 }
 
 void KsGLWidget::initializeGL()
 {
-// 	printf("initializeGL \n");
 	glDisable(GL_TEXTURE_2D);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_COLOR_MATERIAL);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glEnable(GL_POLYGON_SMOOTH);
-	glLineWidth(1.5);
-	glPointSize(2.0);
+	_dpr  = QApplication::desktop()->devicePixelRatio();
+	glLineWidth(1.5*_dpr);
+	glPointSize(2.5*_dpr);
 	glClearColor(1, 1, 1, 1);
 }
 
 void KsGLWidget::resizeGL(int w, int h)
 {
-// 	printf("\n\nresizeGL w: %i  h: %i \n", w, h);
 	glViewport(0, 0, w, h);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
@@ -71,19 +70,42 @@ void KsGLWidget::resizeGL(int w, int h)
 
 void KsGLWidget::paintGL()
 {
-// 	printf("paintGL \n");
 // 	hd_time t0 = GET_TIME;
 	
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	drawGraphs(_cpuList, _taskList);
+	makeGraphs(_cpuList, _taskList);
 	for (auto const &g: _graphs)
-		g->draw(_pidColors);
+		g->draw(_pidColors, 1.5*_dpr);
+
+	for (auto const &s: _shapes)
+		delete s;
+	_shapes.clear();
+
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+	gui_event_handler *evt_handlers;
+	
+	void *vHisto, *vGraph, *vShapes;
+	vHisto = static_cast<void*>(_model.histo());
+	vShapes = static_cast<void*>(&_shapes);
+
+	for (int g = 0; g < _taskList.count(); ++g) {
+		vGraph = static_cast<void*>(_graphs[_cpuList.count() + g]);
+
+		evt_handlers = kshark_ctx->event_handlers;
+		while (evt_handlers) {
+			evt_handlers->draw_func(vHisto, vGraph, _taskList[g], vShapes);
+			evt_handlers = evt_handlers->next;
+		}
+	}
 
 	for (auto const &s: _shapes)
 		s->draw();
 
 	_mState->updateMarkers(*_data, *_model.histo());
+	_mState->markerA().markPtr()->draw();
+	_mState->markerB().markPtr()->draw();
 
 // 	double time = GET_DURATION(t0);
 // 	qInfo() <<"GL paint time: " << 1e3*time << " ms.";
@@ -110,14 +132,15 @@ void KsGLWidget::loadData(KsDataStore *data)
 
 	loadColors();
 	/* Make a default Cpu list. All Cpus will be plotted. */
-	_cpuList = {};
-	for (int i = 0; i < nCpus; ++i)
-		_cpuList.append(i);
+	_cpuList = {3, 4};
+// 	for (int i = 0; i < nCpus; ++i)
+// 		_cpuList.append(i);
 
 	/* Make a default task list. No tasks will be plotted. */
-	_taskList = {};
+	_taskList = {27, 17812};
+// 	_taskList = {};
 
-	drawGraphs(_cpuList, _taskList);
+	makeGraphs(_cpuList, _taskList);
 
 // 	double time = GET_DURATION(t0);
 // 	qInfo() <<"Graph loading time: " << 1e3*time << " ms.";
@@ -131,21 +154,18 @@ void KsGLWidget::loadColors()
 	for (int i = 0; i < n; ++i) {
 		_pidColors[pids[i]] = col;
 		col.setRainbowsColor(i);
-// 		++col;
 	}
 }
 
 void KsGLWidget::setMarkerSM(KsDualMarkerSM *m)
 {
 	_mState = m;
-	_shapes.append(m->markerA().markPtr());
-	_shapes.append(m->markerB().markPtr());
 }
 
 void KsGLWidget::updateGraphs()
 {
-	/** From the size of the widget, calculate the number of bins.
-	 *  One bin will correspond to one pixel. */
+	/* From the size of the widget, calculate the number of bins.
+	 * One bin will correspond to one pixel. */
 	int nBins = width() - _hMargin*2;
 
 	/* Reload the data. The range of the histogram is the same
@@ -157,11 +177,15 @@ void KsGLWidget::updateGraphs()
 	_model.fill(_data->_pevt, _data->_rows, _data->size());
 }
 
-void KsGLWidget::drawAxisX() {
+void KsGLWidget::drawAxisX()
+{
 	KsPlot::Point a0(_hMargin, _vMargin/4), a1(_hMargin, _vMargin/2);
 	KsPlot::Point b0(width()/2, _vMargin/4), b1(width()/2, _vMargin/2);
 	KsPlot::Point c0(width() - _hMargin, _vMargin/4), c1(width() - _hMargin, _vMargin/2);
 	KsPlot::Line a(&a0, &a1), b(&b0, &b1), c(&c0, &c1), ac(&a0, &c0);
+
+	a0._size = c0._size = _dpr;
+	a._size = b._size = c._size = ac._size = 1.5*_dpr;
 
 	a0.draw();
 	c0.draw();
@@ -171,12 +195,15 @@ void KsGLWidget::drawAxisX() {
 	ac.draw();
 }
 
-void KsGLWidget::drawGraphs(QVector<int> cpuList, QVector<int> taskList)
+void KsGLWidget::makeGraphs(QVector<int> cpuList, QVector<int> taskList)
 {
 	/* The very first thing to do is to clean up. */
 	for (auto &g: _graphs)
 		delete g;
 	_graphs.resize(0);
+
+	if (!_data || !_data->size())
+		return;
 
 	/* Draw the time axis. */
 	drawAxisX();
@@ -192,7 +219,7 @@ void KsGLWidget::drawGraphs(QVector<int> cpuList, QVector<int> taskList)
 
 void KsGLWidget::addCpu(int cpu)
 {
-	int pidF, pidB=0;
+	int pidF(0), pidB(0);
 	int nBins = _model.histo()->size();
 	KsPlot::Graph *graph = new KsPlot::Graph(nBins);
 	graph->setHMargin(_hMargin);
@@ -223,7 +250,7 @@ void KsGLWidget::addCpu(int cpu)
 	};
 
 	/* Check the content of the very firs bin and see if the Cpu is active. */
-	int b = 0;
+	int b(0);
 	get_pid(b);
 	if (pidF >= 0) {
 		/* The Cpu is active and this is a regular process. Set this bin. */
@@ -249,7 +276,7 @@ void KsGLWidget::addCpu(int cpu)
 
 void KsGLWidget::addTask(int pid)
 {
-	int cpu, pidB, lastCpu = -1;
+	int cpu, pidF(0), lastCpu(-1);
 	int nBins = _model.histo()->size();
 	KsPlot::Graph *graph = new KsPlot::Graph(nBins);
 	graph->setHMargin(_hMargin);
@@ -264,10 +291,18 @@ void KsGLWidget::addTask(int pid)
 
 	auto set_bin = [&] (int b) {
 		if (cpu >= 0) {
-			if (pid == pidB)
-				graph->setBin(b, pid, pid, {(cpu + 1)*0xae0d});
-			else
-				graph->setBin(b, pid, KS_FILTERED_BIN, {(cpu + 1)*0xae0d});
+			KsPlot::Color col;
+			col.setRainbowsColor(1 + cpu*2);
+
+			/* Data from thе Task has been found in this bin. */
+			if (pid == pidF) {
+				/* . */
+				graph->setBin(b, pid, pid, col);
+			}
+			else {
+				/* . */
+				graph->setBin(b, pidF, KS_FILTERED_BIN, col);
+			}
 
 			lastCpu = cpu;
 		} else {
@@ -287,8 +322,8 @@ void KsGLWidget::addTask(int pid)
 
 	/* Check the content of the very firs bin and see if the Task is active. */
 	int b = 0;
-	cpu = _model.histo()->getCpu(b, pid, true);
-	pidB = _model.histo()->getPidBack(b, cpu, false);
+	cpu = _model.histo()->getCpu(b, pid, false);
+	pidF = _model.histo()->getPidFront(b, cpu, false);
 	
 	if (cpu >= 0) {
 		/* The Task is active. Set this bin. */
@@ -296,7 +331,7 @@ void KsGLWidget::addTask(int pid)
 	} else {
 		/* No data from this Task in the very firs bin. Use the Lower
 		 * Overflow Bin to retrieve the Cpu used by the task (if any). */
-		cpu = _model.histo()->getCpu(KsTimeMap::OverflowBin::Lower, pid, true);
+		cpu = _model.histo()->getCpu(KsTimeMap::OverflowBin::Lower, pid, false);
 		if (cpu >= 0) {
 			/* The Lower Overflow Bin contains data from this Task. Now
 			 * look again in the Lower Overflow Bin and find the Pid of the
@@ -315,7 +350,7 @@ void KsGLWidget::addTask(int pid)
 
 	for (int b = 1; b < nBins; ++b) {
 		cpu = _model.histo()->getCpu(b, pid, false);
-		pidB = _model.histo()->getPidBack(b, cpu, false);
+		pidF = _model.histo()->getPidFront(b, cpu, false);
 		set_bin(b);
 	}
 
@@ -324,7 +359,7 @@ void KsGLWidget::addTask(int pid)
 
 bool KsGLWidget::find(QMouseEvent *event, int variance, size_t *row)
 {
-	/* Get the bin and cpu numbers. Remember that one bin corresponds
+	/* Get the bin, pid and cpu numbers. Remember that one bin corresponds
 	 * to one pixel. */
 	int bin = event->pos().x() - _hMargin;
 	int cpu = getCpu(event->pos().y());
@@ -345,6 +380,7 @@ bool KsGLWidget::find(QMouseEvent *event, int variance, size_t *row)
 			 * has been filtered. */
 			return false;
 		}
+
 		*row = found;
 		return true;
 	};
@@ -357,6 +393,7 @@ bool KsGLWidget::find(QMouseEvent *event, int variance, size_t *row)
 			 * has been filtered. */
 			return false;
 		}
+
 		*row = found;
 		return true;
 	};
@@ -395,7 +432,6 @@ bool KsGLWidget::find(QMouseEvent *event, int variance, size_t *row)
 		}
 	}
 
-
 	*row = 0;
 	return false;
 }
@@ -409,6 +445,7 @@ bool KsGLWidget::findAndSelect(QMouseEvent *event)
 		emit select(row);
 		emit updateView(row, true);
 	}
+
 	return found;
 }
 

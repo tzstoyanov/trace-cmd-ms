@@ -29,11 +29,12 @@
 #include "trace-cmd.h"
 
 // Kernel Shark 2
-#include "KsMainWindow.h"
+#include "KsMainWindow.hpp"
 #include "KsDeff.h"
 
 #define default_input_file (char*)"trace.dat"
 static char *input_file;
+// QList<QString> files;
 
 void usage(const char *prog)
 {
@@ -41,11 +42,6 @@ void usage(const char *prog)
 	printf("  -h	Display this help message\n");
 	printf("  -v	Display version and exit\n");
 	printf("  -i	input_file, default is %s\n", default_input_file);
-}
-
-static void add_plugin(const char *file)
-{
-	// TODO
 }
 
 int main(int argc, char **argv)
@@ -63,10 +59,11 @@ int main(int argc, char **argv)
 
 		case 'i':
 			input_file = optarg;
+// 			files.append(QString(optarg));
 			break;
 
 		case 'p':
-			add_plugin(optarg);
+			kshark_add_plugin(optarg);
 			break;
 
 		default:
@@ -80,11 +77,16 @@ int main(int argc, char **argv)
 		input_file = argv[optind];
 	}
 
-	if (!input_file)
-		input_file = default_input_file;
+// 	if (!input_file)
+// 		input_file = default_input_file;
 
+	QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 	QApplication a(argc, argv);
+
 	KsMainWindow ks;
+
+// 	if (files.count())
+// 		ks.loadFiles(files);
 
 	if (input_file)
 		ks.loadFile(QString(input_file));

@@ -19,8 +19,8 @@
  */
 
 // Kernel Shark 2
-#include "KsTraceGraph.h"
-#include "KsUtils.h"
+#include "KsTraceGraph.hpp"
+#include "KsUtils.hpp"
 
 KsTraceGraph::KsTraceGraph(QWidget *parent)
 : QWidget(parent),
@@ -55,7 +55,14 @@ KsTraceGraph::KsTraceGraph(QWidget *parent)
 		connect(b, SIGNAL(released()), this, SLOT(stopUpdating()));
 		_navigationBar.addWidget(b);
 	};
+
+	_pointerBar.setMaximumHeight(FONT_HEIGHT*1.75);
 	_pointerBar.setOrientation(Qt::Horizontal);
+
+	_navigationBar.setMaximumHeight(FONT_HEIGHT*1.75);
+	_navigationBar.setMinimumWidth(FONT_WIDTH*110);
+	_navigationBar.setOrientation(Qt::Horizontal);
+
 	_pointerBar.addWidget(&_labelP1);
 	_labelP2.setFrameStyle(QFrame::Panel | QFrame::Sunken);
 	_labelP2.setStyleSheet("QLabel { background-color : white;}");
@@ -116,9 +123,6 @@ KsTraceGraph::KsTraceGraph(QWidget *parent)
 	_scrollArea.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	_scrollArea.setWidget(&_drawWindow);
 
-	_navigationBar.setMaximumHeight(FONT_HEIGHT*1.75);
-	_navigationBar.setOrientation(Qt::Horizontal);
-
 	connect(&_scrollLeftButton, SIGNAL(pressed()), this, SLOT(scrollLeft()));
 	makeNavButton(&_scrollLeftButton);
 
@@ -129,7 +133,7 @@ KsTraceGraph::KsTraceGraph(QWidget *parent)
 	makeNavButton(&_zoomOutButton);
 
 	connect(&_scrollRightButton, SIGNAL(pressed()), this, SLOT(scrollRight()));
-	makeNavButton(&_scrollRightButton);	
+	makeNavButton(&_scrollRightButton);
 
 	_layout.addWidget(&_pointerBar);
 	_layout.addWidget(&_navigationBar);
@@ -159,7 +163,14 @@ void KsTraceGraph::reset()
 	/* Clear the all graph lists and update. */
 	_glWindow._cpuList = {};
 	_glWindow._taskList = {};
+	_labelP2.setText("");
+	for (auto l1: {&_labelI1, &_labelI2, &_labelI3, &_labelI4, &_labelI5})
+		l1->setText("");
+
+	_glWindow.model()->reset();
 	update();
+	for (auto l2: {&_labelXMin, &_labelXMid, &_labelXMax})
+		l2->setText("");
 }
 
 void KsTraceGraph::zoomIn()
@@ -193,7 +204,7 @@ void KsTraceGraph::resetPointer()
 {
 	_mState->activeMarker().remove();
 }
-
+#include <unistd.h>
 void KsTraceGraph::setPointerInfo(size_t i)
 {
 	kshark_entry *e = _data->_rows[i];
@@ -214,7 +225,7 @@ void KsTraceGraph::setPointerInfo(size_t i)
 	comm.append(QString("%1").arg(e->pid));
 	_labelI1.setText(comm);
 
-	_labelI2.setText(QString("%1").arg(e->cpu));
+	_labelI2.setText(QString("Cpu %1").arg(e->cpu));
 
 	QString lat(kshark_get_latency(kshark_ctx->pevt, record));
 	_labelI3.setText(lat);
@@ -223,9 +234,31 @@ void KsTraceGraph::setPointerInfo(size_t i)
 	_labelI4.setText(event);
 
 	QString info(kshark_get_info(kshark_ctx->pevt, record, e));
-	_labelI5.setText(info);
-
 	free_record(record);
+
+	_labelI5.setText(info);
+	QCoreApplication::processEvents();
+	
+	int labelWidth = _pointerBar.geometry().right() -
+			 _labelI4.geometry().right();
+
+	if (labelWidth > STRING_WIDTH(info) + FONT_WIDTH*5)
+		return;
+
+	/* The Info string is too long and cannot be displayed on the toolbar.
+	 * Try to fit the text in the available space. */
+	QFontMetrics metrix(_labelI5.font());
+	int width = labelWidth - FONT_WIDTH*3;
+	QString elidedText = metrix.elidedText(info, Qt::ElideRight, width);
+
+	while(labelWidth < STRING_WIDTH(elidedText) + FONT_WIDTH*5) {
+		width -= FONT_WIDTH*3;
+		elidedText = metrix.elidedText(info, Qt::ElideRight, width);
+	}
+
+	_labelI5.setText(elidedText);
+	_labelI5.setVisible(true);
+	QCoreApplication::processEvents();
 }
 
 void KsTraceGraph::markEntry(size_t pos)
@@ -235,6 +268,8 @@ void KsTraceGraph::markEntry(size_t pos)
 	int graph = 0, graphCpu = -1, graphTask = -1;
 	bool cpuFound = false, taskFound = false;
 
+	/* Loop over all Cpu graphs and try to find the one that
+	 * contains the entry. */
 	for (auto const &c: _glWindow._cpuList) {
 		if (c == cpu) {
 			cpuFound = true;
@@ -245,8 +280,10 @@ void KsTraceGraph::markEntry(size_t pos)
 
 	if (cpuFound)
 		graphCpu = graph;
-	
-	graph =  + _glWindow._cpuList.count();
+
+	/* Loop over all Task graphs and try to find the one that
+	 * contains the entry. */
+	graph = _glWindow._cpuList.count();
 	for (auto const &p: _glWindow._taskList) {
 		if (p == pid) {
 			taskFound = true;
@@ -260,12 +297,14 @@ void KsTraceGraph::markEntry(size_t pos)
 	else
 		graph = graphCpu;
 
-	/* If a Task graph has been found, make sure that this Task graph
-	 * is visible. If no Task graph has been found, make visible
-	 * the Cpu graph. */
+	/* If a Task graph has been found, this Task graph will be
+	 * visible. If no Task graph has been found, make visible
+	 * the corresponding Cpu graph. */
+
 	_scrollArea.ensureVisible(0,
-				  _glWindow._vMargin + CPU_GRAPH_HEIGHT/2 +
 				  _legendAxisX.height() +
+				  _glWindow._vMargin +
+				  CPU_GRAPH_HEIGHT/2 +
 				  graph*(CPU_GRAPH_HEIGHT + _glWindow._vSpacing),
 				  50,
 				  CPU_GRAPH_HEIGHT/2 + _glWindow._vSpacing/2);
@@ -300,17 +339,6 @@ void KsTraceGraph::update()
 
 void KsTraceGraph::updateGeom()
 {
-	/* Set the minimum height of the Graph widget. */
-	int hMin = _drawWindow.height() +
-		   _pointerBar.height() +
-		   _navigationBar.height() +
-		   _layout.contentsMargins().top() +
-		   _layout.contentsMargins().bottom();
-
-	if (hMin > CPU_GRAPH_HEIGHT*8) hMin = CPU_GRAPH_HEIGHT*8;
-
-	setMinimumHeight(hMin);
-
 	/* Set the size of the Scroll Area. */
 	int saWidth = width() - _layout.contentsMargins().left() -
 				_layout.contentsMargins().right();
@@ -333,6 +361,18 @@ void KsTraceGraph::updateGeom()
 	 * plotted graphs. */
 	_drawWindow.resize(dwWidth, _glWindow.height() + _legendAxisX.height());
 
+	/* Set the minimum height of the Graph widget. */
+	int hMin = _drawWindow.height() +
+		   _pointerBar.height() +
+		   _navigationBar.height() +
+		   _layout.contentsMargins().top() +
+		   _layout.contentsMargins().bottom();
+
+	if (hMin > CPU_GRAPH_HEIGHT*8)
+		hMin = CPU_GRAPH_HEIGHT*8;
+
+	setMinimumHeight(hMin);
+
 	/* Now use the height of the Draw Window to fix the maximum height
 	 * of the Graph widget. */
 	setMaximumHeight(_drawWindow.height() +
@@ -354,6 +394,7 @@ void KsTraceGraph::updateGraphLegends()
 			delete child->widget();
 			delete child;
 		}
+
 		delete _legendWindow.layout();
 	}
 
@@ -379,7 +420,7 @@ void KsTraceGraph::updateGraphLegends()
 	};
 	
 	for (auto const &cpu: _glWindow._cpuList) {
-		graphName = QString("cpu %1").arg(cpu);
+		graphName = QString("CPU %1").arg(cpu);
 		make_name();
 	}
 
@@ -421,10 +462,12 @@ void KsTraceGraph::resizeEvent(QResizeEvent* event)
 
 bool KsTraceGraph::eventFilter(QObject* obj, QEvent* evt)
 {
-	/* This function is us used to detect the position of the mouse
+	/* Overriding a virtual function from QObject.
+	 * This function is used to detect the position of the mouse
 	 * with respect to the Draw window and according to this position
 	 * to grab / release the keyboard. The function has nothing to do
 	 * with the filtering of the trace events. */
+
 	if (obj == &_drawWindow && evt->type() == QEvent::Enter) {
 		_glWindow.grabKeyboard();
 	}

@@ -26,9 +26,9 @@
 #include <QAction>
 
 // Kernel Shark 2
-#include "KsTraceViewer.h"
-#include "KsTraceGraph.h"
-#include "KsUtils.h"
+#include "KsTraceViewer.hpp"
+#include "KsTraceGraph.hpp"
+#include "KsUtils.hpp"
 
 class KsMainWindow : public QMainWindow
 {
@@ -36,7 +36,8 @@ class KsMainWindow : public QMainWindow
 public:
 	KsMainWindow(QWidget *parent = 0);
 
-	void loadFile(const QString& fileName);
+	void loadFile(const QString &fileName);
+	void loadFiles(const QList<QString> &files);
 
 private slots:
 	void open();
@@ -44,6 +45,8 @@ private slots:
 	void reload();
 	void saveFilter();
 // 	bool saveAs();
+	void listFilterSync(bool state);
+	void graphFilterSync(bool state);
 	void showEvents();
 	void showTasks();
 	void hideTasks();
@@ -73,8 +76,8 @@ private:
 	QAction _quitAction;
 
 	// Filter menu.
-	QAction _taskSyncAction;
-	QAction _eventSyncAction;
+	QWidgetAction _graphFilterSyncAction;
+	QWidgetAction _listFilterSyncAction;
 	QAction _showEventsAction;
 	QAction _showTasksAction;
 	QAction _hideTasksAction;
@@ -90,5 +93,7 @@ private:
 	void createActions();
 	void createMenus();
 };
+
+// class KsConcentratorMainWindow : public
 
 #endif // _KS_MAINWINDOW_H

@@ -1,8 +1,11 @@
 MESSAGE(" src ...")
 
-add_library(kshark SHARED libkshark.c)
+add_library(kshark SHARED kshark-plugin.c
+                          libkshark.c)
+
 target_link_libraries(kshark ${CMAKE_DL_LIBS} ${TRACECMD_LIBRARY})
 set_target_properties(kshark  PROPERTIES SUFFIX	".so.${KS_VERSION_STRING}")
+
 
 IF (PYTHONLIBS_FOUND)
 
@@ -23,17 +26,19 @@ IF (PYTHONLIBS_FOUND)
     set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES
                                           "${KS_DIR}/bin/libkshark_wrapper.so"
                                           "${KS_DIR}/build/py/libkshark_wrapper.so"
-                                          "${KS_DIR}/build/py/libkshark_wrapper.c")
+                                          "${KS_DIR}/build/py/libkshark_wrapper.c"
+                                          "${KS_DIR}/src/KsDeff.h")
 
 ENDIF (PYTHONLIBS_FOUND)
 
+
 IF (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
 
-    set (ks-guiLib_hdr	KsMainWindow.h
-			KsTraceViewer.h
-			KsTraceGraph.h
-			KsGLWidget.h
-			KsUtils.h)
+    set (ks-guiLib_hdr	KsMainWindow.hpp
+			KsTraceViewer.hpp
+			KsTraceGraph.hpp
+			KsGLWidget.hpp
+			KsUtils.hpp)
 
     QT5_WRAP_CPP(ks-guiLib_hdr_moc ${ks-guiLib_hdr})
 
@@ -58,8 +63,11 @@ IF (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
     add_executable(kernelshark		kernelshark.cpp)
     target_link_libraries(kernelshark	kshark-gui)
 
-    add_executable(draw		draw.cpp)
-    target_link_libraries(draw	kshark-gui)
+#     add_executable(draw		draw.cpp)
+#     target_link_libraries(draw	kshark-gui)
+
+    add_library(plugin_sched SHARED  plugin_sched.c PluginSched.cpp)
+    target_link_libraries(plugin_sched kshark-gui)
 
 ENDIF (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
 

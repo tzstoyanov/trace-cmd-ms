@@ -22,7 +22,7 @@
 #define _KS_TRACEGRAPH_H
 
 // Kernel Shark 2
-#include "KsGLWidget.h"
+#include "KsGLWidget.hpp"
 
 class KsGraphScrollArea : public QScrollArea {
 public:
@@ -62,8 +62,8 @@ private slots:
 	void updateTimeLegends();
 
 private:
-	void resizeEvent(QResizeEvent* event);
-	bool eventFilter(QObject* obj, QEvent* evt);
+	void resizeEvent(QResizeEvent* event) override;
+	bool eventFilter(QObject* obj, QEvent* evt) override;
 
 	enum class GraphActions {
 		ZoomIn,
