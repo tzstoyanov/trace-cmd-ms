@@ -21,24 +21,27 @@ int main(int argc, char **argv)
 	n_rows = kshark_load_data_entries(ctx, &rows);
 	for (r = 0; r < n_rows; ++r) {
 		// Do something here ...
-// 		printf("ts: %lu \n", rows[r]->ts);
+// 		printf("%i ts: %lu \n", r, rows[r]->ts);
 		free(rows[r]);
 	}
+
+	free(rows);
 
 	kshark_handle_plugins(ctx, KSHARK_PLUGIN_UNLOAD);
 	kshark_unregister_plugin(ctx, "../lib/plugin-bar.so");
 
 	kshark_register_plugin(ctx, "../lib/plugin-bar_new.so");
 	kshark_handle_plugins(ctx, KSHARK_PLUGIN_LOAD);
-	
-	n_rows = kshark_load_data_entries(ctx, &rows);
+
+	uint64_t *ts;
+	n_rows = kshark_load_data_matrix(ctx, NULL, NULL, &ts, NULL, NULL, NULL);
 	for (r = 0; r < n_rows; ++r) {
 		// Do something else here ...
-
-		free(rows[r]);
+// 		printf("%i ts: %lu \n", r, ts[r]);
 	}
 
-	free(rows);
+	free(ts);
+
 	kshark_close(ctx);
 	kshark_free(ctx);
 

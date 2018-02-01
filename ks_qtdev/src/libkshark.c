@@ -131,6 +131,9 @@ void kshark_free(struct kshark_context *ctx)
 
 	free_task_hash(ctx);
 
+	if (seq.buffer)
+		trace_seq_destroy(&seq);
+	
 	free(ctx);
 }
 
@@ -365,9 +368,6 @@ size_t kshark_load_data_records(struct kshark_context *ctx,
 	struct pevent_record *data;
 	kshark_set_file_context(ctx->handle, ctx);
 
-	if (!seq.buffer)
-		trace_seq_init(&seq);
-
 	struct temp {
 		struct pevent_record	*rec;
 		struct temp		*next;
@@ -439,9 +439,6 @@ size_t kshark_load_data_entries(struct kshark_context *ctx,
 	size_t count, total = 0;
 	struct gui_event_handler *evt_handler;
 	struct pevent_record *rec;
-
-	if (!seq.buffer)
-		trace_seq_init(&seq);
 
 	if (*data_rows)
 		free(*data_rows);
@@ -520,9 +517,6 @@ size_t kshark_load_data_matrix(struct kshark_context *ctx,
 	size_t count, total = 0;
 	struct pevent_record *data;
 	kshark_set_file_context(ctx->handle, ctx);
-
-	if (!seq.buffer)
-		trace_seq_init(&seq);
 
 	struct kshark_entry *rec, **next;
 	struct kshark_entry **cpu_list = calloc(n_cpus, sizeof(struct kshark_entry *));

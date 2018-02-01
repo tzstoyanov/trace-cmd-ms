@@ -35,9 +35,10 @@ class KsMainWindow : public QMainWindow
 	Q_OBJECT
 public:
 	KsMainWindow(QWidget *parent = 0);
+	~KsMainWindow();
 
 	void loadFile(const QString &fileName);
-	void loadFiles(const QList<QString> &files);
+// 	void loadFiles(const QList<QString> &files);
 
 private slots:
 	void open();

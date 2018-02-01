@@ -85,6 +85,14 @@ KsMainWindow::KsMainWindow(QWidget *parent)
 	connect(&_data, SIGNAL(updateGraph()), &_graph, SLOT(update()));
 }
 
+KsMainWindow::~KsMainWindow()
+{
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+	kshark_close(kshark_ctx);
+	kshark_free(kshark_ctx);
+}
+
 void KsMainWindow::resizeEvent(QResizeEvent* event)
 {
 	QMainWindow::resizeEvent(event);
@@ -432,9 +440,6 @@ void KsMainWindow::loadFile(const QString& fileName)
 // 	t1.join();
 }
 
-void KsMainWindow::loadFiles(const QList<QString> &files)
-{
-	for (auto const &f: files)
-		qInfo() << " loadFile " << f;
-}
+// void KsMainWindow::loadFiles(const QList<QString> &files)
+// {}
 
