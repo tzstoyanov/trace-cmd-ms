@@ -56,6 +56,8 @@ KsMainWindow::KsMainWindow(QWidget *parent)
   _hideTasksAction(tr("Hide tasks"), parent),
   _cpuSelectAction(tr("CPUs"), parent),
   _taskSelectAction(tr("Tasks"), parent),
+  _pluginsAction("Plugins", parent),
+  _captureAction("Capture", parent),
   _aboutAction(tr("About"), parent)
 {
 	setWindowTitle("Kernel Shark");
@@ -131,6 +133,7 @@ void KsMainWindow::createActions()
 	connect(&_hideTasksAction, SIGNAL(triggered()), this, SLOT(hideTasks()));
 	connect(&_cpuSelectAction, SIGNAL(triggered()), this, SLOT(cpuSelect()));
 	connect(&_taskSelectAction, SIGNAL(triggered()), this, SLOT(taskSelect()));
+	connect(&_pluginsAction, SIGNAL(triggered()), this, SLOT(pluginSelect()));
 	connect(&_aboutAction, SIGNAL(triggered()), this, SLOT(aboutInfo()));
 }
 
@@ -175,7 +178,10 @@ void KsMainWindow::createMenus()
 	plots->addAction(&_taskSelectAction);
 
 	/* Capture menu */
-	/*QMenu *capture = */menuBar()->addMenu("Capture");
+	QMenu *tools = menuBar()->addMenu("Tools");
+	tools->addAction(&_pluginsAction);
+	tools->addAction(&_captureAction);
+	
 
 	/* Help menu */
 	QMenu *help = menuBar()->addMenu("Help");
@@ -297,8 +303,11 @@ void KsMainWindow::hideTasks()
 void KsMainWindow::cpuSelect()
 {
 	KsCheckBoxDialog *cpus_cbd = new KsCpuCheckBoxDialog(_data._pevt, true, this);
+	if(!_data._pevt)
+		return;
+
 	int nCpus = _data._pevt->cpus;
-	if (nCpus == _graph.glPtr()->_cpuList.count()) {
+	if (nCpus == _graph.glPtr()->cpuGraphCount()) {
 		cpus_cbd->setDefault(true);
 	} else {
 		QVector<bool> v(nCpus, false);
@@ -318,7 +327,7 @@ void KsMainWindow::taskSelect()
 
 	QVector<int> pids;
 	int nPids = getPidList(&pids);
-	if (nPids == _graph.glPtr()->_taskList.count()) {
+	if (nPids == _graph.glPtr()->taskGraphCount()) {
 		tasks_cbd->setDefault(true);
 	} else {
 		QVector<bool> v(nPids, false);
@@ -335,6 +344,11 @@ void KsMainWindow::taskSelect()
 	}
 	connect(tasks_cbd, SIGNAL(apply(QVector<int>)),
 		&_graph, SLOT(taskReDraw(QVector<int>)));
+}
+
+void KsMainWindow::pluginSelect()
+{
+	/*KsCheckBoxDialog *plugin_cbd =*/ new KsPluginCheckBoxDialog(_data._pevt, true, this);
 }
 
 void KsMainWindow::aboutInfo() {

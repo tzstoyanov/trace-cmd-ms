@@ -8,14 +8,14 @@
 #include <QString>
 #include <QList>
 
-const QString plugins = "@PLUGINS@";
+const QString plugins = "sched_events;xenomai_sched_events";
 
 #endif /* __cplusplus */
 
-#cmakedefine KS_VERSION_STRING "@KS_VERSION_STRING@"
+#define KS_VERSION_STRING "0.5.0"
 
-#cmakedefine KS_DIR "@KS_DIR@"
+#define KS_DIR "/home/yordan/Workspace/trace-cmd_qtdev/ks_qtdev"
 
-#cmakedefine N_CPUS @N_CPUS@
+#define N_CPUS 8
 
 #endif // _KS_CONFIG_H

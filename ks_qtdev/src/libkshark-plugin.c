@@ -30,7 +30,7 @@
 #include "event-utils.h"
 
 // Kernel shark 2
-#include "kshark-plugin.h"
+#include "libkshark-plugin.h"
 #include "libkshark.h"
 
 static struct gui_event_handler *gui_event_handler_alloc(int event_id,
@@ -67,7 +67,7 @@ struct gui_event_handler *find_gui_event_handler(struct gui_event_handler *handl
 	return NULL;
 }
 
-void register_gui_event_handler(struct gui_event_handler **handlers,
+void kshark_register_event_handler(struct gui_event_handler **handlers,
 				int event_id,
 				kshark_plugin_event_handler_func evt_func,
 				kshark_plugin_draw_handler_func dw_func,
@@ -83,7 +83,7 @@ void register_gui_event_handler(struct gui_event_handler **handlers,
 	*handlers = handler;
 }
 
-void unregister_gui_event_handler(struct gui_event_handler **handlers,
+void kshark_unregister_event_handler(struct gui_event_handler **handlers,
 				  int event_id,
 				  kshark_plugin_event_handler_func evt_func,
 				  kshark_plugin_draw_handler_func dw_func,
@@ -106,7 +106,24 @@ void unregister_gui_event_handler(struct gui_event_handler **handlers,
 	}
 }
 
-void free_gui_event_handler_list(struct gui_event_handler *handlers)
+
+void kshark_unregister_plugin(struct kshark_context *ctx, const char *file)
+{
+	struct plugin_list **last = &ctx->plugins;
+	struct plugin_list *list;
+
+	for (list = ctx->plugins; list; list = list->next) {
+		if (strcmp(list->file, file) != 0) {
+			*last = list->next;
+			free(list);
+			return;
+		}
+
+		last = &list->next;
+	}
+}
+
+void kshark_free_event_handler_list(struct gui_event_handler *handlers)
 {
 	struct gui_event_handler *last;
 
@@ -117,17 +134,11 @@ void free_gui_event_handler_list(struct gui_event_handler *handlers)
 	}
 }
 
-static struct plugin_list {
-	struct plugin_list	*next;
-	const char		*file;
-} *plugins;
-
-static struct plugin_list **plugin_next = &plugins;
-
-void kshark_add_plugin(const char *file)
+void kshark_register_plugin(struct kshark_context *ctx, const char *file)
 {
 	struct stat st;
 	int ret;
+	struct plugin_list *plugin;
 
 	ret = stat(file, &st);
 	if (ret < 0) {
@@ -135,17 +146,30 @@ void kshark_add_plugin(const char *file)
 		return;
 	}
 
-	*plugin_next = calloc(sizeof(struct plugin_list), 1);
-	if (!*plugin_next) {
+	plugin = calloc(sizeof(struct plugin_list), 1);
+	if (!plugin) {
 		fprintf(stderr, "failed to allocate memory for plugin \n");
 		return;
 	}
 
-	(*plugin_next)->file = file;
-	plugin_next = &(*plugin_next)->next;
+	plugin->file = file;
+	plugin->next = ctx->plugins;
+	ctx->plugins = plugin;
 }
 
-void kshark_handle_plugins(int task_id)
+
+void kshark_free_plugin_list(struct plugin_list *plugins)
+{
+	struct plugin_list *last;
+
+	while (plugins) {
+		last = plugins;
+		plugins = plugins->next;
+		free(last);
+	}
+}
+
+void kshark_handle_plugins(struct kshark_context *ctx, int task_id)
 {
 	kshark_plugin_load_func func;
 	struct plugin_list *plugin;
@@ -175,7 +199,7 @@ void kshark_handle_plugins(int task_id)
 		return;
 	}
 
-	for (plugin = plugins; plugin; plugin = plugin->next) {
+	for (plugin = ctx->plugins; plugin; plugin = plugin->next) {
 		handle = dlopen(plugin->file, RTLD_NOW | RTLD_GLOBAL);
 
 		if (!handle) {
@@ -194,14 +218,14 @@ void kshark_handle_plugins(int task_id)
 		func();
 	}
 
-	if (task_id == KSHARK_PLUGIN_UNLOAD) {
-		while ((plugin = plugins)) {
-			plugins = plugin->next;
-			free(plugin);
-		}
-
-		plugin_next = &plugins;
-	}
+// 	if (task_id == KSHARK_PLUGIN_UNLOAD) {
+// 		while ((plugin = ctx->plugins)) {
+// 			ctx->plugins = plugin->next;
+// 			free(plugin);
+// 		}
+// 
+// 		plugin_next = &plugins;
+// 	}
 
 	free(func_name);
 }

@@ -31,9 +31,10 @@
 extern "C" {
 #endif
 
+
 struct plugin_sched_context {
 	struct tracecmd_input	*handle;
-	struct pevent 		*pevt;
+	struct pevent		*pevt;
 
 	struct event_format	*sched_switch_event;
 	struct format_field	*sched_switch_next_field;
@@ -53,7 +54,7 @@ bool plugin_wakeup_check_pid(struct kshark_context *ctx, struct kshark_entry *e,
 
 bool plugin_switch_check_pid(struct kshark_context *ctx, struct kshark_entry *e, int pid);
 
-void plugin_draw(void *histo, void *graph, int pid, void *shapes);
+void plugin_draw(void *histoPtr, void *graphPtr, void *shapeListPtr, int pid, int draw_action);
 
 #ifdef __cplusplus
 }

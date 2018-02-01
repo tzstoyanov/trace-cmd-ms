@@ -49,8 +49,9 @@ typedef int (*kshark_plugin_load_func)();
 
 typedef void (*kshark_plugin_draw_handler_func)(void *histo,
 						void *graph,
-						int   pid,
-						void *shapes);
+						void *shapes,
+						int   val,
+					        int   draw_action);
 
 typedef void (*kshark_plugin_event_handler_func)(struct kshark_context *ctx,
 						 struct pevent_record *rec,
@@ -62,6 +63,13 @@ enum gui_plugin_actions {
 	KSHARK_PLUGIN_LOAD,
 	KSHARK_PLUGIN_RELOAD,
 	KSHARK_PLUGIN_UNLOAD,
+	KSHARK_PLUGIN_TASK_DRAW,
+	KSHARK_PLUGIN_CPU_DRAW,
+};
+
+struct plugin_list {
+	struct plugin_list	*next;
+	const char		*file;
 };
 
 struct gui_event_handler {
@@ -76,23 +84,27 @@ struct gui_event_handler {
 struct gui_event_handler *find_gui_event_handler(struct gui_event_handler *handlers,
 						 int event_id);
 
-void register_gui_event_handler(struct gui_event_handler **handlers,
+void kshark_register_event_handler(struct gui_event_handler **handlers,
 				int event_id,
 				kshark_plugin_event_handler_func	evt_func,
 				kshark_plugin_draw_handler_func		dw_func,
 				kshark_plugin_context_update_func	ctx_func);
 
-void unregister_gui_event_handler(struct gui_event_handler **handlers,
+void kshark_unregister_event_handler(struct gui_event_handler **handlers,
 				  int event_id,
 				  kshark_plugin_event_handler_func	evt_func,
 				  kshark_plugin_draw_handler_func	dw_func,
 				  kshark_plugin_context_update_func	ctx_func);
 
-void free_gui_event_handler_list(struct gui_event_handler *handlers);
+void kshark_free_event_handler_list(struct gui_event_handler *handlers);
 
-void kshark_add_plugin(const char *file);
+void kshark_register_plugin(struct kshark_context *ctx, const char *file);
 
-void kshark_handle_plugins(int task_id);
+void kshark_unregister_plugin(struct kshark_context *ctx, const char *file);
+
+void kshark_free_plugin_list(struct plugin_list *plugins);
+
+void kshark_handle_plugins(struct kshark_context *ctx, int task_id);
 
 #ifdef __cplusplus
 }

@@ -7,3 +7,4 @@ rm -rf src/
 rm -rf tests/
 rm -f py/pybuild.log
 rm -rf py/build
+rm -f ../lib/*

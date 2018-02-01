@@ -6,6 +6,7 @@
 #include <sys/time.h>
 
 // trace-cmd
+#include "trace-cmd.h"
 #include "trace-hash.h"
 
 // Kernel shark 2
@@ -51,25 +52,6 @@ static int kshark_default_context(struct kshark_context **context)
 	return 0;
 }
 
-void kshark_close(struct kshark_context *ctx)
-{
-	if (!ctx)
-		return;
-
-	filter_task_hash_free(ctx->show_task_filter);
-	filter_task_hash_free(ctx->hide_task_filter);
-
-	filter_task_hash_free(ctx->show_event_filter);
-	filter_task_hash_free(ctx->hide_event_filter);
-
-	free_gui_event_handler_list(ctx->event_handlers);
-	
-	if (ctx == kshark_context_handler)
-		kshark_context_handler = NULL;
-
-	free(ctx);
-}
-
 int kshark_instance(struct kshark_context **context)
 {
 	if (*context == NULL && kshark_context_handler == NULL) {
@@ -79,6 +61,9 @@ int kshark_instance(struct kshark_context **context)
 			return status;
 	} else if (*context != NULL) {
 		// The context handler is already set. Use it.
+		if (kshark_context_handler)
+			free(kshark_context_handler);
+
 		kshark_context_handler = *context;
 	} else {
 		// The context is already set. Use it.
@@ -86,6 +71,67 @@ int kshark_instance(struct kshark_context **context)
 	}
 
 	return true;
+}
+
+static void free_task_hash(struct kshark_context *ctx)
+{
+	struct task_list *list;
+	int i;
+
+	for (i = 0; i < TASK_HASH_SIZE; i++) {
+		while (ctx->tasks[i]) {
+			list = ctx->tasks[i];
+			ctx->tasks[i] = list->next;
+			free(list);
+		}
+	}
+}
+
+static void kshark_set_file_context(struct tracecmd_input *handle,
+				    struct kshark_context *ctx)
+{
+	ctx->handle = handle;
+	ctx->pevt = tracecmd_get_pevent(handle);
+	free_task_hash(ctx);
+}
+
+void kshark_open(struct kshark_context *ctx, const char *file)
+{
+	ctx->handle = tracecmd_open(file);
+	ctx->pevt = tracecmd_get_pevent(ctx->handle);
+	free_task_hash(ctx);
+}
+
+void kshark_close(struct kshark_context *ctx)
+{
+	if (!ctx || !ctx->handle)
+		return;
+
+	tracecmd_close(ctx->handle);
+}
+
+void kshark_free(struct kshark_context *ctx)
+{
+	if (ctx == NULL && kshark_context_handler == NULL)
+		return;
+
+	if (ctx == NULL) {
+		ctx = kshark_context_handler;
+		kshark_context_handler = NULL;
+	}
+
+	filter_task_hash_free(ctx->show_task_filter);
+	filter_task_hash_free(ctx->hide_task_filter);
+
+	filter_task_hash_free(ctx->show_event_filter);
+	filter_task_hash_free(ctx->hide_event_filter);
+	
+	kshark_free_plugin_list(ctx->plugins);
+	kshark_free_event_handler_list(ctx->event_handlers);
+
+	free_task_hash(ctx);
+
+	free(ctx);
 }
 
 const char *kshark_get_task(struct pevent *pe, struct kshark_entry *entry)
@@ -169,6 +215,7 @@ char *kshark_get_event_name_lazy(struct kshark_entry *entry)
 
 	return kshark_get_event_name(ctx->pevt, entry);
 }
+
 char *kshark_get_info_lazy(struct kshark_entry *entry)
 {
 	char *info;
@@ -281,28 +328,6 @@ static struct task_list *add_task_hash(struct kshark_context *ctx,
 	return list;
 }
 
-static void free_task_hash(struct kshark_context *ctx)
-{
-	struct task_list *list;
-	int i;
-
-	for (i = 0; i < TASK_HASH_SIZE; i++) {
-		while (ctx->tasks[i]) {
-			list = ctx->tasks[i];
-			ctx->tasks[i] = list->next;
-			free(list);
-		}
-	}
-}
-
-static void kshark_set_file_context(struct tracecmd_input *handle,
-				      struct kshark_context *ctx)
-{
-	ctx->handle = handle;
-	ctx->pevt = tracecmd_get_pevent(handle);
-	free_task_hash(ctx);
-}
-
 static bool kshark_view_task(struct kshark_context *ctx, int pid)
 {
 	return (!ctx->show_task_filter ||
@@ -331,16 +356,14 @@ static bool kshark_show_entry(struct kshark_context *ctx, int pid, int event_id)
 	return false;
 }
 
-size_t kshark_load_data_records(struct tracecmd_input *handle,
+size_t kshark_load_data_records(struct kshark_context *ctx,
 				struct pevent_record ***data_rows)
 {
-	int cpus = tracecmd_cpus(handle);
+	int n_cpus = tracecmd_cpus(ctx->handle);
 	int cpu;
 	size_t count, total = 0;
 	struct pevent_record *data;
-	struct kshark_context *ctx = NULL;
-	kshark_instance(&ctx);
-	kshark_set_file_context(handle, ctx);
+	kshark_set_file_context(ctx->handle, ctx);
 
 	if (!seq.buffer)
 		trace_seq_init(&seq);
@@ -350,14 +373,14 @@ size_t kshark_load_data_records(struct tracecmd_input *handle,
 		struct temp		*next;
 	} **cpu_list, **temp_next, *temp_rec;
 
-	cpu_list = calloc(cpus, sizeof(struct temp *));
+	cpu_list = calloc(n_cpus, sizeof(struct temp *));
 
-	for (cpu = 0; cpu < cpus; ++cpu) {
+	for (cpu = 0; cpu < n_cpus; ++cpu) {
 		count = 0;
 		cpu_list[cpu] = NULL;
 		temp_next = &cpu_list[cpu];
 
-		data = tracecmd_read_cpu_first(handle, cpu);
+		data = tracecmd_read_cpu_first(ctx->handle, cpu);
 		while (data) {
 			*temp_next = temp_rec = malloc(sizeof(*temp_rec));
 			assert(temp_rec != NULL);
@@ -368,7 +391,7 @@ size_t kshark_load_data_records(struct tracecmd_input *handle,
 			temp_next = &(temp_rec->next);
 
 			++count;
-			data = tracecmd_read_data(handle, cpu);
+			data = tracecmd_read_data(ctx->handle, cpu);
 		}
 
 		total += count;
@@ -383,7 +406,7 @@ size_t kshark_load_data_records(struct tracecmd_input *handle,
 	while (count < total) {
 		ts = 0;
 		next_cpu = -1;
-		for (cpu = 0; cpu < cpus; ++cpu) {
+		for (cpu = 0; cpu < n_cpus; ++cpu) {
 			if (!cpu_list[cpu])
 				continue;
 
@@ -407,32 +430,31 @@ size_t kshark_load_data_records(struct tracecmd_input *handle,
 	return total;
 }
 
-size_t kshark_load_data_entries(struct tracecmd_input *handle,
+size_t kshark_load_data_entries(struct kshark_context *ctx,
 				struct kshark_entry ***data_rows)
 {
-	int cpus = tracecmd_cpus(handle);
+	
+	int n_cpus = tracecmd_cpus(ctx->handle);
 	int cpu;
 	size_t count, total = 0;
 	struct gui_event_handler *evt_handler;
 	struct pevent_record *rec;
-	struct kshark_context *ctx = NULL;
-	kshark_instance(&ctx);
-
-	kshark_set_file_context(handle, ctx);
-	kshark_handle_plugins(KSHARK_PLUGIN_RELOAD);
 
 	if (!seq.buffer)
 		trace_seq_init(&seq);
 
-	struct kshark_entry *entry, **next;
-	struct kshark_entry **cpu_list = calloc(cpus, sizeof(struct kshark_entry *));
+	if (*data_rows)
+		free(*data_rows);
 
-	for (cpu = 0; cpu < cpus; ++cpu) {
+	struct kshark_entry *entry, **next;
+	struct kshark_entry **cpu_list = calloc(n_cpus, sizeof(struct kshark_entry *));
+
+	for (cpu = 0; cpu < n_cpus; ++cpu) {
 		count = 0;
 		cpu_list[cpu] = NULL;
 		next = &cpu_list[cpu];
 
-		rec = tracecmd_read_cpu_first(handle, cpu);
+		rec = tracecmd_read_cpu_first(ctx->handle, cpu);
 		while (rec) {
 			*next = entry = malloc( sizeof(struct kshark_entry) );
 			assert(entry != NULL);
@@ -449,7 +471,7 @@ size_t kshark_load_data_entries(struct tracecmd_input *handle,
 			free_record(rec);
 
 			++count;
-			rec = tracecmd_read_data(handle, cpu);
+			rec = tracecmd_read_data(ctx->handle, cpu);
 		}
 		total += count;
 	}
@@ -463,7 +485,7 @@ size_t kshark_load_data_entries(struct tracecmd_input *handle,
 	while (count < total) {
 		ts = 0;
 		next_cpu = -1;
-		for (cpu = 0; cpu < cpus; ++cpu) {
+		for (cpu = 0; cpu < n_cpus; ++cpu) {
 			if (!cpu_list[cpu])
 				continue;
 
@@ -485,7 +507,7 @@ size_t kshark_load_data_entries(struct tracecmd_input *handle,
 	return total;
 }
 
-size_t kshark_load_data_matrix(struct tracecmd_input *handle,
+size_t kshark_load_data_matrix(struct kshark_context *ctx,
 			       uint64_t **offset_array,
 			       uint8_t **cpu_array,
 			       uint64_t **ts_array,
@@ -493,26 +515,24 @@ size_t kshark_load_data_matrix(struct tracecmd_input *handle,
 			       int **event_array,
 			       uint8_t **vis_array)
 {
-	int cpus = tracecmd_cpus(handle);
+	int n_cpus = tracecmd_cpus(ctx->handle);
 	int cpu;
 	size_t count, total = 0;
 	struct pevent_record *data;
-	struct kshark_context *ctx = NULL;
-	kshark_instance(&ctx);
-	kshark_set_file_context(handle, ctx);
+	kshark_set_file_context(ctx->handle, ctx);
 
 	if (!seq.buffer)
 		trace_seq_init(&seq);
 
 	struct kshark_entry *rec, **next;
-	struct kshark_entry **cpu_list = calloc(cpus, sizeof(struct kshark_entry *));
+	struct kshark_entry **cpu_list = calloc(n_cpus, sizeof(struct kshark_entry *));
 
-	for (cpu = 0; cpu < cpus; ++cpu) {
+	for (cpu = 0; cpu < n_cpus; ++cpu) {
 		count = 0;
 		cpu_list[cpu] = NULL;
 		next = &cpu_list[cpu];
 
-		data = tracecmd_read_cpu_first(handle, cpu);
+		data = tracecmd_read_cpu_first(ctx->handle, cpu);
 		while (data) {
 			*next = rec = malloc( sizeof(struct kshark_entry) );
 			assert(rec != NULL);
@@ -524,17 +544,28 @@ size_t kshark_load_data_matrix(struct tracecmd_input *handle,
 			free_record(data);
 
 			++count;
-			data = tracecmd_read_data(handle, cpu);
+			data = tracecmd_read_data(ctx->handle, cpu);
 		}
 		total += count;
 	}
 
-	*offset_array	= calloc(total, sizeof(uint64_t));
-	*cpu_array	= calloc(total, sizeof(uint8_t));
-	*ts_array	= calloc(total, sizeof(uint64_t));
-	*pid_array	= calloc(total, sizeof(uint16_t));
-	*event_array	= calloc(total, sizeof(int));
-	*vis_array	= calloc(total, sizeof(uint8_t));
+	if (offset_array)
+		*offset_array = calloc(total, sizeof(uint64_t));
+
+	if (cpu_array)
+		*cpu_array = calloc(total, sizeof(uint8_t));
+
+	if (ts_array)
+		*ts_array = calloc(total, sizeof(uint64_t));
+
+	if (pid_array)
+		*pid_array = calloc(total, sizeof(uint16_t));
+
+	if (event_array)
+		*event_array = calloc(total, sizeof(int));
+
+	if (vis_array)
+		*vis_array = calloc(total, sizeof(uint8_t));
 
 	count = 0;
 	int next_cpu;
@@ -542,7 +573,7 @@ size_t kshark_load_data_matrix(struct tracecmd_input *handle,
 	while (count < total) {
 		ts = 0;
 		next_cpu = -1;
-		for (cpu = 0; cpu < cpus; ++cpu) {
+		for (cpu = 0; cpu < n_cpus; ++cpu) {
 			if (!cpu_list[cpu])
 				continue;
 
@@ -553,13 +584,23 @@ size_t kshark_load_data_matrix(struct tracecmd_input *handle,
 		}
 
 		if (next_cpu >= 0) {
-			(*offset_array)[count] = cpu_list[next_cpu]->offset;
-			(*cpu_array)[count] = cpu_list[next_cpu]->cpu;
-			(*ts_array)[count] = cpu_list[next_cpu]->ts;
-			(*pid_array)[count] = cpu_list[next_cpu]->pid;
-			(*event_array)[count] = cpu_list[next_cpu]->event_id;
-			(*event_array)[count] = cpu_list[next_cpu]->event_id;
-			(*event_array)[count] = cpu_list[next_cpu]->event_id;
+			if (offset_array)
+				(*offset_array)[count] = cpu_list[next_cpu]->offset;
+
+			if (cpu_array)
+				(*cpu_array)[count] = cpu_list[next_cpu]->cpu;
+
+			if (ts_array)
+				(*ts_array)[count] = cpu_list[next_cpu]->ts;
+
+			if (pid_array)
+				(*pid_array)[count] = cpu_list[next_cpu]->pid;
+
+			if (event_array)
+				(*event_array)[count] = cpu_list[next_cpu]->event_id;
+
+			if (vis_array)
+				(*vis_array)[count] = cpu_list[next_cpu]->visible;
 
 			rec = cpu_list[next_cpu];
 			cpu_list[next_cpu] = cpu_list[next_cpu]->next;
@@ -581,13 +622,17 @@ size_t kshark_trace2matrix(const char *fname,
 			   int **event_array,
 			   uint8_t **vis_array)
 {
-	struct tracecmd_input *handle = tracecmd_open(fname);
-	return kshark_load_data_matrix(handle, offset_array,
-					       cpu_array,
-					       ts_array,
-					       pid_array,
-					       event_array,
-					       vis_array);
+	struct kshark_context *ctx = NULL;
+	kshark_instance(&ctx);
+
+	kshark_open(ctx, fname);
+
+	return kshark_load_data_matrix(ctx, offset_array,
+					    cpu_array,
+					    ts_array,
+					    pid_array,
+					    event_array,
+					    vis_array);
 }
 
 uint32_t kshark_find_entry_row(uint64_t time,

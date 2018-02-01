@@ -32,7 +32,6 @@
 
 // Kernel Shark 2
 #include "libkshark.h"
-// #include "KsPlotTools.h"
 
 #define SCREEN_HEIGHT  QApplication::desktop()->screenGeometry().height()
 #define SCREEN_WIDTH   QApplication::desktop()->screenGeometry().width()
@@ -55,13 +54,13 @@ auto stringWidth = [](QString s)
 #define FONT_WIDTH  stringWidth("4")
 #define STRING_WIDTH(s)  stringWidth(s)
 
-auto graph_height = [] (int scale)
-{
-	int h = (SCREEN_HEIGHT < SCREEN_WIDTH)? SCREEN_HEIGHT : SCREEN_WIDTH;
-	return scale*h/35;
-};
-
+// auto graph_height = [] (int scale)
+// {
+// 	int h = (SCREEN_HEIGHT < SCREEN_WIDTH)? SCREEN_HEIGHT : SCREEN_WIDTH;
+// 	return scale*h/35;
+// };
 // #define CPU_GRAPH_HEIGHT (graph_height(1))
+
 #define CPU_GRAPH_HEIGHT (FONT_HEIGHT*2)
 
 #define KS_VIEW_FILTER_MASK   0x1
@@ -70,9 +69,10 @@ auto graph_height = [] (int scale)
 typedef std::chrono::high_resolution_clock::time_point  hd_time;
 #define GET_TIME std::chrono::high_resolution_clock::now()
 #define GET_DURATION(t0) std::chrono::duration_cast<std::chrono::duration<double>>( \
-std::chrono::high_resolution_clock::now()-t0).count()
+std::chrono::high_resolution_clock::now() - t0).count()
 
 int getPidList(QVector<int> *pids);
+int getPluginList(QStringList *pl);
 
 class KsDataProgressBar : public QWidget {
 	Q_OBJECT
@@ -192,6 +192,11 @@ struct KsTasksCheckBoxDialog : public KsCheckBoxTableDialog
 	KsTasksCheckBoxDialog(struct pevent *pe, bool cond = true, QWidget *parent = 0);
 };
 
+struct KsPluginCheckBoxDialog : public KsCheckBoxTableDialog
+{
+	KsPluginCheckBoxDialog(struct pevent *pe, bool cond = true, QWidget *parent = 0);
+};
+
 class KsDataStore : public QObject
 {
 	Q_OBJECT
@@ -203,7 +208,6 @@ public:
 	KsDataStore();
 	~KsDataStore();
 
-	void loadData(struct tracecmd_input *handle);
 	void loadData(const QString &file);
 // 	void loadData(const QList<QString> &file);
 	void clear();

@@ -124,7 +124,9 @@ void KsCheckBoxDialog::resizeEvent(QResizeEvent* event)
 			   this->height() - FONT_HEIGHT*5);
 }
 
-KsCheckBoxTableDialog::KsCheckBoxTableDialog(const QString &name, bool cond, QWidget *parent)
+KsCheckBoxTableDialog::KsCheckBoxTableDialog(const QString &name,
+					     bool cond,
+					     QWidget *parent)
 : KsCheckBoxDialog(name, cond, parent),
   _table(this)
 {}
@@ -152,6 +154,7 @@ void KsCheckBoxTableDialog::initTable(QStringList headers, int size)
 	_table.setRowCount(size);
 	_table.setShowGrid(false);
 	_table.setHorizontalHeaderLabels(headers);
+	_table.horizontalHeader()->setDefaultAlignment(Qt::AlignLeft);
 	_table.horizontalHeader()->setStretchLastSection(true);
 	_table.setSelectionBehavior(QAbstractItemView::SelectRows);
 	_table.setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -190,7 +193,11 @@ void KsCheckBoxTableDialog::adjustSize()
 	if(_table.verticalHeader()->length() > _cb_widget->height())
 		width += style()->pixelMetric(QStyle::PM_ScrollBarExtent);
 
-	_cb_widget->resize(width, FONT_HEIGHT*1.9*_table.rowCount());
+	int height = _table.horizontalHeader()->height();
+	if (_table.rowCount())
+		height += _table.verticalHeader()->length() + FONT_HEIGHT;
+
+	_cb_widget->resize(width, height);
 
 	setMinimumWidth(_cb_widget->width() +
 			_cb_layout->contentsMargins().left() +
@@ -227,7 +234,9 @@ void KsCheckBoxTableDialog::chechAll(bool st)
 	}
 }
 
-KsCheckBoxTreeDialog::KsCheckBoxTreeDialog(const QString &name, bool cond, QWidget *parent)
+KsCheckBoxTreeDialog::KsCheckBoxTreeDialog(const QString &name,
+					   bool cond,
+					   QWidget *parent)
 : KsCheckBoxDialog(name, cond, parent),
   _tree(this)
 {}
@@ -265,6 +274,9 @@ void KsCheckBoxTreeDialog::initTree()
 
 void KsCheckBoxTreeDialog::adjustSize(int size)
 {
+	if (size == 0)
+		return;
+
 	int width, height;
 	int n = _tree.topLevelItemCount();
         for (int i = 0; i < n; ++i)
@@ -361,13 +373,13 @@ void KsCheckBoxTreeDialog::applyPress()
 KsCpuCheckBoxDialog::KsCpuCheckBoxDialog(struct pevent *pe, bool cond, QWidget *parent)
 : KsCheckBoxTreeDialog("CPUs", cond, parent)
 {
-	int nCpus = pe->cpus;
-	if (!nCpus)
-		return;
-
-	_tree.setStyleSheet(QString("QTreeView::item { height: %1 ;}").arg(FONT_HEIGHT*1.5));
-
-	initTree();
+	int nCpus = 0;
+	if (pe) {
+		nCpus = pe->cpus;
+		QString style = QString("QTreeView::item { height: %1 ;}").arg(FONT_HEIGHT*1.5);
+		_tree.setStyleSheet(style);
+		initTree();
+	}
 
 	_id.resize(nCpus);
 	_cb.resize(nCpus);
@@ -388,24 +400,26 @@ KsCpuCheckBoxDialog::KsCpuCheckBoxDialog(struct pevent *pe, bool cond, QWidget *
 	adjustSize(nCpus);
 }
 
-KsEventsCheckBoxDialog::KsEventsCheckBoxDialog(struct pevent *pe, bool cond, QWidget *parent)
+KsEventsCheckBoxDialog::KsEventsCheckBoxDialog(struct pevent *pe,
+					       bool cond,
+					       QWidget *parent)
 : KsCheckBoxTreeDialog("Events", cond, parent)
 {
-	int n = pe->nr_events;
-	if (!n)
-		return;
-
-	struct event_format **events;
-	events = pevent_list_events(pe, EVENT_SORT_NAME);
-	if (!events)
-		return;
+	int nEvts = 0;
+	if (nEvts) {
+		nEvts = pe->nr_events;
+		struct event_format **events;
+		events = pevent_list_events(pe, EVENT_SORT_NAME);
+		if (!events)
+			return;
+	}
 
 	initTree();
-	_id.resize(n);
-	_cb.resize(n);
+	_id.resize(nEvts);
+	_cb.resize(nEvts);
 
 	int i(0);
-	while (i < n) {
+	while (i < nEvts) {
 		QString sysName(pe->events[i]->system);
 		QTreeWidgetItem *sysItem = new QTreeWidgetItem;
 		sysItem->setText(0, sysName);
@@ -422,12 +436,12 @@ KsEventsCheckBoxDialog::KsEventsCheckBoxDialog(struct pevent *pe, bool cond, QWi
 			sysItem->addChild(evtItem);
 			_id[i] = pe->events[i]->id;
 			_cb[i] = evtItem;
-			if (++i == n)
+			if (++i == nEvts)
 				break;
 		}
 	}
 
-	adjustSize(n);
+	adjustSize(nEvts);
 }
 
 int getPidList(QVector<int> *pids)
@@ -449,7 +463,15 @@ int getPidList(QVector<int> *pids)
 	return pids->size();
 }
 
-KsTasksCheckBoxDialog::KsTasksCheckBoxDialog(struct pevent *pe, bool cond, QWidget *parent)
+int getPluginList(QStringList *pl)
+{
+	*pl = plugins.split(";");
+	return pl->count();
+}
+
+KsTasksCheckBoxDialog::KsTasksCheckBoxDialog(struct pevent *pe,
+					     bool cond,
+					     QWidget *parent)
 : KsCheckBoxTableDialog("Tasks", cond, parent)
 {
 	struct kshark_context *kshark_ctx = NULL;
@@ -483,6 +505,30 @@ KsTasksCheckBoxDialog::KsTasksCheckBoxDialog(struct pevent *pe, bool cond, QWidg
 	adjustSize();
 }
 
+KsPluginCheckBoxDialog::KsPluginCheckBoxDialog(struct pevent *pe,
+					       bool cond,
+					       QWidget *parent)
+: KsCheckBoxTableDialog("Plugins", cond, parent)
+{
+	QStringList pluginList;
+	int n = getPluginList(&pluginList);
+
+	QStringList headers;
+	headers << "Load" << "Name" << "Info";
+
+	initTable(headers, n);
+
+	for (int i = 0; i < n; ++i) {
+		QTableWidgetItem *nameItem = new QTableWidgetItem(pluginList[i]);
+		_table.setItem(i, 1, nameItem);
+		QTableWidgetItem *infoItem = new QTableWidgetItem(" -- ");
+		_table.setItem(i, 2, infoItem);
+		
+	}
+
+	adjustSize();
+}
+
 KsDataStore::KsDataStore()
 : _handle(nullptr), _dataSize(0), _rows(nullptr), _pevt(nullptr)
 {}
@@ -497,9 +543,14 @@ void KsDataStore::loadData(const QString &file)
 	hd_time t0 = GET_TIME;
 
 	clear();
-	_handle = tracecmd_open( file.toStdString().c_str() );
 
-	if(!_handle) {
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+	kshark_open(kshark_ctx, file.toStdString().c_str());
+	_handle = kshark_ctx->handle;
+	_pevt = kshark_ctx->pevt;
+
+	if(!_handle || !_pevt) {
 		qCritical() << "ERROR Loading file " << file;
 		return;
 	}
@@ -512,23 +563,16 @@ void KsDataStore::loadData(const QString &file)
 
 	/* Also, show the function name in the tail for function graph */
 	trace_util_add_option("fgraph:tailprint", "1");
+	
+	if(kshark_ctx->event_handlers == NULL)
+		kshark_handle_plugins(kshark_ctx, KSHARK_PLUGIN_LOAD);
+	else
+		kshark_handle_plugins(kshark_ctx, KSHARK_PLUGIN_RELOAD);
 
-	loadData(_handle);
+	_dataSize = kshark_load_data_entries(kshark_ctx, &_rows);
 
 	double time = GET_DURATION(t0);
 	qInfo() <<"Data loading time: " << 1e3*time << " ms.   entries: " << _dataSize;
-}
-
-// void KsDataStore::loadData(const QList<QString> &file)
-// {
-// 
-// }
-
-void KsDataStore::loadData(struct tracecmd_input *handle)
-{
-	//_dataSize = kshark_load_data_records(handle, &_rows);
-	_dataSize = kshark_load_data_entries(handle, &_rows);
-	_pevt = tracecmd_get_pevent(handle);
 }
 
 void KsDataStore::clear()
@@ -564,6 +608,7 @@ void KsDataStore::applyPosTaskFilter(QVector<int> vec)
 		kshark_filter_add_id(ctx, SHOW_TASK_FILTER, pid);
 
 	kshark_filter_entries(ctx, _rows, _dataSize);
+
 	emit updateView();
 	emit updateGraph();
 
@@ -584,6 +629,7 @@ void KsDataStore::applyNegTaskFilter(QVector<int> vec)
 		kshark_filter_add_id(ctx, HIDE_TASK_FILTER, pid);
 
 	kshark_filter_entries(ctx, _rows, _dataSize);
+
 	emit updateView();
 	emit updateGraph();
 
@@ -605,6 +651,7 @@ void KsDataStore::applyPosEventFilter(QVector<int> vec)
 		kshark_filter_add_id(ctx, SHOW_EVENT_FILTER, pid);
 
 	kshark_filter_entries(ctx, _rows, _dataSize);
+
 	emit updateView();
 	emit updateGraph();
 
@@ -625,6 +672,7 @@ void KsDataStore::applyNegEventFilter(QVector<int> vec)
 		kshark_filter_add_id(ctx, HIDE_EVENT_FILTER, pid);
 
 	kshark_filter_entries(ctx, _rows, _dataSize);
+
 	emit updateView();
 	emit updateGraph();
 
@@ -656,7 +704,9 @@ void KsGraphMark::reset()
 	_task = -1;
 }
 
-bool KsGraphMark::set(const KsDataStore &data, const  KsTimeMap &histo, size_t pos, int grCpu, int grTask)
+bool KsGraphMark::set(const KsDataStore &data,
+		      const  KsTimeMap &histo,
+		      size_t pos, int grCpu, int grTask)
 {
 	_isSet = true;
 	_pos = pos;

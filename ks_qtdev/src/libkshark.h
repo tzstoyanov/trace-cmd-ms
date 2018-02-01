@@ -29,7 +29,7 @@
 #include "trace-filter-hash.h"
 
 // Kernel shark 2
-#include "kshark-plugin.h"
+#include "libkshark-plugin.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,12 +69,32 @@ struct kshark_context {
 	struct filter_task	*hide_event_filter;  /* hash of events to not display */
 	uint8_t			filter_mask;
 
+	struct plugin_list	*plugins;
+
 	struct gui_event_handler *event_handlers;
 };
 
 int kshark_instance(struct kshark_context **ctx);
 
+void kshark_open(struct kshark_context *ctx, const char *file);
+
+size_t kshark_load_data_entries(struct kshark_context *ctx,
+				struct kshark_entry ***data_rows);
+
+size_t kshark_load_data_records(struct kshark_context *ctx,
+				struct pevent_record ***data_rows);
+
+size_t kshark_load_data_matrix(struct kshark_context *ctx,
+			       uint64_t **offset_array,
+			       uint8_t **cpu_array,
+			       uint64_t **ts_array,
+			       uint16_t **pid_array,
+			       int **event_array,
+			       uint8_t **vis_array);
+
 void kshark_close(struct kshark_context *ctx);
+
+void kshark_free(struct kshark_context *ctx);
 
 typedef bool (matching_condition_func)(struct kshark_context*, struct kshark_entry*, int);
 
@@ -105,20 +125,6 @@ void kshark_set_entry_values(struct kshark_context *ctx,
 
 char* kshark_dump_entry(struct kshark_entry *entry, int *size);
 
-size_t kshark_load_data_entries(struct tracecmd_input *handle,
-				struct kshark_entry ***data_rows);
-
-size_t kshark_load_data_records(struct tracecmd_input *handle,
-				struct pevent_record ***data_rows);
-
-size_t kshark_load_data_matrix(struct tracecmd_input *handle,
-			       uint64_t **offset_array,
-			       uint8_t **cpu_array,
-			       uint64_t **ts_array,
-			       uint16_t **pid_array,
-			       int **event_array,
-			       uint8_t **vis_array);
-
 uint32_t kshark_find_entry_row(uint64_t time,
 			       struct kshark_entry **data_rows,
 			       uint32_t l, uint32_t h);
@@ -126,6 +132,7 @@ uint32_t kshark_find_entry_row(uint64_t time,
 uint32_t kshark_find_record_row(uint64_t time,
 				struct pevent_record **data_rows,
 				uint32_t l, uint32_t h);
+
 
 enum kshark_filter_type {
 	SHOW_EVENT_FILTER,

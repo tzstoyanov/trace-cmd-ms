@@ -26,21 +26,6 @@
 #include "KsGLWidget.hpp"
 #include "KsUtils.hpp"
 
-KsGLWidget::KsGLWidget(QWidget *parent)
-: QOpenGLWidget(parent),
-  _hMargin(20),
-  _vMargin(30),
-  _vSpacing(20),
-  _mState(nullptr),
-  _data(nullptr),
-  _rubberBand(QRubberBand::Rectangle, this),
-  _rubberBandOrigin(0, 0),
-  _dpr(1)
-{
-	setMouseTracking(true);
-	connect(&_model, SIGNAL(modelReset()), this, SLOT(update()));
-}
-
 void KsGLWidget::initializeGL()
 {
 	glDisable(GL_TEXTURE_2D);
@@ -74,41 +59,41 @@ void KsGLWidget::paintGL()
 	
 	glClear(GL_COLOR_BUFFER_BIT);
 
+	/* Process and draw all graphs by using the built-in logistic. */
 	makeGraphs(_cpuList, _taskList);
 	for (auto const &g: _graphs)
 		g->draw(_pidColors, 1.5*_dpr);
 
-	for (auto const &s: _shapes)
+	/* Process and draw all plugin-specific shapes. */
+	makePluginShapes(_cpuList, _taskList);
+	for (auto const &s: _shapes) {
+		s->draw();
 		delete s;
+	}
 	_shapes.clear();
 
-	struct kshark_context *kshark_ctx = NULL;
-	kshark_instance(&kshark_ctx);
-	gui_event_handler *evt_handlers;
-	
-	void *vHisto, *vGraph, *vShapes;
-	vHisto = static_cast<void*>(_model.histo());
-	vShapes = static_cast<void*>(&_shapes);
-
-	for (int g = 0; g < _taskList.count(); ++g) {
-		vGraph = static_cast<void*>(_graphs[_cpuList.count() + g]);
-
-		evt_handlers = kshark_ctx->event_handlers;
-		while (evt_handlers) {
-			evt_handlers->draw_func(vHisto, vGraph, _taskList[g], vShapes);
-			evt_handlers = evt_handlers->next;
-		}
-	}
-
-	for (auto const &s: _shapes)
-		s->draw();
-
+	/* Update and draw the markers. */
 	_mState->updateMarkers(*_data, *_model.histo());
 	_mState->markerA().markPtr()->draw();
 	_mState->markerB().markPtr()->draw();
 
 // 	double time = GET_DURATION(t0);
 // 	qInfo() <<"GL paint time: " << 1e3*time << " ms.";
+}
+
+KsGLWidget::KsGLWidget(QWidget *parent)
+: QOpenGLWidget(parent),
+  _hMargin(20),
+  _vMargin(30),
+  _vSpacing(20),
+  _mState(nullptr),
+  _data(nullptr),
+  _rubberBand(QRubberBand::Rectangle, this),
+  _rubberBandOrigin(0, 0),
+  _dpr(1)
+{
+	setMouseTracking(true);
+	connect(&_model, SIGNAL(modelReset()), this, SLOT(update()));
 }
 
 void KsGLWidget::loadData(KsDataStore *data)
@@ -132,13 +117,13 @@ void KsGLWidget::loadData(KsDataStore *data)
 
 	loadColors();
 	/* Make a default Cpu list. All Cpus will be plotted. */
-	_cpuList = {3, 4};
-// 	for (int i = 0; i < nCpus; ++i)
-// 		_cpuList.append(i);
+	_cpuList = {};
+	for (int i = 0; i < nCpus; ++i)
+		_cpuList.append(i);
 
 	/* Make a default task list. No tasks will be plotted. */
-	_taskList = {27, 17812};
-// 	_taskList = {};
+// 	_taskList = {27, 17812};
+	_taskList = {};
 
 	makeGraphs(_cpuList, _taskList);
 
@@ -160,6 +145,31 @@ void KsGLWidget::loadColors()
 void KsGLWidget::setMarkerSM(KsDualMarkerSM *m)
 {
 	_mState = m;
+}
+
+int KsGLWidget::cpuGraphCount() const
+{
+	return _cpuList.count();
+}
+
+int KsGLWidget::taskGraphCount() const
+{
+	return _taskList.count();
+}
+
+int KsGLWidget::graphCount() const
+{
+	return _cpuList.count() + _taskList.count();
+}
+
+int KsGLWidget::height() const
+{
+	return graphCount()*(CPU_GRAPH_HEIGHT + _vSpacing) + _vMargin*2;
+}
+
+int KsGLWidget::dpr() const
+{
+	return _dpr;
 }
 
 void KsGLWidget::updateGraphs()
@@ -215,6 +225,45 @@ void KsGLWidget::makeGraphs(QVector<int> cpuList, QVector<int> taskList)
 	/* Create Task graphs taskList to the taskList. */
 	for (auto const &pid: taskList)
 		addTask(pid);
+}
+
+void KsGLWidget::makePluginShapes(QVector<int> cpuList, QVector<int> taskList)
+{
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+	gui_event_handler *evt_handlers;
+
+	void *histoPtr, *graphPtr, *shapeListPtr;
+	histoPtr = static_cast<void*>(_model.histo());
+	shapeListPtr = static_cast<void*>(&_shapes);
+
+	for (int g = 0; g < cpuList.count(); ++g) {
+		graphPtr = static_cast<void*>(_graphs[g]);
+		evt_handlers = kshark_ctx->event_handlers;
+		while (evt_handlers) {
+			evt_handlers->draw_func(histoPtr,
+						graphPtr,
+						shapeListPtr,
+						cpuList[g],
+						KSHARK_PLUGIN_CPU_DRAW);
+
+			evt_handlers = evt_handlers->next;
+		}
+	}
+
+	for (int g = 0; g < taskList.count(); ++g) {
+		graphPtr = static_cast<void*>(_graphs[cpuList.count() + g]);
+		evt_handlers = kshark_ctx->event_handlers;
+		while (evt_handlers) {
+			evt_handlers->draw_func(histoPtr,
+						graphPtr,
+						shapeListPtr,
+						taskList[g],
+						KSHARK_PLUGIN_TASK_DRAW);
+
+			evt_handlers = evt_handlers->next;
+		}
+	}
 }
 
 void KsGLWidget::addCpu(int cpu)

@@ -32,6 +32,11 @@
 class KsGLWidget : public QOpenGLWidget
 {
 	Q_OBJECT
+
+	void initializeGL() override;
+	void resizeGL(int w, int h) override;
+	void paintGL() override;
+
 public:
 	KsGLWidget(QWidget *parent = NULL);
 
@@ -39,10 +44,22 @@ public:
 	void loadColors();
 	void setMarkerSM(KsDualMarkerSM *m);
 	KsGraphModel *model() {return &_model;}
-	
-	size_t chartCount() {return _cpuList.count() + _taskList.count();}
-	int height() {return (_cpuList.count() + _taskList.count())*(CPU_GRAPH_HEIGHT + _vSpacing) + _vMargin*2;}
-	int dpr() const {return _dpr;}
+
+	int cpuGraphCount()	const;
+	int taskGraphCount()	const;
+	int graphCount()	const;
+	int height()		const;
+	int dpr()		const;
+
+	QVector<KsPlot::Graph*>	_graphs;
+	KsPlot::ShapeList	_shapes;
+	QVector<int>		_cpuList;
+	QVector<int>		_taskList;
+	KsPlot::ColorTable	_pidColors;
+
+	int		_hMargin, _vMargin;
+	unsigned int	_vSpacing;
+
 signals:
 	void found(size_t pos);
 	void zoomIn();
@@ -55,10 +72,6 @@ signals:
 	void deselect();
 
 protected:
-	void initializeGL() override;
-	void resizeGL(int w, int h) override;
-	void paintGL() override;
-
 	void mousePressEvent(QMouseEvent *event);
 	void mouseMoveEvent(QMouseEvent *event);
 	void mouseReleaseEvent(QMouseEvent *event);
@@ -67,11 +80,13 @@ protected:
 	void keyPressEvent(QKeyEvent *event);
 	void keyReleaseEvent(QKeyEvent *event);
 
+private:
 	void updateGraphs();
 	void drawAxisX();
 	void makeGraphs(QVector<int> cpuMask, QVector<int> taskMask);
 	void addCpu(int cpu);
 	void addTask(int pid);
+	void makePluginShapes(QVector<int> cpuMask, QVector<int> taskMask);
 
 	int posInRange(int x);
 	int getCpu(int y);
@@ -84,17 +99,6 @@ protected:
 	bool find(QMouseEvent *event, int variance, size_t *row);
 	bool findAndSelect(QMouseEvent *event);
 
-public:
-	QVector<KsPlot::Graph*>		_graphs;
-	KsPlot::ShapeList		_shapes;
-	QVector<int>			_cpuList;
-	QVector<int>			_taskList;
-	QHash<int, KsPlot::Color>	_pidColors;
-
-	int		_hMargin, _vMargin;
-	unsigned int	_vSpacing;
-
-private:
 	KsGraphModel	 _model;
 	KsDualMarkerSM	*_mState;
 	KsDataStore	*_data;

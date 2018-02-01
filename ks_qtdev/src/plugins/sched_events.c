@@ -23,7 +23,7 @@
 #include <stdio.h>
 
 // Kernel Shark 2
-#include "plugin_sched.h"
+#include "plugins/sched_events.h"
 #include "kshark-plugin.h"
 
 struct plugin_sched_context	*plugin_sched_context_handler = NULL;
@@ -31,10 +31,16 @@ struct plugin_sched_context	*plugin_sched_context_handler = NULL;
 static bool plugin_sched_update_context(struct kshark_context *kshark_ctx)
 {
 	struct event_format 		*event;
-	struct plugin_sched_context 	*plugin_ctx = plugin_sched_context_handler;
+	struct plugin_sched_context 	*plugin_ctx;
 
-	if (!plugin_ctx)
-		return false;
+	if (!plugin_sched_context_handler) {
+		plugin_sched_context_handler =
+		(struct plugin_sched_context*) malloc(sizeof(struct plugin_sched_context));
+	}
+
+	plugin_ctx = plugin_sched_context_handler;
+	plugin_ctx->handle = kshark_ctx->handle;
+	plugin_ctx->pevt = kshark_ctx->pevt;
 
 	event = pevent_find_event_by_name(plugin_ctx->pevt, "sched", "sched_switch");
 	if (!event)
@@ -58,23 +64,6 @@ static bool plugin_sched_update_context(struct kshark_context *kshark_ctx)
 // 	plugin_ctx->sched_wakeup_new_pid_field = pevent_find_any_field(event, "pid");
 
 	return true;
-}
-
-static void plugin_sched_context_new(struct kshark_context *kshark_ctx)
-{
-	if (!plugin_sched_context_handler) {
-		plugin_sched_context_handler =
-		(struct plugin_sched_context*) malloc(sizeof(struct plugin_sched_context));
-	}
-
-	plugin_sched_context_handler->handle = kshark_ctx->handle;
-	plugin_sched_context_handler->pevt = kshark_ctx->pevt;
-
-	int status = plugin_sched_update_context(kshark_ctx);
-	if (status == false) {
-		free(plugin_sched_context_handler);
-		plugin_sched_context_handler = NULL;
-	}
 }
 
 int plugin_get_next_pid(struct plugin_sched_context *ctx, struct pevent_record *record)
@@ -161,25 +150,29 @@ bool plugin_switch_check_pid(struct kshark_context *ctx, struct kshark_entry *e,
 
 static void plugin_sched_load()
 {
+	printf("## plugin_sched_load @@\n");
+
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
-	plugin_sched_context_new(kshark_ctx);
+	plugin_sched_update_context(kshark_ctx);
 	if (!plugin_sched_context_handler)
 		return;
 
 	struct plugin_sched_context *plugin_ctx =
 		plugin_sched_context_handler;
 
-	register_gui_event_handler(&kshark_ctx->event_handlers,
-				   plugin_ctx->sched_switch_event->id,
-				   plugin_sched_edit_entry,
-				   plugin_draw,
-				   plugin_sched_update_context);
+	kshark_register_event_handler(&kshark_ctx->event_handlers,
+				      plugin_ctx->sched_switch_event->id,
+				      plugin_sched_edit_entry,
+				      plugin_draw,
+				      plugin_sched_update_context);
 }
 
 static void plugin_sched_unload()
 {
+	printf("@@ plugin_sched_unload ##\n");
+
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
@@ -189,11 +182,11 @@ static void plugin_sched_unload()
 	struct plugin_sched_context *plugin_ctx = plugin_sched_context_handler;
 
 	if (kshark_ctx) {
-		unregister_gui_event_handler(&kshark_ctx->event_handlers,
-					     plugin_ctx->sched_switch_event->id,
-					     plugin_sched_edit_entry,
-					     plugin_draw,
-					     plugin_sched_update_context);
+		kshark_unregister_event_handler(&kshark_ctx->event_handlers,
+					        plugin_ctx->sched_switch_event->id,
+					        plugin_sched_edit_entry,
+					        plugin_draw,
+					        plugin_sched_update_context);
 	}
 
 	free(plugin_ctx);

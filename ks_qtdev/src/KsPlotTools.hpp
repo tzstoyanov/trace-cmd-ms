@@ -48,12 +48,17 @@ struct Color
 	uint8_t _r, _g, _b;
 };
 
+typedef QHash<int, KsPlot::Color> ColorTable;
+
 struct Shape
 {
 	Shape() : _visible(true), _size(2.) {}
 	virtual ~Shape() {}
 
-	void draw() const {if (_visible) _draw(_color, _size);}
+	void draw() const {
+		if (_visible)
+			_draw(_color, _size);
+	}
 
 	bool	_visible;
 	Color	_color;
@@ -110,15 +115,13 @@ public:
 	bool	  _drawContour;
 };
 
-class Triangle : public Polygon
+struct Triangle : public Polygon
 {
-public:
 	Triangle() : Polygon(3) {}
 };
 
-class Rectangle : public Polygon
+struct Rectangle : public Polygon
 {
-public:
 	Rectangle() : Polygon(4) {}
 };
 
@@ -135,9 +138,8 @@ public:
 	void setMark(int bin, int cpuId, int taskId, KsGLWidget *w, int dpr);
 };
 
-class Bin
+struct Bin
 {
-public:
 	Bin();
 	Bin(size_t id);
 
@@ -163,7 +165,7 @@ public:
 	~Graph();
 
 	size_t size();
-	void draw(const QHash<int, KsPlot::Color> &pidColors, float s = 1);
+	void draw(const ColorTable &pidColors, float s = 1);
 	QList<KsPlot::Shape*> schedSwitchPluginDraw(KsTimeMap *histo, int pid);
 	QList<KsPlot::Shape*> schedWakeupPluginDraw(KsTimeMap *histo, int pid);
 

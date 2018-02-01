@@ -1,14 +1,16 @@
-MESSAGE(" src ...")
+message("\n src ...")
 
-add_library(kshark SHARED kshark-plugin.c
-                          libkshark.c)
+message(STATUS "libkshark")
+add_library(kshark SHARED libkshark.c
+                          libkshark-plugin.c)
 
 target_link_libraries(kshark ${CMAKE_DL_LIBS} ${TRACECMD_LIBRARY})
 set_target_properties(kshark  PROPERTIES SUFFIX	".so.${KS_VERSION_STRING}")
 
 
-IF (PYTHONLIBS_FOUND)
+if (PYTHONLIBS_FOUND)
 
+    message(STATUS "kshark_wrapper")
     add_custom_target(kshark_wrapper ALL DEPENDS kshark
                       COMMENT "Generating libkshark_wrapper.c")
 
@@ -29,47 +31,46 @@ IF (PYTHONLIBS_FOUND)
                                           "${KS_DIR}/build/py/libkshark_wrapper.c"
                                           "${KS_DIR}/src/KsDeff.h")
 
-ENDIF (PYTHONLIBS_FOUND)
+endif (PYTHONLIBS_FOUND)
 
 
-IF (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
+if (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
 
-    set (ks-guiLib_hdr	KsMainWindow.hpp
-			KsTraceViewer.hpp
-			KsTraceGraph.hpp
-			KsGLWidget.hpp
-			KsUtils.hpp)
+    message(STATUS "libkshark-gui")
+
+    set (ks-guiLib_hdr  KsMainWindow.hpp
+                        KsTraceViewer.hpp
+                        KsTraceGraph.hpp
+                        KsGLWidget.hpp
+                        KsUtils.hpp)
 
     QT5_WRAP_CPP(ks-guiLib_hdr_moc ${ks-guiLib_hdr})
 
-    add_library(kshark-gui  SHARED  ${ks-guiLib_hdr_moc}	KsMainWindow.cpp
-								KsTraceViewer.cpp
-								KsTraceGraph.cpp
-								KsModel.cpp
-								KsUtils.cpp
-								KsPlotTools.cpp
-								KsGLWidget.cpp)
+    add_library(kshark-gui  SHARED  ${ks-guiLib_hdr_moc}    KsMainWindow.cpp
+                                                            KsTraceViewer.cpp
+                                                            KsTraceGraph.cpp
+                                                            KsModel.cpp
+                                                            KsUtils.cpp
+                                                            KsPlotTools.cpp
+                                                            KsGLWidget.cpp)
 
     target_link_libraries(kshark-gui ${TRACECMD_LIBRARY}
-				     kshark
-				     ${OPENGL_LIBRARIES}
-				     ${GLUT_LIBRARY}
-				     Qt5::Widgets)
+                                     kshark
+                                     ${OPENGL_LIBRARIES}
+                                     ${GLUT_LIBRARY}
+                                     Qt5::Widgets)
 
-    set_target_properties(kshark-gui  PROPERTIES  SUFFIX	".so.${KS_VERSION_STRING}")
+    set_target_properties(kshark-gui PROPERTIES  SUFFIX ".so.${KS_VERSION_STRING}")
 
 
-    MESSAGE(STATUS "kernelshark")
+    message(STATUS "kernelshark")
     add_executable(kernelshark		kernelshark.cpp)
     target_link_libraries(kernelshark	kshark-gui)
 
-#     add_executable(draw		draw.cpp)
-#     target_link_libraries(draw	kshark-gui)
+    add_subdirectory(plugins)
+    add_subdirectory(prototypes)
 
-    add_library(plugin_sched SHARED  plugin_sched.c PluginSched.cpp)
-    target_link_libraries(plugin_sched kshark-gui)
+endif (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
 
-ENDIF (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
-
-add_executable(dload		dataload.c)
-target_link_libraries(dload	kshark)
+configure_file( ${KS_DIR}/build/deff.h.cmake
+                ${KS_DIR}/src/KsDeff.h)

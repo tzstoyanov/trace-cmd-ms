@@ -470,7 +470,6 @@ void KsTimeMap::setBining(size_t n, uint64_t min, uint64_t max)
 	
 }
 
-
 void KsTimeMap::setBiningInRange(size_t n, uint64_t min, uint64_t max)
 {
 	this->clear();

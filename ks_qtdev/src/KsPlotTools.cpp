@@ -336,7 +336,7 @@ void Graph::setBin(size_t bin, int pidF, int pidB, const Color &c)
 	setBinColor(bin, c);
 }
 
-void Graph::draw(const QHash<int, KsPlot::Color> &pidColors, float s)
+void Graph::draw(const ColorTable &pidColors, float s)
 {
 	/* Start by drawing a line between the base points of the first
 	 * and the last bin. */

@@ -52,6 +52,7 @@ private slots:
 	void hideTasks();
 	void cpuSelect();
 	void taskSelect();
+	void pluginSelect();
 	void aboutInfo();
 
 private:
@@ -85,6 +86,10 @@ private:
 	// Plots menu.
 	QAction _cpuSelectAction;
 	QAction _taskSelectAction;
+
+	// Tools menu.
+	QAction _pluginsAction;
+	QAction _captureAction;
 
 	// Help menu.
 	QAction _aboutAction;

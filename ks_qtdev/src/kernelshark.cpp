@@ -34,7 +34,7 @@
 
 #define default_input_file (char*)"trace.dat"
 static char *input_file;
-// QList<QString> files;
+// QStringList files;
 
 void usage(const char *prog)
 {
@@ -46,6 +46,9 @@ void usage(const char *prog)
 
 int main(int argc, char **argv)
 {
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+
 	int c;
 	while ((c = getopt(argc, argv, "hvi:p:")) != -1) {
 		switch(c) {
@@ -63,7 +66,7 @@ int main(int argc, char **argv)
 			break;
 
 		case 'p':
-			kshark_add_plugin(optarg);
+			kshark_register_plugin(kshark_ctx, optarg);
 			break;
 
 		default:
