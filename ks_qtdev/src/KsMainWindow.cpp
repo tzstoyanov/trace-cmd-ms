@@ -36,8 +36,6 @@
 #include "KsMainWindow.hpp"
 #include "KsDeff.h"
 
-using namespace std;
-
 KsMainWindow::KsMainWindow(QWidget *parent)
 : QMainWindow(parent),
   _view(this),
@@ -81,8 +79,20 @@ KsMainWindow::KsMainWindow(QWidget *parent)
 	connect(&_view, SIGNAL(select(size_t)), &_graph, SLOT(markEntry(size_t)));
 	connect(_graph.glPtr(), SIGNAL(updateView(size_t, bool)), &_view, SLOT(showRow(size_t, bool)));
 	connect(_graph.glPtr(), SIGNAL(deselect()), &_view, SLOT(deselect()));
-	connect(&_data, SIGNAL(updateView()), &_view, SLOT(update()));
-	connect(&_data, SIGNAL(updateGraph()), &_graph, SLOT(update()));
+	connect(&_data, SIGNAL(updateView(KsDataStore *)), &_view, SLOT(update(KsDataStore *)));
+	connect(&_data, SIGNAL(updateGraph(KsDataStore *)), &_graph, SLOT(update(KsDataStore *)));
+
+	int n = getPluginList(&_pluginList);
+	_registeredPlugins.resize(n);
+
+	for (int i = 0; i < n; ++i) {
+		if (_pluginList[i].contains(" default", Qt::CaseInsensitive)) {
+			_pluginList[i].remove(" default", Qt::CaseInsensitive);
+			registerPlugin(_pluginList[i]);
+		} else {
+			_registeredPlugins[i] = false;
+		}
+	}
 }
 
 KsMainWindow::~KsMainWindow()
@@ -196,12 +206,63 @@ void KsMainWindow::createMenus()
 	help->addAction(&_aboutAction);
 }
 
+void KsMainWindow::registerPlugin(QString plugin)
+{
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+
+	for (int i = 0; i < _pluginList.count(); ++i) {
+		char *lib;
+		if (_pluginList[i] == plugin) {
+			asprintf(&lib, "%s/lib/plugin-%s.so", KS_DIR,
+							      plugin.toStdString().c_str());
+
+			kshark_register_plugin(kshark_ctx, lib);
+			_registeredPlugins[i] = true;
+			break;
+		} else if (plugin.contains("/lib/plugin-" +
+			                   _pluginList[i], Qt::CaseInsensitive)) {
+			asprintf(&lib, "%s", plugin.toStdString().c_str());
+
+			kshark_register_plugin(kshark_ctx, lib);
+			_registeredPlugins[i] = true;
+			break;
+		}
+	}
+}
+
+void KsMainWindow::unregisterPlugin(QString plugin)
+{
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+
+	for (int i = 0; i < _pluginList.count(); ++i) {
+		char *lib;
+		if (_pluginList[i] == plugin) {
+			asprintf(&lib, "%s/lib/plugin-%s.so", KS_DIR,
+							      plugin.toStdString().c_str());
+
+			kshark_unregister_plugin(kshark_ctx, lib);
+			_registeredPlugins[i] = false;
+			break;
+		} else if  (plugin.contains("/lib/plugin-" +
+			                   _pluginList[i], Qt::CaseInsensitive)) {
+			asprintf(&lib, "%s", plugin.toStdString().c_str());
+
+			kshark_unregister_plugin(kshark_ctx, lib);
+			_registeredPlugins[i] = false;
+			break;
+		}
+	}
+}
+
 void KsMainWindow::open()
 {
 	QFileDialog* fileDlg = new QFileDialog(this,
 					       "Open File",
 					       KS_DIR,
 					       "trace-cmd files (*.dat);;All files (*)");
+
 	int status = fileDlg->exec();
 	QApplication::processEvents();
 
@@ -252,6 +313,7 @@ void KsMainWindow::showEvents()
 {
 	KsCheckBoxDialog *events_cb = new KsEventsCheckBoxDialog(_data._pevt, true, this);
 	events_cb->setDefault(true);
+
 	connect(events_cb, SIGNAL(apply(QVector<int>)),
 		&_data, SLOT(applyPosEventFilter(QVector<int>)));
 }
@@ -350,13 +412,46 @@ void KsMainWindow::taskSelect()
 
 		tasks_cbd->set(v);
 	}
+
 	connect(tasks_cbd, SIGNAL(apply(QVector<int>)),
 		&_graph, SLOT(taskReDraw(QVector<int>)));
 }
 
+void KsMainWindow::updatePlugins(QVector<int> pluginId)
+{
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+
+	kshark_handle_plugins(kshark_ctx, KSHARK_PLUGIN_UNLOAD);
+	kshark_free_plugin_list(kshark_ctx->plugins);
+	kshark_ctx->plugins = NULL;
+	kshark_free_event_handler_list(kshark_ctx->event_handlers);
+
+	for (auto &p: _registeredPlugins)
+		p = false;
+
+	for (auto const &p: pluginId) {
+		registerPlugin(_pluginList[p]);
+	}
+
+	kshark_handle_plugins(kshark_ctx, KSHARK_PLUGIN_LOAD);
+	_data.reload();
+}
+
 void KsMainWindow::pluginSelect()
 {
-	/*KsCheckBoxDialog *plugin_cbd =*/ new KsPluginCheckBoxDialog(_data._pevt, true, this);
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+
+	KsCheckBoxDialog *plugin_cbd = new KsPluginCheckBoxDialog(_data._pevt,
+								  _pluginList,
+								  true,
+								  this);
+
+	plugin_cbd->set(_registeredPlugins);
+
+	connect(plugin_cbd, SIGNAL(apply(QVector<int>)),
+		this, SLOT(updatePlugins(QVector<int>)));
 }
 
 void KsMainWindow::aboutInfo() {
@@ -442,4 +537,3 @@ void KsMainWindow::loadFile(const QString& fileName)
 
 // void KsMainWindow::loadFiles(const QList<QString> &files)
 // {}
-

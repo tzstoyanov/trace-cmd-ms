@@ -506,24 +506,24 @@ KsTasksCheckBoxDialog::KsTasksCheckBoxDialog(struct pevent *pe,
 }
 
 KsPluginCheckBoxDialog::KsPluginCheckBoxDialog(struct pevent *pe,
+					       QStringList pluginList,
 					       bool cond,
 					       QWidget *parent)
 : KsCheckBoxTableDialog("Plugins", cond, parent)
 {
-	QStringList pluginList;
-	int n = getPluginList(&pluginList);
-
 	QStringList headers;
 	headers << "Load" << "Name" << "Info";
 
+	int n = pluginList.count();
 	initTable(headers, n);
+	_id.resize(n);
 
 	for (int i = 0; i < n; ++i) {
 		QTableWidgetItem *nameItem = new QTableWidgetItem(pluginList[i]);
 		_table.setItem(i, 1, nameItem);
 		QTableWidgetItem *infoItem = new QTableWidgetItem(" -- ");
 		_table.setItem(i, 2, infoItem);
-		
+		_id[i] = i;
 	}
 
 	adjustSize();
@@ -546,11 +546,15 @@ void KsDataStore::loadData(const QString &file)
 
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
-	kshark_open(kshark_ctx, file.toStdString().c_str());
+
+	bool status = kshark_open(kshark_ctx, file.toStdString().c_str());
+	if (!status)
+		return;
+
 	_handle = kshark_ctx->handle;
 	_pevt = kshark_ctx->pevt;
 
-	if(!_handle || !_pevt) {
+	if (!_handle || !_pevt) {
 		qCritical() << "ERROR Loading file " << file;
 		return;
 	}
@@ -564,7 +568,7 @@ void KsDataStore::loadData(const QString &file)
 	/* Also, show the function name in the tail for function graph */
 	trace_util_add_option("fgraph:tailprint", "1");
 	
-	if(kshark_ctx->event_handlers == NULL)
+	if (kshark_ctx->event_handlers == NULL)
 		kshark_handle_plugins(kshark_ctx, KSHARK_PLUGIN_LOAD);
 	else
 		kshark_handle_plugins(kshark_ctx, KSHARK_PLUGIN_RELOAD);
@@ -573,6 +577,28 @@ void KsDataStore::loadData(const QString &file)
 
 	double time = GET_DURATION(t0);
 	qInfo() <<"Data loading time: " << 1e3*time << " ms.   entries: " << _dataSize;
+}
+
+void KsDataStore::reload()
+{
+	hd_time t0 = GET_TIME;
+
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+
+	for (size_t r = 0; r < _dataSize; ++r)
+		free(_rows[r]);
+
+	free(_rows);
+	_rows = nullptr;
+
+	_dataSize = kshark_load_data_entries(kshark_ctx, &_rows);
+
+	emit updateView(this);
+	emit updateGraph(this);
+
+	double time = GET_DURATION(t0);
+	qInfo() <<"Data reloading time: " << 1e3*time << " ms.   entries: " << _dataSize;
 }
 
 void KsDataStore::clear()
@@ -599,18 +625,18 @@ void KsDataStore::applyPosTaskFilter(QVector<int> vec)
 {
 	hd_time t0 = GET_TIME;
 
-	struct kshark_context *ctx = NULL;
-	kshark_instance(&ctx);
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
 
-	kshark_filter_clear(ctx, SHOW_TASK_FILTER);
-	kshark_filter_clear(ctx, HIDE_TASK_FILTER);
+	kshark_filter_clear(kshark_ctx, SHOW_TASK_FILTER);
+	kshark_filter_clear(kshark_ctx, HIDE_TASK_FILTER);
 	for (auto const &pid: vec)
-		kshark_filter_add_id(ctx, SHOW_TASK_FILTER, pid);
+		kshark_filter_add_id(kshark_ctx, SHOW_TASK_FILTER, pid);
 
-	kshark_filter_entries(ctx, _rows, _dataSize);
+	kshark_filter_entries(kshark_ctx, _rows, _dataSize);
 
-	emit updateView();
-	emit updateGraph();
+	emit updateView(this);
+	emit updateGraph(this);
 
 	double time = GET_DURATION(t0);
 	qInfo() <<"Filtering time: " << 1e3*time << " ms.";
@@ -620,18 +646,18 @@ void KsDataStore::applyNegTaskFilter(QVector<int> vec)
 {
 	hd_time t0 = GET_TIME;
 
-	struct kshark_context *ctx = NULL;
-	kshark_instance(&ctx);
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
 
-	kshark_filter_clear(ctx, SHOW_TASK_FILTER);
-	kshark_filter_clear(ctx, HIDE_TASK_FILTER);
+	kshark_filter_clear(kshark_ctx, SHOW_TASK_FILTER);
+	kshark_filter_clear(kshark_ctx, HIDE_TASK_FILTER);
 	for (auto const &pid: vec)
-		kshark_filter_add_id(ctx, HIDE_TASK_FILTER, pid);
+		kshark_filter_add_id(kshark_ctx, HIDE_TASK_FILTER, pid);
 
-	kshark_filter_entries(ctx, _rows, _dataSize);
+	kshark_filter_entries(kshark_ctx, _rows, _dataSize);
 
-	emit updateView();
-	emit updateGraph();
+	emit updateView(this);
+	emit updateGraph(this);
 
 	double time = GET_DURATION(t0);
 	qInfo() <<"Filtering time: " << 1e3*time << " ms.";
@@ -641,19 +667,19 @@ void KsDataStore::applyPosEventFilter(QVector<int> vec)
 {
 	hd_time t0 = GET_TIME;
 
-	struct kshark_context *ctx = NULL;
-	kshark_instance(&ctx);
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
 
-	kshark_filter_clear(ctx, SHOW_EVENT_FILTER);
-	kshark_filter_clear(ctx, HIDE_EVENT_FILTER);
+	kshark_filter_clear(kshark_ctx, SHOW_EVENT_FILTER);
+	kshark_filter_clear(kshark_ctx, HIDE_EVENT_FILTER);
 
 	for (auto const &pid: vec)
-		kshark_filter_add_id(ctx, SHOW_EVENT_FILTER, pid);
+		kshark_filter_add_id(kshark_ctx, SHOW_EVENT_FILTER, pid);
 
-	kshark_filter_entries(ctx, _rows, _dataSize);
+	kshark_filter_entries(kshark_ctx, _rows, _dataSize);
 
-	emit updateView();
-	emit updateGraph();
+	emit updateView(this);
+	emit updateGraph(this);
 
 	double time = GET_DURATION(t0);
 	qInfo() <<"Filtering time: " << 1e3*time << " ms.";
@@ -663,18 +689,18 @@ void KsDataStore::applyNegEventFilter(QVector<int> vec)
 {
 	hd_time t0 = GET_TIME;
 
-	struct kshark_context *ctx = NULL;
-	kshark_instance(&ctx);
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
 
-	kshark_filter_clear(ctx, SHOW_EVENT_FILTER);
-	kshark_filter_clear(ctx, HIDE_EVENT_FILTER);
+	kshark_filter_clear(kshark_ctx, SHOW_EVENT_FILTER);
+	kshark_filter_clear(kshark_ctx, HIDE_EVENT_FILTER);
 	for (auto const &pid: vec)
-		kshark_filter_add_id(ctx, HIDE_EVENT_FILTER, pid);
+		kshark_filter_add_id(kshark_ctx, HIDE_EVENT_FILTER, pid);
 
-	kshark_filter_entries(ctx, _rows, _dataSize);
+	kshark_filter_entries(kshark_ctx, _rows, _dataSize);
 
-	emit updateView();
-	emit updateGraph();
+	emit updateView(this);
+	emit updateGraph(this);
 
 	double time = GET_DURATION(t0);
 	qInfo() <<"Filtering time: " << 1e3*time << " ms.";
@@ -773,12 +799,14 @@ KsDualMarkerSM::KsDualMarkerSM(QWidget *parent)
   _buttonB("Marker B", this),
   _labelDeltaDescr("    A,B Delta: ", this),
   _markA(DualMarkerState::A, Qt::darkGreen),
-  _markB(DualMarkerState::B, Qt::darkCyan)
+  _markB(DualMarkerState::B, Qt::darkCyan),
+  _scCtrlA(this),
+  _scCtrlB(this)
 {
 	_buttonA.setFixedWidth(STRING_WIDTH(" Marker A "));
-// 	_buttonA.setFixedHeight(FONT_HEIGHT*1.5);
 	_buttonB.setFixedWidth(STRING_WIDTH(" Marker B "));
-// 	_buttonB.setFixedHeight(FONT_HEIGHT*1.5);
+// 	_buttonA.setShortcut(QKeySequence(Qt::CTRL + Qt::Key_A));
+// 	_buttonB.setShortcut(QKeySequence(Qt::CTRL + Qt::Key_B));
 
 	for (auto const &l: {&_labelMA, &_labelMB, &_labelDelta}) {
 		l->setFrameStyle(QFrame::Panel | QFrame::Sunken);
@@ -815,6 +843,11 @@ KsDualMarkerSM::KsDualMarkerSM(QWidget *parent)
 				"styleSheet",
 				styleSheetB);
 
+	_scCtrlA.setKey(Qt::CTRL + Qt::Key_A);
+	_scCtrlB.setKey(Qt::CTRL + Qt::Key_B);
+	_stateA->addTransition(&_scCtrlB, SIGNAL(activated()),_stateB);
+	_stateB->addTransition(&_scCtrlA, SIGNAL(activated()),_stateA);
+
 	_stateB->addTransition(&_buttonA, SIGNAL(clicked()), _stateA);
 	connect(&_buttonA, SIGNAL(clicked()), this, SLOT(setStateA()));
 
@@ -847,6 +880,7 @@ void KsDualMarkerSM::setStateA()
 		emit showInGraph(activeMarker().row());
 	}
 }
+
 void KsDualMarkerSM::setStateB()
 {
 	if (_markState !=  DualMarkerState::B) {

@@ -40,6 +40,9 @@ public:
 	void loadFile(const QString &fileName);
 // 	void loadFiles(const QList<QString> &files);
 
+	void registerPlugin(QString plugin);
+	void unregisterPlugin(QString plugin);
+
 private slots:
 	void open();
 	void importFilter();
@@ -54,10 +57,11 @@ private slots:
 	void cpuSelect();
 	void taskSelect();
 	void pluginSelect();
+	void updatePlugins(QVector<int>);
 	void aboutInfo();
 
 private:
-	/** Data manager. */
+	/** Data Manager. */
 	KsDataStore	_data;
 
 	/** Widget for reading and searching in the trace data. */
@@ -69,6 +73,12 @@ private:
 	/** Dual Marker State Machine. */
 	KsDualMarkerSM  _mState;
 
+	/** A list of available plugins. */
+	QStringList 	_pluginList;
+
+	/** A list of registered plugins. */
+	QVector<bool>	_registeredPlugins;
+	
 	// File menu.
 	QAction _openAction;
 	QAction _importFilterAction;
@@ -98,6 +108,9 @@ private:
 	void resizeEvent(QResizeEvent* event);
 	void createActions();
 	void createMenus();
+
+	void registerPlugin(int pluginId);
+	void unregisterPlugin(int pluginId);
 };
 
 // class KsConcentratorMainWindow : public

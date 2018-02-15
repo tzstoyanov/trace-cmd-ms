@@ -51,6 +51,8 @@ public:
 	int height()		const;
 	int dpr()		const;
 
+	void findGraphIds(const kshark_entry &e, int *graphCpu, int *graphTask);
+
 	QVector<KsPlot::Graph*>	_graphs;
 	KsPlot::ShapeList	_shapes;
 	QVector<int>		_cpuList;

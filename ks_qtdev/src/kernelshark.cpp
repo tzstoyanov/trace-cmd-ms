@@ -42,15 +42,19 @@ void usage(const char *prog)
 	printf("  -h	Display this help message\n");
 	printf("  -v	Display version and exit\n");
 	printf("  -i	input_file, default is %s\n", default_input_file);
+	printf("  -p	register plugin, use plugin name, absolute or relative path\n");
+	printf("  -u	unregister plugin, use plugin name or absolute path\n");
 }
 
 int main(int argc, char **argv)
 {
-	struct kshark_context *kshark_ctx = NULL;
-	kshark_instance(&kshark_ctx);
+	QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+	QApplication a(argc, argv);
+
+	KsMainWindow ks;
 
 	int c;
-	while ((c = getopt(argc, argv, "hvi:p:")) != -1) {
+	while ((c = getopt(argc, argv, "hvi:p:u:")) != -1) {
 		switch(c) {
 		case 'h':
 			usage(argv[0]);
@@ -66,7 +70,11 @@ int main(int argc, char **argv)
 			break;
 
 		case 'p':
-			kshark_register_plugin(kshark_ctx, optarg);
+			ks.registerPlugin(QString(optarg));
+			break;
+
+		case 'u':
+			ks.unregisterPlugin(QString(optarg));
 			break;
 
 		default:
@@ -82,11 +90,6 @@ int main(int argc, char **argv)
 
 // 	if (!input_file)
 // 		input_file = default_input_file;
-
-	QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-	QApplication a(argc, argv);
-
-	KsMainWindow ks;
 
 // 	if (files.count())
 // 		ks.loadFiles(files);

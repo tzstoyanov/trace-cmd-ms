@@ -41,17 +41,19 @@ extern "C" {
 #define KS_FILTERED_BIN		-2
 
 struct kshark_entry {
-	struct kshark_entry *next;
-
-	uint64_t	offset;
+	uint8_t		visible;
 	uint8_t		cpu;
-	uint64_t	ts;
+
 	int16_t		pid;
 
 	int		event_id;
-	uint8_t		visible;
+
+	uint64_t	offset;
+	uint64_t	ts;
+
+	struct kshark_entry *next;
 };
-	
+
 struct task_list {
 	struct task_list	*next;
 	int			 pid;
@@ -74,27 +76,27 @@ struct kshark_context {
 	struct gui_event_handler *event_handlers;
 };
 
-int kshark_instance(struct kshark_context **ctx);
+int kshark_instance(struct kshark_context **kshark_ctx);
 
-void kshark_open(struct kshark_context *ctx, const char *file);
+bool kshark_open(struct kshark_context *kshark_ctx, const char *file);
 
-size_t kshark_load_data_entries(struct kshark_context *ctx,
+size_t kshark_load_data_entries(struct kshark_context *kshark_ctx,
 				struct kshark_entry ***data_rows);
 
-size_t kshark_load_data_records(struct kshark_context *ctx,
+size_t kshark_load_data_records(struct kshark_context *kshark_ctx,
 				struct pevent_record ***data_rows);
 
-size_t kshark_load_data_matrix(struct kshark_context *ctx,
-			       uint64_t **offset_array,
-			       uint8_t **cpu_array,
-			       uint64_t **ts_array,
-			       uint16_t **pid_array,
-			       int **event_array,
-			       uint8_t **vis_array);
+size_t kshark_load_data_matrix(struct kshark_context *kshark_ctx,
+			       uint64_t	**offset_array,
+			       uint8_t	**cpu_array,
+			       uint64_t	**ts_array,
+			       uint16_t	**pid_array,
+			       int	**event_array,
+			       uint8_t	**vis_array);
 
-void kshark_close(struct kshark_context *ctx);
+void kshark_close(struct kshark_context *kshark_ctx);
 
-void kshark_free(struct kshark_context *ctx);
+void kshark_free(struct kshark_context *kshark_ctx);
 
 typedef bool (matching_condition_func)(struct kshark_context*, struct kshark_entry*, int);
 
@@ -119,11 +121,28 @@ char *kshark_get_info(struct pevent *pevt,
 
 char *kshark_get_info_lazy(struct kshark_entry *entry);
 
-void kshark_set_entry_values(struct kshark_context *ctx,
+void kshark_set_entry_values(struct kshark_context *kshark_ctx,
 			     struct pevent_record *record,
 			     struct kshark_entry *entry);
 
 char* kshark_dump_entry(struct kshark_entry *entry, int *size);
+
+enum kshark_filter_type {
+	SHOW_EVENT_FILTER,
+	HIDE_EVENT_FILTER,
+	SHOW_TASK_FILTER,
+	HIDE_TASK_FILTER,
+};
+
+void kshark_filter_add_id(struct kshark_context *kshark_ctx, int filter_id, int id);
+
+void kshark_filter_clear(struct kshark_context *kshark_ctx, int filter_id);
+
+size_t kshark_filter_entries(struct kshark_context *kshark_ctx,
+			     struct kshark_entry **data_rows,
+			     size_t n_entries);
+
+bool kshark_filter_task_find_pid(struct filter_task *filter, int pid);
 
 uint32_t kshark_find_entry_row(uint64_t time,
 			       struct kshark_entry **data_rows,
@@ -133,25 +152,8 @@ uint32_t kshark_find_record_row(uint64_t time,
 				struct pevent_record **data_rows,
 				uint32_t l, uint32_t h);
 
-
-enum kshark_filter_type {
-	SHOW_EVENT_FILTER,
-	HIDE_EVENT_FILTER,
-	SHOW_TASK_FILTER,
-	HIDE_TASK_FILTER,
-};
-
-void kshark_filter_add_id(struct kshark_context *ctx, int filter_id, int id);
-
-void kshark_filter_clear(struct kshark_context *ctx, int filter_id);
-
-size_t kshark_filter_entries(struct kshark_context *ctx,
-			     struct kshark_entry **data_rows,
-			     size_t n_entries);
-
-void kshark_convert_nano(uint64_t time, uint64_t *sec, uint64_t *usec);
-
-bool kshark_filter_task_find_pid(struct filter_task *filter, int pid);
+bool kshark_check_pid(struct kshark_context *kshark_ctx,
+		      struct kshark_entry *e, int pid);
 
 struct kshark_entry *kshark_get_entry_front(size_t first,
 					    size_t n,
@@ -194,6 +196,8 @@ struct kshark_entry *kshark_get_entry_by_pid_front(size_t first,
 						   bool vis_only,
 						   int vis_mask,
 						   struct kshark_entry **data);
+
+void kshark_convert_nano(uint64_t time, uint64_t *sec, uint64_t *usec);
 
 #ifdef __cplusplus
 }

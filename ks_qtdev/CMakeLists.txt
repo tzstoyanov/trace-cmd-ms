@@ -54,4 +54,4 @@ if (GTEST_FOUND)
 
 endif (GTEST_FOUND)
 
-message("\n")
+message("")

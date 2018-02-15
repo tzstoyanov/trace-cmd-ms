@@ -55,7 +55,7 @@ private slots:
 	void showRow(size_t r, bool mark);
 	void deselect();
 	void markSwitch();
-	void update();
+	void update(KsDataStore *data = nullptr);
 
 private:
 	void resizeToContents();

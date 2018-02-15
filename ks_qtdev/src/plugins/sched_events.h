@@ -48,8 +48,6 @@ int plugin_get_next_pid(struct plugin_sched_context *ctx, struct pevent_record *
 
 int plugin_get_wakeup_pid(struct plugin_sched_context *ctx, struct pevent_record *record);
 
-bool plugin_check_pid(struct kshark_context *ctx, struct kshark_entry *e, int pid);
-
 bool plugin_wakeup_check_pid(struct kshark_context *ctx, struct kshark_entry *e, int pid);
 
 bool plugin_switch_check_pid(struct kshark_context *ctx, struct kshark_entry *e, int pid);

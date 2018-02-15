@@ -69,18 +69,14 @@ static bool plugin_sched_update_context(struct kshark_context *kshark_ctx)
 int plugin_get_next_pid(struct plugin_sched_context *ctx, struct pevent_record *record)
 {
 	unsigned long long val;
-
 	pevent_read_number_field(ctx->sched_switch_next_field, record->data, &val);
-
 	return val;
 }
 
 int plugin_get_wakeup_pid(struct plugin_sched_context *ctx, struct pevent_record *record)
 {
 	unsigned long long val;
-
 	pevent_read_number_field(ctx->sched_wakeup_pid_field, record->data, &val);
-
 	return val;
 }
 
@@ -100,14 +96,6 @@ void plugin_sched_edit_entry(struct kshark_context *ctx,
 	entry->pid = plugin_get_next_pid(plugin_sched_context_handler, rec);
 }
 
-bool plugin_check_pid(struct kshark_context *ctx, struct kshark_entry *e, int pid)
-{
-	if (e->pid == pid)
-		return true;
-
-	return false;
-}
-
 bool plugin_wakeup_check_pid(struct kshark_context *ctx, struct kshark_entry *e, int pid)
 {
 	if (e->pid == pid)
@@ -121,6 +109,7 @@ bool plugin_wakeup_check_pid(struct kshark_context *ctx, struct kshark_entry *e,
 		struct pevent_record *record = tracecmd_read_at(plugin_ctx->handle,
 								e->offset,
 								NULL);
+
 		if (plugin_get_wakeup_pid(plugin_ctx, record) == pid)
 			return true;
 	}
@@ -140,13 +129,13 @@ bool plugin_switch_check_pid(struct kshark_context *ctx, struct kshark_entry *e,
 		struct pevent_record *record = tracecmd_read_at(plugin_ctx->handle,
 								e->offset,
 								NULL);
+
 		if (pevent_data_pid(plugin_ctx->pevt, record) == pid)
 			return true;
 	}
 
 	return false;
 }
-
 
 static void plugin_sched_load()
 {
@@ -155,9 +144,11 @@ static void plugin_sched_load()
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
-	plugin_sched_update_context(kshark_ctx);
-	if (!plugin_sched_context_handler)
+	if (!plugin_sched_update_context(kshark_ctx)) {
+		free(plugin_sched_context_handler);
+		plugin_sched_context_handler = NULL;
 		return;
+	}
 
 	struct plugin_sched_context *plugin_ctx =
 		plugin_sched_context_handler;
@@ -183,10 +174,10 @@ static void plugin_sched_unload()
 
 	if (kshark_ctx) {
 		kshark_unregister_event_handler(&kshark_ctx->event_handlers,
-					        plugin_ctx->sched_switch_event->id,
-					        plugin_sched_edit_entry,
-					        plugin_draw,
-					        plugin_sched_update_context);
+						plugin_ctx->sched_switch_event->id,
+						plugin_sched_edit_entry,
+						plugin_draw,
+						plugin_sched_update_context);
 	}
 
 	free(plugin_ctx);

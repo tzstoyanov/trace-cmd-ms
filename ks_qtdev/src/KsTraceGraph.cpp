@@ -261,45 +261,18 @@ void KsTraceGraph::setPointerInfo(size_t i)
 	QCoreApplication::processEvents();
 }
 
-void KsTraceGraph::markEntry(size_t pos)
+void KsTraceGraph::markEntry(size_t row)
 {
-	int cpu = _data->_rows[pos]->cpu;
-	int pid = _data->_rows[pos]->pid;
-	int graph = 0, graphCpu = -1, graphTask = -1;
-	bool cpuFound = false, taskFound = false;
-
-	/* Loop over all Cpu graphs and try to find the one that
-	 * contains the entry. */
-	for (auto const &c: _glWindow._cpuList) {
-		if (c == cpu) {
-			cpuFound = true;
-			break;
-		}
-		++graph;
-	}
-
-	if (cpuFound)
-		graphCpu = graph;
-
-	/* Loop over all Task graphs and try to find the one that
-	 * contains the entry. */
-	graph = _glWindow._cpuList.count();
-	for (auto const &p: _glWindow._taskList) {
-		if (p == pid) {
-			taskFound = true;
-			break;
-		}
-		++graph;
-	}
-
-	if (taskFound)
-		graphTask = graph;
-	else
-		graph = graphCpu;
+	int graph, cpuGrId, taskGrId;
+	_glWindow.findGraphIds(*_data->_rows[row], &cpuGrId, &taskGrId);
 
 	/* If a Task graph has been found, this Task graph will be
 	 * visible. If no Task graph has been found, make visible
 	 * the corresponding Cpu graph. */
+	if (taskGrId >= 0)
+		graph = taskGrId;
+	else
+		graph = cpuGrId;
 
 	_scrollArea.ensureVisible(0,
 				  _legendAxisX.height() +
@@ -309,29 +282,55 @@ void KsTraceGraph::markEntry(size_t pos)
 				  50,
 				  CPU_GRAPH_HEIGHT/2 + _glWindow._vSpacing/2);
 
-	_glWindow.model()->shiftTo(_data->_rows[pos]->ts);
-	_mState->activeMarker().set(*_data, *_glWindow.model()->histo(), pos, graphCpu, graphTask);
+	_glWindow.model()->shiftTo(_data->_rows[row]->ts);
+	_mState->activeMarker().set(*_data,
+				    *_glWindow.model()->histo(),
+				    row, cpuGrId, taskGrId);
+
 	_mState->updateLabels(*_glWindow.model()->histo());
 	_mState->updateMarkers(*_data, *_glWindow.model()->histo());
 }
 
+void KsTraceGraph::markerReDraw()
+{
+	int cpuGrId, taskGrId;
+	size_t row;
+
+	if (_mState->markerA().isSet()) {
+		row = _mState->markerA().row();
+		_glWindow.findGraphIds(*_data->_rows[row], &cpuGrId, &taskGrId);
+		_mState->markerA().set(*_data,
+				       *_glWindow.model()->histo(),
+				       row, cpuGrId, taskGrId);
+	}
+
+	if (_mState->markerB().isSet()) {
+		row = _mState->markerB().row();
+		_glWindow.findGraphIds(*_data->_rows[row], &cpuGrId, &taskGrId);
+		_mState->markerB().set(*_data,
+				       *_glWindow.model()->histo(),
+				       row, cpuGrId, taskGrId);
+	}
+}
+
 void KsTraceGraph::cpuReDraw(QVector<int> v)
 {
-	_mState->reset();
 	_glWindow._cpuList = v;
+	markerReDraw();
+
 	update();
 }
 
 void KsTraceGraph::taskReDraw(QVector<int> v)
 {
-	_mState->reset();
 	_glWindow._taskList = v;
+	markerReDraw();
 	update();
 }
 
-void KsTraceGraph::update()
+void KsTraceGraph::update(KsDataStore *data)
 {
-	_glWindow.model()->update();
+	_glWindow.model()->update(data);
 	updateGraphLegends();
 	updateTimeLegends();
 	updateGeom();

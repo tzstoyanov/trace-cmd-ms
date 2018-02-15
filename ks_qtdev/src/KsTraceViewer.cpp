@@ -161,9 +161,14 @@ void KsTraceViewer::reset()
 	resizeToContents();
 }
 
-void KsTraceViewer::update()
+void KsTraceViewer::update(KsDataStore *data)
 {
-	_model.update();
+	/* The Proxy model has to be updated first! */ 
+	_proxyModel.update(data);
+	_model.update(data);
+
+	if (_mState->activeMarker().isSet())
+		showRow(_mState->activeMarker().row(), true);
 }
 
 void KsTraceViewer::searchEditColumn(int index)
@@ -399,9 +404,6 @@ size_t KsTraceViewer::searchItems(int column,
 		 * the selected one. */
 		while (*_it <= row)
 			++_it;
-			
-		
-		
 	} else {
 		// Move the iterator to the beginning of the match list.
 		_view.clearSelection();

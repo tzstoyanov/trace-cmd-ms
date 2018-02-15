@@ -87,8 +87,7 @@ static void xenomai_context_new(struct kshark_context *kshark_ctx)
 	}
 }
 
-static int cobalt_get_next_pid(struct xenomai_context *ctx,
-			       struct pevent_record *record)
+int cobalt_get_next_pid(struct xenomai_context *ctx, struct pevent_record *record)
 {
 	long long unsigned int val;
 
@@ -96,6 +95,26 @@ static int cobalt_get_next_pid(struct xenomai_context *ctx,
 					      record->data, &val);
 
 	return val;
+}
+
+bool cobalt_switch_check_pid(struct kshark_context *ctx, struct kshark_entry *e, int pid)
+{
+	if (e->pid == pid)
+		return true;
+
+	struct xenomai_context *plugin_ctx = xenomai_context_handler;
+
+	if (plugin_ctx->cobalt_switch_event &&
+	    e->event_id == plugin_ctx->cobalt_switch_event->id) {
+		struct pevent_record *record = tracecmd_read_at(plugin_ctx->handle,
+								e->offset,
+								NULL);
+
+		if (pevent_data_pid(plugin_ctx->pevt, record) == pid)
+			return true;
+	}
+
+	return false;
 }
 
 // static int cobalt_get_prev_state(struct xenomai_context *ctx,
@@ -122,16 +141,36 @@ static int cobalt_get_next_pid(struct xenomai_context *ctx,
 // 	offset &= COBALT_COMM_OFFSET_MASK;
 // 	*comm = record->data + offset;
 // }
-// 
-// static int cobalt_get_wakeup_pid(struct xenomai_context *ctx,
-// 				 struct pevent_record *record,
-// 				 int *pid)
-// {
-// 	long long unsigned int val;
-// 	pevent_read_number_field(ctx->cobalt_wakeup_pid_field,
-// 				 record->data, &val);
-// 	return val;
-// }
+
+int cobalt_get_wakeup_pid(struct xenomai_context *ctx, struct pevent_record *record)
+{
+	long long unsigned int val;
+	pevent_read_number_field(ctx->cobalt_wakeup_pid_field,
+				 record->data, &val);
+	return val;
+}
+
+bool cobalt_wakeup_check_pid(struct kshark_context *ctx, struct kshark_entry *e, int pid)
+{
+	if (e->pid == pid)
+		return true;
+
+	struct xenomai_context *plugin_ctx = xenomai_context_handler;
+	
+	if (plugin_ctx &&
+	    plugin_ctx->cobalt_wakeup_event &&
+	    e->event_id == plugin_ctx->cobalt_wakeup_event->id) {
+		struct pevent_record *record = tracecmd_read_at(plugin_ctx->handle,
+								e->offset,
+								NULL);
+
+		if (cobalt_get_wakeup_pid(plugin_ctx, record) == pid)
+			return true;
+	}
+
+	return false;
+}
+
 
 void cobalt_edit_entry(struct kshark_context *ctx,
 			   struct pevent_record *rec,
@@ -151,13 +190,13 @@ static void plugin_xenomai_load()
 	if (!xenomai_context_handler)
 		return;
 
-// 	struct xenomai_context *plugin_ctx = xenomai_context_handler;
-// 
-// 	register_gui_event_handler(&kshark_ctx->event_handlers,
-// 				   plugin_ctx->sched_switch_event->id,
-// 				   plugin_sched_edit_entry,
-// 				   plugin_draw,
-// 				   plugin_sched_update_context);
+	struct xenomai_context *plugin_ctx = xenomai_context_handler;
+
+	kshark_register_event_handler(&kshark_ctx->event_handlers,
+				      plugin_ctx->cobalt_switch_event->id,
+				      cobalt_edit_entry,
+				      xenomai_draw,
+				      xenomai_update_context);
 }
 
 static void plugin_xenomai_unload()
@@ -172,13 +211,13 @@ static void plugin_xenomai_unload()
 
 	struct xenomai_context *plugin_ctx = xenomai_context_handler;
 
-// 	if (kshark_ctx) {
-// 		unregister_gui_event_handler(&kshark_ctx->event_handlers,
-// 					     plugin_ctx->sched_switch_event->id,
-// 					     plugin_sched_edit_entry,
-// 					     plugin_draw,
-// 					     plugin_sched_update_context);
-// 	}
+	if (kshark_ctx) {
+		kshark_unregister_event_handler(&kshark_ctx->event_handlers,
+						plugin_ctx->cobalt_switch_event->id,
+						cobalt_edit_entry,
+						xenomai_draw,
+						xenomai_update_context);
+	}
 
 	free(plugin_ctx);
 	xenomai_context_handler = NULL;

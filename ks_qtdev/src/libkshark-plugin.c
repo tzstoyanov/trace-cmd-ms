@@ -106,23 +106,6 @@ void kshark_unregister_event_handler(struct gui_event_handler **handlers,
 	}
 }
 
-
-void kshark_unregister_plugin(struct kshark_context *ctx, const char *file)
-{
-	struct plugin_list **last = &ctx->plugins;
-	struct plugin_list *list;
-
-	for (list = ctx->plugins; list; list = list->next) {
-		if (strcmp(list->file, file) != 0) {
-			*last = list->next;
-			free(list);
-			return;
-		}
-
-		last = &list->next;
-	}
-}
-
 void kshark_free_event_handler_list(struct gui_event_handler *handlers)
 {
 	struct gui_event_handler *last;
@@ -134,29 +117,52 @@ void kshark_free_event_handler_list(struct gui_event_handler *handlers)
 	}
 }
 
-void kshark_register_plugin(struct kshark_context *ctx, const char *file)
+void kshark_register_plugin(struct kshark_context *kshark_ctx, char *file)
 {
 	struct stat st;
 	int ret;
-	struct plugin_list *plugin;
+	struct plugin_list *plugin = kshark_ctx->plugins;
+
+	while (plugin) {
+		if (strcmp(plugin->file, file) == 0)
+			return;
+
+		plugin = plugin->next;
+	}
 
 	ret = stat(file, &st);
 	if (ret < 0) {
-		fprintf(stderr, "plugin %s not found \n", file);
+		fprintf(stderr, "plugin %s not found\n", file);
 		return;
 	}
 
 	plugin = calloc(sizeof(struct plugin_list), 1);
 	if (!plugin) {
-		fprintf(stderr, "failed to allocate memory for plugin \n");
+		fprintf(stderr, "failed to allocate memory for plugin\n");
 		return;
 	}
 
 	plugin->file = file;
-	plugin->next = ctx->plugins;
-	ctx->plugins = plugin;
+	plugin->next = kshark_ctx->plugins;
+	kshark_ctx->plugins = plugin;
 }
 
+void kshark_unregister_plugin(struct kshark_context *kshark_ctx, char *file)
+{
+	struct plugin_list **last = &kshark_ctx->plugins;
+	struct plugin_list *list;
+
+	for (list = kshark_ctx->plugins; list; list = list->next) {
+		if (strcmp(list->file, file) == 0) {
+			*last = list->next;
+			free(list->file);
+			free(list);
+			return;
+		}
+
+		last = &list->next;
+	}
+}
 
 void kshark_free_plugin_list(struct plugin_list *plugins)
 {
@@ -169,7 +175,7 @@ void kshark_free_plugin_list(struct plugin_list *plugins)
 	}
 }
 
-void kshark_handle_plugins(struct kshark_context *ctx, int task_id)
+void kshark_handle_plugins(struct kshark_context *kshark_ctx, int task_id)
 {
 	kshark_plugin_load_func func;
 	struct plugin_list *plugin;
@@ -199,18 +205,18 @@ void kshark_handle_plugins(struct kshark_context *ctx, int task_id)
 		return;
 	}
 
-	for (plugin = ctx->plugins; plugin; plugin = plugin->next) {
+	for (plugin = kshark_ctx->plugins; plugin; plugin = plugin->next) {
 		handle = dlopen(plugin->file, RTLD_NOW | RTLD_GLOBAL);
 
 		if (!handle) {
-			fprintf(stderr, "cound not load plugin '%s'\n%s\n",
+			fprintf(stderr, "cannot load plugin '%s'\n%s\n",
 				plugin->file, dlerror());
 			continue;
 		}
 
 		func = dlsym(handle, func_name);
 		if (!func) {
-			fprintf(stderr, "cound not find func '%s' in plugin '%s'\n%s\n",
+			fprintf(stderr, "cannot find func '%s' in plugin '%s'\n%s\n",
 				func_name, plugin->file, dlerror());
 			continue;
 		}
@@ -219,8 +225,8 @@ void kshark_handle_plugins(struct kshark_context *ctx, int task_id)
 	}
 
 // 	if (task_id == KSHARK_PLUGIN_UNLOAD) {
-// 		while ((plugin = ctx->plugins)) {
-// 			ctx->plugins = plugin->next;
+// 		while ((plugin = kshark_ctx->plugins)) {
+// 			kshark_ctx->plugins = plugin->next;
 // 			free(plugin);
 // 		}
 // 

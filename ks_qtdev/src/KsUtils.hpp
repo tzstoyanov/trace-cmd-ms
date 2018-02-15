@@ -194,7 +194,10 @@ struct KsTasksCheckBoxDialog : public KsCheckBoxTableDialog
 
 struct KsPluginCheckBoxDialog : public KsCheckBoxTableDialog
 {
-	KsPluginCheckBoxDialog(struct pevent *pe, bool cond = true, QWidget *parent = 0);
+	KsPluginCheckBoxDialog(struct pevent *pe,
+			       QStringList pluginList,
+			       bool cond = true,
+			       QWidget *parent = 0);
 };
 
 class KsDataStore : public QObject
@@ -209,13 +212,14 @@ public:
 	~KsDataStore();
 
 	void loadData(const QString &file);
+	void reload();
 // 	void loadData(const QList<QString> &file);
 	void clear();
 	size_t size() const {return _dataSize;}
 
 signals:
-	void updateView();
-	void updateGraph();
+	void updateView(KsDataStore *);
+	void updateGraph(KsDataStore *);
 
 private slots:
 	void applyPosTaskFilter(QVector<int>);
@@ -332,6 +336,7 @@ private:
 
 	DualMarkerState	 _markState;
 	KsGraphMark	 _markA, _markB;
+	QShortcut        _scCtrlA, _scCtrlB;
 };
 
 #endif

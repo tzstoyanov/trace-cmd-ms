@@ -56,10 +56,15 @@ void KsGLWidget::resizeGL(int w, int h)
 void KsGLWidget::paintGL()
 {
 // 	hd_time t0 = GET_TIME;
-	
+
+	/* Clear the canvas and prepare for a new drawing. */
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	/* Process and draw all graphs by using the built-in logistic. */
+	/* Draw the time axis. */
+	if(_data)
+		drawAxisX();
+
+	/* Process and draw all graphs by using the built-in logic. */
 	makeGraphs(_cpuList, _taskList);
 	for (auto const &g: _graphs)
 		g->draw(_pidColors, 1.5*_dpr);
@@ -172,6 +177,43 @@ int KsGLWidget::dpr() const
 	return _dpr;
 }
 
+void KsGLWidget::findGraphIds(const kshark_entry &e, int *graphCpu, int *graphTask)
+{
+	int graph(0);
+	bool cpuFound(false), taskFound(false);
+
+	/* Loop over all Cpu graphs and try to find the one that
+	 * contains the entry. */
+	for (auto const &c: _cpuList) {
+		if (c == e.cpu) {
+			cpuFound = true;
+			break;
+		}
+		++graph;
+	}
+
+	if (cpuFound)
+		*graphCpu = graph;
+	else
+		*graphCpu = -1;
+	
+	/* Loop over all Task graphs and try to find the one that
+	 * contains the entry. */
+	graph = _cpuList.count();
+	for (auto const &p: _taskList) {
+		if (p == e.pid) {
+			taskFound = true;
+			break;
+		}
+		++graph;
+	}
+
+	if (taskFound)
+		*graphTask = graph;
+	else
+		*graphTask = -1;
+}
+
 void KsGLWidget::updateGraphs()
 {
 	/* From the size of the widget, calculate the number of bins.
@@ -214,9 +256,6 @@ void KsGLWidget::makeGraphs(QVector<int> cpuList, QVector<int> taskList)
 
 	if (!_data || !_data->size())
 		return;
-
-	/* Draw the time axis. */
-	drawAxisX();
 	
 	/* Create Cpu graphs according to the cpuList. */
 	for (auto const &cpu: cpuList)
@@ -325,7 +364,7 @@ void KsGLWidget::addCpu(int cpu)
 
 void KsGLWidget::addTask(int pid)
 {
-	int cpu, pidF(0), lastCpu(-1);
+	int cpu, pidF(0), pidB(0), lastCpu(-1);
 	int nBins = _model.histo()->size();
 	KsPlot::Graph *graph = new KsPlot::Graph(nBins);
 	graph->setHMargin(_hMargin);
@@ -344,13 +383,13 @@ void KsGLWidget::addTask(int pid)
 			col.setRainbowsColor(1 + cpu*2);
 
 			/* Data from thе Task has been found in this bin. */
-			if (pid == pidF) {
+			if (pid == pidF && pid == pidB) {
 				/* . */
 				graph->setBin(b, pid, pid, col);
 			}
 			else {
 				/* . */
-				graph->setBin(b, pidF, KS_FILTERED_BIN, col);
+				graph->setBin(b, pidF, pidB, col);
 			}
 
 			lastCpu = cpu;
@@ -373,7 +412,8 @@ void KsGLWidget::addTask(int pid)
 	int b = 0;
 	cpu = _model.histo()->getCpu(b, pid, false);
 	pidF = _model.histo()->getPidFront(b, cpu, false);
-	
+	pidB = _model.histo()->getPidBack(b, cpu, false);
+
 	if (cpu >= 0) {
 		/* The Task is active. Set this bin. */
 		set_bin(b);
@@ -400,6 +440,7 @@ void KsGLWidget::addTask(int pid)
 	for (int b = 1; b < nBins; ++b) {
 		cpu = _model.histo()->getCpu(b, pid, false);
 		pidF = _model.histo()->getPidFront(b, cpu, false);
+		pidB = _model.histo()->getPidBack(b, cpu, false);
 		set_bin(b);
 	}
 
@@ -487,9 +528,10 @@ bool KsGLWidget::find(QMouseEvent *event, int variance, size_t *row)
 
 bool KsGLWidget::findAndSelect(QMouseEvent *event)
 {
-	emit deselect();
 	size_t row;
 	bool found = find(event, 10, &row);
+
+	emit deselect();
 	if (found) {
 		emit select(row);
 		emit updateView(row, true);

@@ -56,7 +56,7 @@ private slots:
 	void markEntry(size_t);
 	void cpuReDraw(QVector<int>);
 	void taskReDraw(QVector<int>);
-	void update();
+ 	void update(KsDataStore *data = nullptr);
 	void updateGeom();
 	void updateGraphLegends();
 	void updateTimeLegends();
@@ -73,6 +73,7 @@ private:
 	};
 
 	void updateGraphs(GraphActions action);
+	void markerReDraw();
 
 	QToolBar	_pointerBar;
 	QToolBar	_navigationBar;

@@ -53,11 +53,11 @@ typedef void (*kshark_plugin_draw_handler_func)(void *histo,
 						int   val,
 					        int   draw_action);
 
-typedef void (*kshark_plugin_event_handler_func)(struct kshark_context *ctx,
+typedef void (*kshark_plugin_event_handler_func)(struct kshark_context *kshark_ctx,
 						 struct pevent_record *rec,
 						 struct kshark_entry *e);
 
-typedef bool (*kshark_plugin_context_update_func)(struct kshark_context *ctx);
+typedef bool (*kshark_plugin_context_update_func)(struct kshark_context *kshark_ctx);
 
 enum gui_plugin_actions {
 	KSHARK_PLUGIN_LOAD,
@@ -65,11 +65,6 @@ enum gui_plugin_actions {
 	KSHARK_PLUGIN_UNLOAD,
 	KSHARK_PLUGIN_TASK_DRAW,
 	KSHARK_PLUGIN_CPU_DRAW,
-};
-
-struct plugin_list {
-	struct plugin_list	*next;
-	const char		*file;
 };
 
 struct gui_event_handler {
@@ -85,10 +80,10 @@ struct gui_event_handler *find_gui_event_handler(struct gui_event_handler *handl
 						 int event_id);
 
 void kshark_register_event_handler(struct gui_event_handler **handlers,
-				int event_id,
-				kshark_plugin_event_handler_func	evt_func,
-				kshark_plugin_draw_handler_func		dw_func,
-				kshark_plugin_context_update_func	ctx_func);
+				   int event_id,
+				   kshark_plugin_event_handler_func	evt_func,
+				   kshark_plugin_draw_handler_func	dw_func,
+				   kshark_plugin_context_update_func	ctx_func);
 
 void kshark_unregister_event_handler(struct gui_event_handler **handlers,
 				  int event_id,
@@ -98,13 +93,18 @@ void kshark_unregister_event_handler(struct gui_event_handler **handlers,
 
 void kshark_free_event_handler_list(struct gui_event_handler *handlers);
 
-void kshark_register_plugin(struct kshark_context *ctx, const char *file);
+struct plugin_list {
+	struct plugin_list	*next;
+	char			*file;
+};
 
-void kshark_unregister_plugin(struct kshark_context *ctx, const char *file);
+void kshark_register_plugin(struct kshark_context *kshark_ctx, char *file);
+
+void kshark_unregister_plugin(struct kshark_context *kshark_ctx, char *file);
 
 void kshark_free_plugin_list(struct plugin_list *plugins);
 
-void kshark_handle_plugins(struct kshark_context *ctx, int task_id);
+void kshark_handle_plugins(struct kshark_context *kshark_ctx, int task_id);
 
 #ifdef __cplusplus
 }

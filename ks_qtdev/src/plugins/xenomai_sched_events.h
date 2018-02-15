@@ -44,7 +44,15 @@ struct xenomai_context {
 	struct format_field	*cobalt_wakeup_pid_field;
 };
 
-void plugin_draw(void *histoPtr, void *graphPtr, void *shapeListPtr, int pid, int draw_action);
+int cobalt_get_next_pid(struct xenomai_context *ctx, struct pevent_record *record);
+
+int cobalt_get_wakeup_pid(struct xenomai_context *ctx, struct pevent_record *record);
+
+bool cobalt_switch_check_pid(struct kshark_context *ctx, struct kshark_entry *e, int pid);
+
+bool cobalt_wakeup_check_pid(struct kshark_context *ctx, struct kshark_entry *e, int pid);
+
+void xenomai_draw(void *histoPtr, void *graphPtr, void *shapeListPtr, int pid, int draw_action);
 
 #ifdef __cplusplus
 }

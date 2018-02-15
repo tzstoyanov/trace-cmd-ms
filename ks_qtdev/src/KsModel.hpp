@@ -37,6 +37,7 @@
 
 typedef bool (*condition_func)(QString, QString);
 enum class DualMarkerState;
+class KsDataStore;
 
 class KsViewModel : public QAbstractTableModel
 {
@@ -76,7 +77,7 @@ public:
 	void fill(pevent *pevt, kshark_entry **entries, size_t n);
 	void selectRow(DualMarkerState state, int row);
 	void reset();
-	void update();
+	void update(KsDataStore *data = nullptr);
 
 	QStringList header() const {return _header;}
 	QVariant getValue(const QModelIndex &index) const;
@@ -99,7 +100,7 @@ public:
 	bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const;
 
 	void fill(kshark_entry **rows);
-
+	void update(KsDataStore *data);
 	void setSource(KsViewModel *s);
 
 	size_t search(int		 column,
@@ -211,7 +212,7 @@ public:
 	void zoomIn(double r, int mark = -1);
 
 	void reset();
-	void update();
+	void update(KsDataStore *data = nullptr);
 
 	QVariant getValue(const QModelIndex &index) const;
 };

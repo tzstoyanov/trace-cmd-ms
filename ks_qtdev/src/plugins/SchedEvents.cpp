@@ -19,6 +19,7 @@
  */
 
 // Kernel Shark 2
+#include "libkshark.h"
 #include "plugins/sched_events.h"
 #include "KsPlotTools.hpp"
 
@@ -72,7 +73,7 @@ static void schedSwitchPluginDraw(KsTimeMap *histo,
 		/* Starting from the first element in this bin, go forward in time
 		 * until you find a trace entry that satisfies the condition defined
 		 * by plugin_check_pid. */
-		entryFront = histo->getEntryFront(bin, pid, false, plugin_check_pid);
+		entryFront = histo->getEntryFront(bin, pid, false, kshark_check_pid);
 
 		/* Starting from the last element in this bin, go backward in time
 		 * until you find a trace entry that satisfies the condition defined
@@ -126,7 +127,7 @@ static void schedWakeupPluginDraw(KsTimeMap *histo,
 		/* Starting from the first element in this bin, go forward in time
 		 * until you find a trace entry that satisfies the condition defined
 		 * by plugin_check_pid. */
-		entryFront = histo->getEntryFront(bin, pid, false, plugin_check_pid);
+		entryFront = histo->getEntryFront(bin, pid, false, kshark_check_pid);
 
 		/* Starting from the last element in this bin, go backward in time
 		 * until you find a trace entry that satisfies the condition defined

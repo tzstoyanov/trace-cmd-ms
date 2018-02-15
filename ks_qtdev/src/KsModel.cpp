@@ -43,6 +43,11 @@ void KsFilterProxyModel::fill(kshark_entry **rows)
 	_data = rows;
 }
 
+void KsFilterProxyModel::update(KsDataStore *data)
+{
+	fill(data->_rows);
+}
+
 void KsFilterProxyModel::setSource(KsViewModel *s)
 {
 	QSortFilterProxyModel::setSourceModel(s);
@@ -57,9 +62,9 @@ size_t KsFilterProxyModel::search(int column,
 	int nRows = rowCount({});
 	for (int r = 0; r < nRows; ++r) {
 		/* Use the index of the proxy model to retrieve the value
-		 * of the row number in the base model. This works because 
-		 *  the row number is shown in column "0".*/
-		size_t row = data(this->index(r, 0)).toInt();
+		 * of the row number in the base model. This works because
+		 *  the source row number is shown in column "0". */
+		size_t row = data(index(r, 0)).toInt();
 		QVariant item = _source->getValue(column, row);
 		if (cond(searchText, item.toString())) {
 			matchList->append(row);
@@ -140,10 +145,31 @@ QVariant KsViewModel::getValue(int column, int row) const
 			return time;
 
 		case TRACE_VIEW_COL_COMM:
-			return pevent_data_comm_from_pid(_pevt, _data[row]->pid);
+		{
+			struct kshark_context *ctx = NULL;
+			kshark_instance(&ctx);
+
+			pevent_record *record = tracecmd_read_at(ctx->handle,
+								 _data[row]->offset,
+								 NULL);
+	
+			int pid = pevent_data_pid(_pevt, record);
+			return pevent_data_comm_from_pid(_pevt, pid);
+// 			return pevent_data_comm_from_pid(_pevt, _data[row]->pid);
+		}
 
 		case TRACE_VIEW_COL_PID:
-			return _data[row]->pid;
+		{
+			struct kshark_context *ctx = NULL;
+			kshark_instance(&ctx);
+
+			pevent_record *record = tracecmd_read_at(ctx->handle,
+								 _data[row]->offset,
+								 NULL);
+	
+			return pevent_data_pid(_pevt, record);
+// 			return _data[row]->pid;
+		}
 
 		case TRACE_VIEW_COL_LAT: 
 		{
@@ -153,6 +179,7 @@ QVariant KsViewModel::getValue(int column, int row) const
 			pevent_record *record = tracecmd_read_at(ctx->handle,
 								 _data[row]->offset,
 								 NULL);
+
 			char *lat = kshark_get_latency(ctx->pevt, record);
 			free_record(record);
 
@@ -173,12 +200,12 @@ QVariant KsViewModel::getValue(int column, int row) const
 
 		case TRACE_VIEW_COL_INFO :
 		{
-			
 			struct kshark_context *ctx = NULL;
 			kshark_instance(&ctx);
 			pevent_record *record = tracecmd_read_at(ctx->handle,
-							      _data[row]->offset,
-							      NULL);
+								 _data[row]->offset,
+								 NULL);
+
 			char *info = kshark_get_info(ctx->pevt, record, _data[row]);
 			free_record(record);
 
@@ -293,9 +320,15 @@ void KsViewModel::reset()
 	endResetModel();
 }
 
-void KsViewModel::update()
+void KsViewModel::update(KsDataStore *data)
 {
+	reset();
+
 	beginResetModel();
+	if (data) {
+		_data.clear();
+		fill(data->_pevt, data->_rows, data->size());
+	}
 	endResetModel();
 }
 
@@ -304,10 +337,10 @@ size_t KsViewModel::search(int column,
 			   condition_func  cond,
 			   QList<size_t>  *matchList)
 {
-	int nRows = this->rowCount({});
+	int nRows = rowCount({});
 	for (int r = 0; r < nRows; ++r) {
-		QModelIndex index = this->index(r, column);
-		QVariant item = this->getValue(index);
+		QModelIndex idx = index(r, column);
+		QVariant item = getValue(idx);
 		if (cond(searchText, item.toString())) {
 			matchList->append(r);
 		}
@@ -414,9 +447,12 @@ void KsGraphModel::reset()
 	endResetModel();
 }
 
-void KsGraphModel::update()
+void KsGraphModel::update(KsDataStore *data)
 {
 	beginResetModel();
+	if (data) {
+		_histo.fill(data->_rows, data->size());
+	}
 	endResetModel();
 }
 
