@@ -212,7 +212,6 @@ public:
 	~KsDataStore();
 
 	void loadData(const QString &file);
-	void reload();
 // 	void loadData(const QList<QString> &file);
 	void clear();
 	size_t size() const {return _dataSize;}
@@ -220,6 +219,9 @@ public:
 signals:
 	void updateView(KsDataStore *);
 	void updateGraph(KsDataStore *);
+
+public slots:
+	void reload();
 
 private slots:
 	void applyPosTaskFilter(QVector<int>);
@@ -231,6 +233,28 @@ public:
 	struct kshark_entry  **_rows;
 	//struct pevent_record **_rows;
 	pevent		      *_pevt;
+};
+
+class KsPluginManager : public QObject
+{
+	Q_OBJECT
+
+public:
+	KsPluginManager();
+
+	/** A list of available plugins. */
+	QStringList 	_pluginList;
+
+	/** A list of registered plugins. */
+	QVector<bool>	_registeredPlugins;
+
+signals:
+	void dataReload();
+
+public slots:
+	void registerPlugin(QString plugin);
+	void unregisterPlugin(QString plugin);
+	void updatePlugins(QVector<int> pluginId);
 };
 
 class KsTimeMap;

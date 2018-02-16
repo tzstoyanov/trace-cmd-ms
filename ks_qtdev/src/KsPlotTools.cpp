@@ -18,9 +18,6 @@
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
-// Qt
-#include <QMouseEvent>
-
 // OpenGL
 #include <iostream>
 #include <GL/glut.h>

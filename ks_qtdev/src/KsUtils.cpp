@@ -706,6 +706,99 @@ void KsDataStore::applyNegEventFilter(QVector<int> vec)
 	qInfo() <<"Filtering time: " << 1e3*time << " ms.";
 }
 
+KsPluginManager::KsPluginManager()
+{
+	int nPlugins = getPluginList(&_pluginList);
+	_registeredPlugins.resize(nPlugins);
+
+	for (int i = 0; i < nPlugins; ++i) {
+		if (_pluginList[i].contains(" default", Qt::CaseInsensitive)) {
+			_pluginList[i].remove(" default", Qt::CaseInsensitive);
+			registerPlugin(_pluginList[i]);
+		} else {
+			_registeredPlugins[i] = false;
+		}
+	}
+}
+
+void KsPluginManager::registerPlugin(QString plugin)
+{
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+	char *lib;
+
+	for (int i = 0; i < _pluginList.count(); ++i) {
+		if (_pluginList[i] == plugin) {
+			asprintf(&lib, "%s/lib/plugin-%s.so", KS_DIR,
+							      plugin.toStdString().c_str());
+
+			kshark_register_plugin(kshark_ctx, lib);
+			_registeredPlugins[i] = true;
+			return;
+		} else if (plugin.contains("/lib/plugin-" +
+			                   _pluginList[i], Qt::CaseInsensitive)) {
+			asprintf(&lib, "%s", plugin.toStdString().c_str());
+
+			kshark_register_plugin(kshark_ctx, lib);
+			_registeredPlugins[i] = true;
+			return;
+		}
+	}
+
+	/** No plugin with this name in the list.
+	 * Try to add it anyway.  */
+	asprintf(&lib, "%s", plugin.toStdString().c_str());
+	kshark_register_plugin(kshark_ctx, lib);
+	_pluginList.append(plugin);
+	_registeredPlugins.append(true);
+}
+
+void KsPluginManager::unregisterPlugin(QString plugin)
+{
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+
+	for (int i = 0; i < _pluginList.count(); ++i) {
+		char *lib;
+		if (_pluginList[i] == plugin) {
+			asprintf(&lib, "%s/lib/plugin-%s.so", KS_DIR,
+							      plugin.toStdString().c_str());
+
+			kshark_unregister_plugin(kshark_ctx, lib);
+			_registeredPlugins[i] = false;
+			return;
+		} else if  (plugin.contains("/lib/plugin-" +
+			                   _pluginList[i], Qt::CaseInsensitive)) {
+			asprintf(&lib, "%s", plugin.toStdString().c_str());
+
+			kshark_unregister_plugin(kshark_ctx, lib);
+			_registeredPlugins[i] = false;
+			return;
+		}
+	}
+}
+
+void KsPluginManager::updatePlugins(QVector<int> pluginId)
+{
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+
+	kshark_handle_plugins(kshark_ctx, KSHARK_PLUGIN_UNLOAD);
+	kshark_free_plugin_list(kshark_ctx->plugins);
+	kshark_ctx->plugins = NULL;
+	kshark_free_event_handler_list(kshark_ctx->event_handlers);
+
+	for (auto &p: _registeredPlugins)
+		p = false;
+
+	for (auto const &p: pluginId)
+		registerPlugin(_pluginList[p]);
+
+	kshark_handle_plugins(kshark_ctx, KSHARK_PLUGIN_LOAD);
+
+	emit dataReload();
+}
+
 KsGraphMark::KsGraphMark(DualMarkerState s)
 : _state(s), _isSet(false), _bin(-1), _cpu(-1), _task(-1), _pos(0), _color(Qt::darkGreen)
 {

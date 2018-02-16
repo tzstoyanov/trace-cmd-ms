@@ -151,8 +151,8 @@ const char *kshark_get_task(struct pevent *pe, struct kshark_entry *entry)
 	return pevent_data_comm_from_pid(pe, entry->pid);
 }
 
-char *kshark_get_latency(struct pevent *pe,
-			 struct pevent_record *record)
+const char *kshark_get_latency(struct pevent *pe,
+			       struct pevent_record *record)
 {
 	if (!seq.buffer)
 		trace_seq_init(&seq);
@@ -162,7 +162,7 @@ char *kshark_get_latency(struct pevent *pe,
 	return seq.buffer;
 }
 
-char *kshark_get_event_name(struct pevent *pe, struct kshark_entry *entry)
+const char *kshark_get_event_name(struct pevent *pe, struct kshark_entry *entry)
 {
 	trace_seq_reset(&seq);
 	struct event_format *event
@@ -174,9 +174,9 @@ char *kshark_get_event_name(struct pevent *pe, struct kshark_entry *entry)
 	return NULL;
 }
 
-char *kshark_get_info(struct pevent *pe,
-		      struct pevent_record *record,
-		      struct kshark_entry *entry)
+const char *kshark_get_info(struct pevent *pe,
+			    struct pevent_record *record,
+			    struct kshark_entry *entry)
 {
 	if (!seq.buffer)
 		trace_seq_init(&seq);
@@ -204,9 +204,9 @@ const char *kshark_get_task_lazy(int16_t pid)
 	return pevent_data_comm_from_pid(kshark_ctx->pevt, pid);
 }
 
-char *kshark_get_latency_lazy(struct kshark_entry *entry)
+const char *kshark_get_latency_lazy(struct kshark_entry *entry)
 {
-	char *lat;
+	const char *lat;
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
@@ -220,7 +220,7 @@ char *kshark_get_latency_lazy(struct kshark_entry *entry)
 	return lat;
 }
 
-char *kshark_get_event_name_lazy(struct kshark_entry *entry)
+const char *kshark_get_event_name_lazy(struct kshark_entry *entry)
 {
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
@@ -228,9 +228,9 @@ char *kshark_get_event_name_lazy(struct kshark_entry *entry)
 	return kshark_get_event_name(kshark_ctx->pevt, entry);
 }
 
-char *kshark_get_info_lazy(struct kshark_entry *entry)
+const char *kshark_get_info_lazy(struct kshark_entry *entry)
 {
-	char *info;
+	const char *info;
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 

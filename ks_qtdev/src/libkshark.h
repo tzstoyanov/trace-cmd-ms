@@ -105,21 +105,21 @@ const char *kshark_get_task(struct pevent *pevt,
 
 const char *kshark_get_task_lazy(int16_t pid);
 
-char *kshark_get_latency(struct pevent *pevt,
-			 struct pevent_record *record);
+const char *kshark_get_latency(struct pevent *pevt,
+			       struct pevent_record *record);
 
-char *kshark_get_latency_lazy(struct kshark_entry *entry);
+const char *kshark_get_latency_lazy(struct kshark_entry *entry);
 
-char *kshark_get_event_name(struct pevent *pevt,
+const char *kshark_get_event_name(struct pevent *pevt,
+				  struct kshark_entry *entry);
+
+const char *kshark_get_event_name_lazy(struct kshark_entry *entry);
+
+const char *kshark_get_info(struct pevent *pevt,
+			    struct pevent_record *record,
 			    struct kshark_entry *entry);
 
-char *kshark_get_event_name_lazy(struct kshark_entry *entry);
-
-char *kshark_get_info(struct pevent *pevt,
-		      struct pevent_record *record,
-		      struct kshark_entry *entry);
-
-char *kshark_get_info_lazy(struct kshark_entry *entry);
+const char *kshark_get_info_lazy(struct kshark_entry *entry);
 
 void kshark_set_entry_values(struct kshark_context *kshark_ctx,
 			     struct pevent_record *record,

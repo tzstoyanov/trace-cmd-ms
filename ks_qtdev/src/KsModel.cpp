@@ -154,7 +154,9 @@ QVariant KsViewModel::getValue(int column, int row) const
 								 NULL);
 	
 			int pid = pevent_data_pid(_pevt, record);
-			return pevent_data_comm_from_pid(_pevt, pid);
+			const char *comm = pevent_data_comm_from_pid(_pevt, pid);
+			free_record(record);
+			return comm;
 // 			return pevent_data_comm_from_pid(_pevt, _data[row]->pid);
 		}
 
@@ -167,7 +169,9 @@ QVariant KsViewModel::getValue(int column, int row) const
 								 _data[row]->offset,
 								 NULL);
 	
-			return pevent_data_pid(_pevt, record);
+			int pid =  pevent_data_pid(_pevt, record);
+			free_record(record);
+			return pid;
 // 			return _data[row]->pid;
 		}
 
@@ -180,7 +184,7 @@ QVariant KsViewModel::getValue(int column, int row) const
 								 _data[row]->offset,
 								 NULL);
 
-			char *lat = kshark_get_latency(ctx->pevt, record);
+			const char *lat = kshark_get_latency(ctx->pevt, record);
 			free_record(record);
 
 			return lat;
@@ -206,13 +210,14 @@ QVariant KsViewModel::getValue(int column, int row) const
 								 _data[row]->offset,
 								 NULL);
 
-			char *info = kshark_get_info(ctx->pevt, record, _data[row]);
+			const char *info = kshark_get_info(ctx->pevt, record, _data[row]);
 			free_record(record);
 
 			return  info;
 		}
 
-		default: return {};
+		default:
+			return {};
 	}
 }
 

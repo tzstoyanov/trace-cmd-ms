@@ -109,7 +109,7 @@ public:
 
 	void setPoint(size_t i, int x, int y);
 	void setPoint(size_t i, const Point &p);
-	size_t pointCount() {return _nPoints;}
+	size_t pointCount() const {return _nPoints;}
 	void makeLines();
 
 	bool	  _drawContour;

@@ -40,8 +40,8 @@ public:
 	void loadFile(const QString &fileName);
 // 	void loadFiles(const QList<QString> &files);
 
-	void registerPlugin(QString plugin);
-	void unregisterPlugin(QString plugin);
+	void registerPlugin(QString plugin) {_plugins.registerPlugin(plugin);}
+	void unregisterPlugin(QString plugin) {_plugins.unregisterPlugin(plugin);}
 
 private slots:
 	void open();
@@ -57,7 +57,6 @@ private slots:
 	void cpuSelect();
 	void taskSelect();
 	void pluginSelect();
-	void updatePlugins(QVector<int>);
 	void aboutInfo();
 
 private:
@@ -73,11 +72,8 @@ private:
 	/** Dual Marker State Machine. */
 	KsDualMarkerSM  _mState;
 
-	/** A list of available plugins. */
-	QStringList 	_pluginList;
-
-	/** A list of registered plugins. */
-	QVector<bool>	_registeredPlugins;
+	/** A plugin manager. */
+	KsPluginManager  _plugins;
 	
 	// File menu.
 	QAction _openAction;
@@ -108,9 +104,6 @@ private:
 	void resizeEvent(QResizeEvent* event);
 	void createActions();
 	void createMenus();
-
-	void registerPlugin(int pluginId);
-	void unregisterPlugin(int pluginId);
 };
 
 // class KsConcentratorMainWindow : public
