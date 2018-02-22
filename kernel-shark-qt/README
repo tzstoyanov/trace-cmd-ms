@@ -1,0 +1,37 @@
+
+This directory contains experimental code, aimed towards
+development of a Qt-based version of the KernelShark GUI.
+
+Third Party Software:
+------------------------------------------------------------
+The external dependencies are listed below:
+1. Cmake, Qt5Base, OpenGL/Glut, Python2.7, NumPy and GTest
+
+  1.1 In order to install the packages on Ubuntu do the following:
+    sudo apt-get install build-essential git cmake -y
+    sudo apt-get install qtbase5-dev -y
+    sudo apt-get install freeglut3-dev libxmu-dev libxi-dev -y
+    sudo apt-get install libpython2.7-dev cython python-numpy -y
+
+  1.2 In order to be able to run the tests on Ubuntu do the following:
+    sudo apt-get libgtest-dev -y
+    cd /usr/src/gtest
+    sudo cmake .
+    sudo make
+    sudo cp *.a /usr/lib
+
+  2 In order to install the packages on Fedora, as root do the following:
+    dnf install gcc gcc-c++ git cmake -y
+    dnf install qt5-qtbase-devel freeglut-devel redhat-rpm-config -y
+    dnf install python2-devel python2-Cython python-numpy gtest-devel -y
+
+
+Building:
+------------------------------------------------------------
+1. Follow the instructions given in trace-cmd/README and build
+the original libraries.
+
+2. Do:
+    cd ks_qtdev/build
+    cmake ../
+    make

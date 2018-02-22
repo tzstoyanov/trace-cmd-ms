@@ -1,0 +1,73 @@
+/*
+ * Copyright (C) 2009, 2010 Red Hat Inc, Steven Rostedt <srostedt@redhat.com>
+ *
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License (not later!)
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not,  see <http://www.gnu.org/licenses>
+ *
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ */
+#ifndef _KSHARH_FILTER_HASH_H
+#define _KSHARH_FILTER_HASH_H
+
+#include <stdint.h>
+
+struct filter_id_item {
+	struct filter_id_item	*next;
+	int			id;
+};
+
+struct filter_id {
+	struct filter_id_item **hash;
+	int			count;
+};
+
+struct filter_id_item *filter_id_find(struct filter_id *hash, int id);
+
+void filter_id_add(struct filter_id *hash, int id);
+
+void filter_id_remove(struct filter_id *hash, int id);
+
+void filter_id_clear(struct filter_id *hash);
+
+struct filter_id *filter_id_hash_alloc(void);
+
+void filter_id_hash_free(struct filter_id *hash);
+
+struct filter_id *filter_id_hash_copy(struct filter_id *hash);
+
+int *filter_ids(struct filter_id *hash);
+
+int filter_id_compare(struct filter_id *hash1, struct filter_id *hash2);
+
+static inline int filter_id_count(struct filter_id *hash)
+{
+	return hash->count;
+}
+
+static inline uint8_t knuth_hash8(uint32_t val)
+{
+	return val*UINT8_C(2654435761);
+}
+
+static inline uint16_t knuth_hash16(uint32_t val)
+{
+	return val*UINT16_C(2654435761);
+}
+
+static inline uint16_t knuth_hash(uint32_t val)
+{
+	return val*UINT32_C(2654435761);
+}
+
+#endif /* _TRACE_FILTER_HASH_H */
