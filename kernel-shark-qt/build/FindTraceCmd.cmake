@@ -14,15 +14,17 @@
 
 # MESSAGE(" Looking for trace-cmd ...")
 
+find_path(TRACECMD_BIN_DIR      NAMES  trace-cmd
+                                PATHS  $ENV{TRACE_CMD}/tracecmd/
+                                       ${CMAKE_SOURCE_DIR}/..//tracecmd/)
+
 find_path(TRACECMD_INCLUDE_DIR  NAMES  trace-cmd.h
                                 PATHS  $ENV{TRACE_CMD}/include/trace-cmd/
-                                       ${CMAKE_SOURCE_DIR}/../include/trace-cmd/
-                                )
+                                       ${CMAKE_SOURCE_DIR}/../include/trace-cmd/)
 
 find_path(TRACECMD_LIBRARY_DIR  NAMES  libtracecmd.a
                                 PATHS  $ENV{TRACE_CMD}/lib/trace-cmd/
-                                       ${CMAKE_SOURCE_DIR}/../lib/trace-cmd/
-                                )
+                                       ${CMAKE_SOURCE_DIR}/../lib/trace-cmd/)
 
 IF (TRACECMD_INCLUDE_DIR AND TRACECMD_LIBRARY_DIR)
 
@@ -44,13 +46,11 @@ ENDIF (TRACECMD_FOUND)
 
 find_path(TRACEEVENT_INCLUDE_DIR  NAMES  event-parse.h
                                   PATHS  $ENV{TRACE_CMD}/include/traceevent/
-                                         ${CMAKE_SOURCE_DIR}/../include/traceevent/
-                                  )
+                                         ${CMAKE_SOURCE_DIR}/../include/traceevent/)
 
 find_path(TRACEEVENT_LIBRARY_DIR  NAMES  libtraceevent.a
                                   PATHS  $ENV{TRACE_CMD}/lib/traceevent/
-                                         ${CMAKE_SOURCE_DIR}/../lib/traceevent/
-                                  )
+                                         ${CMAKE_SOURCE_DIR}/../lib/traceevent/)
 
 IF (TRACEEVENT_INCLUDE_DIR AND TRACEEVENT_LIBRARY_DIR)
 

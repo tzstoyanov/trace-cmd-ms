@@ -57,6 +57,7 @@ private slots:
 	void cpuSelect();
 	void taskSelect();
 	void pluginSelect();
+	void capture();
 	void aboutInfo();
 	void contents();
 

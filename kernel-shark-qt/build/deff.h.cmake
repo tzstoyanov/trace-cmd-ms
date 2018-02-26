@@ -6,7 +6,6 @@
 #ifdef __cplusplus
 
 #include <QString>
-#include <QList>
 
 const QString plugins = "@PLUGINS@";
 
@@ -15,6 +14,8 @@ const QString plugins = "@PLUGINS@";
 #cmakedefine KS_VERSION_STRING "@KS_VERSION_STRING@"
 
 #cmakedefine KS_DIR "@KS_DIR@"
+
+#cmakedefine TRACECMD_BIN_DIR "@TRACECMD_BIN_DIR@"
 
 #cmakedefine N_CPUS @N_CPUS@
 

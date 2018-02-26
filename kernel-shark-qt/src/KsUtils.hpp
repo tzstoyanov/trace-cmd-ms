@@ -97,7 +97,7 @@ public:
 private:
 	QVBoxLayout	_layout;
 	QLabel		_text;
-	QPushButton	_close_button;
+	QPushButton	_closeButton;
 };
 
 class KsCheckBoxDialog : public QDialog
@@ -120,19 +120,19 @@ protected:
 	void resizeEvent(QResizeEvent* event);
 
 	bool		_positiveCond;
-	QCheckBox	_all_cb;
+	QCheckBox	_allCb;
 	QVector<int>    _id;
 
-	QVBoxLayout	*_cb_layout;
-	QWidget		*_cb_widget;
-	QVBoxLayout	 _top_layout;
-	QHBoxLayout	 _button_layout;
+	QVBoxLayout	*_cbLayout;
+	QWidget		*_cbWidget;
+	QVBoxLayout	 _topLayout;
+	QHBoxLayout	 _buttonLayout;
 	QScrollArea	 _scrollArea;
 
 protected:
 	QString		_name;
-	QPushButton	_cansel_button;
-	QPushButton	_apply_button;
+	QPushButton	_canselButton;
+	QPushButton	_applyButton;
 };
 
 class KsCheckBoxTableDialog : public KsCheckBoxDialog
@@ -238,7 +238,6 @@ public:
 class KsPluginManager : public QObject
 {
 	Q_OBJECT
-
 public:
 	KsPluginManager();
 

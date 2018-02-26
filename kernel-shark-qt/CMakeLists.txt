@@ -55,4 +55,7 @@ if (GTEST_FOUND)
 
 endif (GTEST_FOUND)
 
+configure_file( ${KS_DIR}/build/ks.desktop.cmake
+                ${KS_DIR}/kernelshark.desktop)
+
 message("")

@@ -32,8 +32,9 @@
 #include <QLabel>
 
 // Kernel Shark 2
-#include "libkshark.h"
 #include "KsMainWindow.hpp"
+#include "KsCaptureDialog.hpp"
+#include "libkshark.h"
 #include "KsDeff.h"
 
 KsMainWindow::KsMainWindow(QWidget *parent)
@@ -75,14 +76,29 @@ KsMainWindow::KsMainWindow(QWidget *parent)
 	_mState.markerA().setGLWidget(_graph.glPtr());
 	_mState.markerB().setGLWidget(_graph.glPtr());
 
-	connect(&_mState, SIGNAL(showInGraph(size_t)), &_graph, SLOT(markEntry(size_t)));
-	connect(&_mState, SIGNAL(updateView(size_t, bool)), &_view, SLOT(showRow(size_t, bool)));
-	connect(&_view, SIGNAL(select(size_t)), &_graph, SLOT(markEntry(size_t)));
-	connect(_graph.glPtr(), SIGNAL(updateView(size_t, bool)), &_view, SLOT(showRow(size_t, bool)));
-	connect(_graph.glPtr(), SIGNAL(deselect()), &_view, SLOT(deselect()));
-	connect(&_data, SIGNAL(updateView(KsDataStore *)), &_view, SLOT(update(KsDataStore *)));
-	connect(&_data, SIGNAL(updateGraph(KsDataStore *)), &_graph, SLOT(update(KsDataStore *)));
-	connect(&_plugins, SIGNAL(dataReload()), &_data, SLOT(reload()));
+	connect(&_mState, SIGNAL(showInGraph(size_t)),
+		&_graph, SLOT(markEntry(size_t)));
+
+	connect(&_mState, SIGNAL(updateView(size_t, bool)),
+		&_view, SLOT(showRow(size_t, bool)));
+
+	connect(&_view, SIGNAL(select(size_t)),
+		&_graph, SLOT(markEntry(size_t)));
+
+	connect(_graph.glPtr(), SIGNAL(updateView(size_t, bool)),
+		&_view, SLOT(showRow(size_t, bool)));
+
+	connect(_graph.glPtr(), SIGNAL(deselect()),
+		&_view, SLOT(deselect()));
+
+	connect(&_data, SIGNAL(updateView(KsDataStore *)),
+		&_view, SLOT(update(KsDataStore *)));
+
+	connect(&_data, SIGNAL(updateGraph(KsDataStore *)),
+		&_graph, SLOT(update(KsDataStore *)));
+	
+	connect(&_plugins, SIGNAL(dataReload()),
+		&_data, SLOT(reload()));
 
 	this->resize(SCREEN_WIDTH*.4, FONT_HEIGHT*3);
 }
@@ -103,9 +119,7 @@ void KsMainWindow::resizeEvent(QResizeEvent* event)
 
 void KsMainWindow::createActions()
 {
-	QString iconsPath(KS_DIR);
-	iconsPath.append("/icons/");
-
+	/* File menu */
 	_openAction.setIcon(QIcon::fromTheme("document-open"));
 	_openAction.setShortcut(tr("Ctrl+O"));
 	_openAction.setStatusTip(tr("Open an existing data file"));
@@ -134,29 +148,37 @@ void KsMainWindow::createActions()
 	_quitAction.setIcon(QIcon::fromTheme("window-close"));
 	_quitAction.setShortcut(tr("Ctrl+Q"));
 	_quitAction.setStatusTip(tr("Exit KernelShark"));
-
-	_pluginsAction.setIcon(QIcon::fromTheme("insert-image"));
-	_pluginsAction.setShortcut(tr("Ctrl+P"));
-	_pluginsAction.setStatusTip(tr("Manage plugins"));
-
-	_captureAction.setIcon(QIcon::fromTheme("media-record"));
-	_captureAction.setShortcut(tr("Ctrl+C"));
-	_captureAction.setStatusTip(tr("Capture trace data"));
-
-	_aboutAction.setIcon(QIcon::fromTheme("help-about"));
-	_contentsAction.setIcon(QIcon::fromTheme("help-contents"));
-	
 	connect(&_quitAction, SIGNAL(triggered()), this, SLOT(close()));
-	//connect(QApplication::desktop(), SIGNAL(resized(int)), this, SLOT(reset(int));
+
+	/* Filter menu */
 	connect(&_listFilterSyncAction, SIGNAL(toggled(bool)), this, SLOT(listFilterSync(bool)));
 	connect(&_showEventsAction, SIGNAL(triggered()), this, SLOT(showEvents()));
 	connect(&_showTasksAction, SIGNAL(triggered()), this, SLOT(showTasks()));
 	connect(&_hideTasksAction, SIGNAL(triggered()), this, SLOT(hideTasks()));
+
+	/* Plot menu */
 	connect(&_cpuSelectAction, SIGNAL(triggered()), this, SLOT(cpuSelect()));
 	connect(&_taskSelectAction, SIGNAL(triggered()), this, SLOT(taskSelect()));
+
+	/* Tools menu */
+	_pluginsAction.setIcon(QIcon::fromTheme("insert-image"));
+	_pluginsAction.setShortcut(tr("Ctrl+P"));
+	_pluginsAction.setStatusTip(tr("Manage plugins"));
 	connect(&_pluginsAction, SIGNAL(triggered()), this, SLOT(pluginSelect()));
+
+	_captureAction.setIcon(QIcon::fromTheme("media-record"));
+	_captureAction.setShortcut(tr("Ctrl+C"));
+	_captureAction.setStatusTip(tr("Capture trace data"));
+	connect(&_captureAction, SIGNAL(triggered()), this, SLOT(capture()));
+
+	/* Help menu */
+	_aboutAction.setIcon(QIcon::fromTheme("help-about"));
 	connect(&_aboutAction, SIGNAL(triggered()), this, SLOT(aboutInfo()));
+
+	_contentsAction.setIcon(QIcon::fromTheme("help-contents"));
 	connect(&_contentsAction, SIGNAL(triggered()), this, SLOT(contents()));
+
+	//connect(QApplication::desktop(), SIGNAL(resized(int)), this, SLOT(reset(int));
 }
 
 void KsMainWindow::createMenus()
@@ -177,7 +199,8 @@ void KsMainWindow::createMenus()
 	{
 		QWidget  *containerWidget = new QWidget(filter);
 		containerWidget->setLayout(new QHBoxLayout());
-		containerWidget->layout()->setContentsMargins(FONT_WIDTH, FONT_HEIGHT/5, FONT_WIDTH, FONT_HEIGHT/5);
+		containerWidget->layout()->setContentsMargins(FONT_WIDTH, FONT_HEIGHT/5,
+							      FONT_WIDTH, FONT_HEIGHT/5);
 		QCheckBox *checkBox = new QCheckBox(name, filter);
 		checkBox->setChecked(true);
 		connect(checkBox, SIGNAL(toggled(bool)), this, SLOT(graphFilterSync(bool)));
@@ -266,7 +289,6 @@ void KsMainWindow::graphFilterSync(bool state)
 
 void KsMainWindow::showEvents()
 {
-	qInfo() << "KsMainWindow::showEvents";
 	KsCheckBoxDialog *events_cb = new KsEventsCheckBoxDialog(_data._pevt, true, this);
 	events_cb->setDefault(true);
 
@@ -389,6 +411,12 @@ void KsMainWindow::pluginSelect()
 		&_plugins, SLOT(updatePlugins(QVector<int>)));
 }
 
+void KsMainWindow::capture()
+{
+	qInfo() << "capture";
+	new KsCaptureDialog(this);
+}
+
 void KsMainWindow::aboutInfo() {
 	QString text;
 	text.append(" KernelShark\n\n version: ");
@@ -396,6 +424,7 @@ void KsMainWindow::aboutInfo() {
 	text.append("\n");
 
 	KsMessageDialog *message = new KsMessageDialog(text);
+	message->setWindowTitle("About");
 	message->show();
 }
 
@@ -426,6 +455,7 @@ void KsMainWindow::loadFile(const QString& fileName)
 		KsMessageDialog *message = new KsMessageDialog(text);
 		message->setWindowFlags(Qt::WindowStaysOnTopHint);
 		message->setMinimumWidth(STRING_WIDTH(text) + FONT_WIDTH*3);
+		message->setWindowTitle("ERROR");
 		message->show();
 		qCritical() << "ERROR: " << text;
 		return;
@@ -457,6 +487,7 @@ void KsMainWindow::loadFile(const QString& fileName)
 		KsMessageDialog *message = new KsMessageDialog(text);
 		message->setWindowFlags(Qt::WindowStaysOnTopHint);
 		message->setMinimumWidth(STRING_WIDTH(text) + FONT_WIDTH*3);
+		message->setWindowTitle("ERROR");
 		message->show();
 		qCritical() << "ERROR: " << text;
 		return;

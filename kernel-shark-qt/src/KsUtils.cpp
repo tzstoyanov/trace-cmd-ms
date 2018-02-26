@@ -51,12 +51,12 @@ void KsDataProgressBar::setValue(int i) {
 KsMessageDialog::KsMessageDialog(QString message, QWidget *parent)
 : QDialog(parent),
   _text(message, this),
-  _close_button("Close", this)
+  _closeButton("Close", this)
 {
 	this->resize(SCREEN_WIDTH/10, FONT_HEIGHT*8);
 	_layout.addWidget(&_text);
-	_layout.addWidget(&_close_button);
-	connect(&_close_button, SIGNAL(pressed()), this, SLOT(close()));
+	_layout.addWidget(&_closeButton);
+	connect(&_closeButton, SIGNAL(pressed()), this, SLOT(close()));
 
 	this->setLayout(&_layout);
 }
@@ -64,45 +64,45 @@ KsMessageDialog::KsMessageDialog(QString message, QWidget *parent)
 KsCheckBoxDialog::KsCheckBoxDialog(const QString &n, bool cond, QWidget *parent)
 : QDialog(parent),
   _positiveCond(cond),
-  _all_cb("all", this),
-  _cb_layout(nullptr),
-  _cb_widget(nullptr),
-  _top_layout(this),
+  _allCb("all", this),
+  _cbLayout(nullptr),
+  _cbWidget(nullptr),
+  _topLayout(this),
   _scrollArea(this),
   _name(n),
-  _cansel_button("Cansel", this),
-  _apply_button("Apply", this)
+  _canselButton("Cansel", this),
+  _applyButton("Apply", this)
 {
 	this->resize(SCREEN_WIDTH/10, SCREEN_HEIGHT/2.5);
 	this->setWindowTitle(_name);
 
-	connect(&_apply_button, SIGNAL(pressed()), this, SLOT(applyPress()));
-	connect(&_apply_button, SIGNAL(pressed()), parentWidget(), SLOT(reload()));
+	connect(&_applyButton, SIGNAL(pressed()), this, SLOT(applyPress()));
+	connect(&_applyButton, SIGNAL(pressed()), parentWidget(), SLOT(reload()));
 
-	connect(&_cansel_button,  SIGNAL(pressed()), this, SLOT(close()));
+	connect(&_canselButton,  SIGNAL(pressed()), this, SLOT(close()));
 
-	connect(&_all_cb, SIGNAL(clicked(bool)), this, SLOT(chechAll(bool)));
+	connect(&_allCb, SIGNAL(clicked(bool)), this, SLOT(chechAll(bool)));
 
-	_button_layout.addWidget(&_apply_button,  1, Qt::AlignBottom);
-	_button_layout.addWidget(&_cansel_button, 1, Qt::AlignBottom);
+	_buttonLayout.addWidget(&_applyButton,  1, Qt::AlignBottom);
+	_buttonLayout.addWidget(&_canselButton, 1, Qt::AlignBottom);
 
-	_cb_widget = new QWidget(this);
-	_cb_layout = new QVBoxLayout();
-	_cb_widget->setLayout(_cb_layout);
+	_cbWidget = new QWidget(this);
+	_cbLayout = new QVBoxLayout();
+	_cbWidget->setLayout(_cbLayout);
 	_scrollArea.setMinimumHeight(this->height() -
 				   FONT_HEIGHT*3 -
-				   _apply_button.height());
+				   _applyButton.height());
 
 	_scrollArea.setStyleSheet("background-color : rgb(240, 240, 240)");
 	_scrollArea.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	_scrollArea.setWidget(_cb_widget);
+	_scrollArea.setWidget(_cbWidget);
 
-	_top_layout.addWidget(&_all_cb);
-	_top_layout.addWidget(&_scrollArea);
-	_top_layout.addLayout(&_button_layout, 1);
+	_topLayout.addWidget(&_allCb);
+	_topLayout.addWidget(&_scrollArea);
+	_topLayout.addLayout(&_buttonLayout, 1);
 
-	this->setLayout(&_top_layout);
-	_all_cb.setCheckState(Qt::Checked);
+	this->setLayout(&_topLayout);
+	_allCb.setCheckState(Qt::Checked);
 	this->show();
 }
 
@@ -112,7 +112,7 @@ void KsCheckBoxDialog::setDefault(bool st)
 	if (st)
 		state = Qt::Checked;
 
-	_all_cb.setCheckState(state);
+	_allCb.setCheckState(state);
 	chechAll(state);
 
 }
@@ -136,13 +136,13 @@ void KsCheckBoxTableDialog::set(QVector<bool> v)
 {
 	int n = (v.size() <=  _cb.size())? v.size() : _cb.size();
 	Qt::CheckState state;
-	_all_cb.setCheckState(Qt::Checked);
+	_allCb.setCheckState(Qt::Checked);
 	for (int i = 0; i < n; ++i) {
 		if (v[i]) {
 			state = Qt::Checked;
 		} else {
 			state = Qt::Unchecked;
-			_all_cb.setCheckState(state);
+			_allCb.setCheckState(state);
 		}
 		_cb[i]->setCheckState(state);
 	}
@@ -178,8 +178,8 @@ void KsCheckBoxTableDialog::initTable(QStringList headers, int size)
 		_table.setCellWidget(i, 0, cbWidget);
 	}
 
-	_cb_layout->setContentsMargins(1, 1, 1, 1);
-	_cb_layout->addWidget(&_table);
+	_cbLayout->setContentsMargins(1, 1, 1, 1);
+	_cbLayout->addWidget(&_table);
 }
 
 void KsCheckBoxTableDialog::adjustSize()
@@ -190,26 +190,26 @@ void KsCheckBoxTableDialog::adjustSize()
 
 	int width = _table.horizontalHeader()->length() + 5;
 
-	if(_table.verticalHeader()->length() > _cb_widget->height())
+	if(_table.verticalHeader()->length() > _cbWidget->height())
 		width += style()->pixelMetric(QStyle::PM_ScrollBarExtent);
 
 	int height = _table.horizontalHeader()->height();
 	if (_table.rowCount())
 		height += _table.verticalHeader()->length() + FONT_HEIGHT;
 
-	_cb_widget->resize(width, height);
+	_cbWidget->resize(width, height);
 
-	setMinimumWidth(_cb_widget->width() +
-			_cb_layout->contentsMargins().left() +
-			_cb_layout->contentsMargins().right() +
-			_top_layout.contentsMargins().left() +
-			_top_layout.contentsMargins().right());
+	setMinimumWidth(_cbWidget->width() +
+			_cbLayout->contentsMargins().left() +
+			_cbLayout->contentsMargins().right() +
+			_topLayout.contentsMargins().left() +
+			_topLayout.contentsMargins().right());
 }
 
 void  KsCheckBoxTableDialog::update(bool state)
 {
 	if (!state)
-		_all_cb.setCheckState(Qt::Unchecked);
+		_allCb.setCheckState(Qt::Unchecked);
 }
 
 void KsCheckBoxTableDialog::applyPress()
@@ -221,7 +221,7 @@ void KsCheckBoxTableDialog::applyPress()
 			vec.append(_id[i]);
 
 	emit apply(vec);
-	disconnect(&_apply_button, SIGNAL(pressed()), this, SLOT(applyPress()));
+	disconnect(&_applyButton, SIGNAL(pressed()), this, SLOT(applyPress()));
 	close();
 }
 
@@ -246,13 +246,13 @@ void KsCheckBoxTreeDialog::set(QVector<bool> v)
 {
 	int n = (v.size() <=  _cb.size())? v.size() : _cb.size();
 	Qt::CheckState state;
-	_all_cb.setCheckState(Qt::Checked);
+	_allCb.setCheckState(Qt::Checked);
 	for (int i = 0; i < n; ++i) {
 		if (v[i]) {
 			state = Qt::Checked;
 		} else {
 			state = Qt::Unchecked;
-			_all_cb.setCheckState(state);
+			_allCb.setCheckState(state);
 		}
 		_cb[i]->setCheckState(0, state);
 	}
@@ -269,8 +269,8 @@ void KsCheckBoxTreeDialog::initTree()
 	connect(&_tree, SIGNAL(itemClicked(QTreeWidgetItem*, int)),
 	this, SLOT(update(QTreeWidgetItem*, int)));
 
-	_cb_layout->setContentsMargins(1, 1, 1, 1);
-	_cb_layout->addWidget(&_tree);
+	_cbLayout->setContentsMargins(1, 1, 1, 1);
+	_cbLayout->addWidget(&_tree);
 }
 
 void KsCheckBoxTreeDialog::adjustSize(int size)
@@ -300,29 +300,29 @@ void KsCheckBoxTreeDialog::adjustSize(int size)
 	height += height/10;
 
 	int heightSe = _scrollArea.height() -
-		       _cb_layout->contentsMargins().top() -
-		       _cb_layout->contentsMargins().bottom();
+		       _cbLayout->contentsMargins().top() -
+		       _cbLayout->contentsMargins().bottom();
 
 	int widthSe = _scrollArea.width() -
-		      _cb_layout->contentsMargins().left() -
-		      _cb_layout->contentsMargins().right();
+		      _cbLayout->contentsMargins().left() -
+		      _cbLayout->contentsMargins().right();
 
 	if (height < heightSe)
 		height = heightSe;
 
-	if (height > _cb_widget->height())
+	if (height > _cbWidget->height())
 		width += style()->pixelMetric(QStyle::PM_ScrollBarExtent);
 
 	if (width < widthSe)
 		width = widthSe;
 
-	_cb_widget->resize(width, height);
+	_cbWidget->resize(width, height);
 
-	setMinimumWidth(_cb_widget->width() +
-			_cb_layout->contentsMargins().left() +
-			_cb_layout->contentsMargins().right() +
-			_top_layout.contentsMargins().left() +
-			_top_layout.contentsMargins().right());
+	setMinimumWidth(_cbWidget->width() +
+			_cbLayout->contentsMargins().left() +
+			_cbLayout->contentsMargins().right() +
+			_topLayout.contentsMargins().left() +
+			_topLayout.contentsMargins().right());
 }
 
 static void update_r(QTreeWidgetItem *item, Qt::CheckState state)
@@ -338,7 +338,7 @@ void KsCheckBoxTreeDialog::update(QTreeWidgetItem *item, int column)
 {
 	Qt::CheckState state = item->checkState(0);
 	if (state != Qt::Checked) {
-		_all_cb.setCheckState(Qt::Unchecked);
+		_allCb.setCheckState(Qt::Unchecked);
 		QTreeWidgetItem *parent = item->parent();
 		if (parent)
 			parent->setCheckState(0, Qt::Unchecked);
@@ -368,7 +368,7 @@ void KsCheckBoxTreeDialog::applyPress()
 	}
 
 	emit apply(vec);
-	disconnect(&_apply_button, SIGNAL(pressed()), this, SLOT(applyPress()));
+	disconnect(&_applyButton, SIGNAL(pressed()), this, SLOT(applyPress()));
 	close();
 }
 

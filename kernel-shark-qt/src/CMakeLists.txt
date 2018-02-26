@@ -3,7 +3,9 @@ message("\n src ...")
 message(STATUS "libkshark")
 add_library(kshark SHARED libkshark.c
                           libkshark-plugin.c
-                          trace-filter-hash.c)
+                          trace-filter-hash.c
+#                           trace-capture.c
+                          )
 
 target_link_libraries(kshark ${CMAKE_DL_LIBS}
                              ${TRACEEVENT_LIBRARY}
@@ -39,7 +41,8 @@ if (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
                         KsTraceViewer.hpp
                         KsTraceGraph.hpp
                         KsGLWidget.hpp
-                        KsUtils.hpp)
+                        KsUtils.hpp
+                        KsCaptureDialog.hpp)
 
     QT5_WRAP_CPP(ks-guiLib_hdr_moc ${ks-guiLib_hdr})
 
@@ -49,7 +52,8 @@ if (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
                                                             KsModel.cpp
                                                             KsUtils.cpp
                                                             KsPlotTools.cpp
-                                                            KsGLWidget.cpp)
+                                                            KsGLWidget.cpp
+                                                            KsCaptureDialog.cpp)
 
     target_link_libraries(kshark-gui kshark
                                      ${OPENGL_LIBRARIES}
@@ -64,7 +68,7 @@ if (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
     target_link_libraries(kernelshark   kshark-gui)
 
     add_subdirectory(plugins)
-#     add_subdirectory(prototypes)
+    add_subdirectory(prototypes)
 
 endif (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
 
