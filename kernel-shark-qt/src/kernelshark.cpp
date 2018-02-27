@@ -34,7 +34,6 @@
 
 #define default_input_file (char*)"trace.dat"
 static char *input_file;
-// QStringList files;
 
 void usage(const char *prog)
 {
@@ -66,7 +65,6 @@ int main(int argc, char **argv)
 
 		case 'i':
 			input_file = optarg;
-// 			files.append(QString(optarg));
 			break;
 
 		case 'p':
@@ -88,11 +86,11 @@ int main(int argc, char **argv)
 		input_file = argv[optind];
 	}
 
-// 	if (!input_file)
-// 		input_file = default_input_file;
-
-// 	if (files.count())
-// 		ks.loadFiles(files);
+	if (!input_file) {
+		struct stat st;
+		if (stat(default_input_file, &st) == 0)
+			input_file = default_input_file;
+	}
 
 	if (input_file)
 		ks.loadFile(QString(input_file));

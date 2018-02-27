@@ -112,8 +112,8 @@ QVariant KsViewModel::data(const QModelIndex &index, int role) const
 	return {};
 }
 
-int KsViewModel::rowCount(const QModelIndex &) const {
-// 	return (_data.count() < VIEWER_PAGE_SIZE) ? _data.count() : VIEWER_PAGE_SIZE;
+int KsViewModel::rowCount(const QModelIndex &) const
+{
 	return _data.count();
 }
 

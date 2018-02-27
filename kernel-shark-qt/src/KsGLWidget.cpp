@@ -451,6 +451,12 @@ bool KsGLWidget::find(QMouseEvent *event, int variance, size_t *row)
 	int bin = event->pos().x() - _hMargin;
 	int cpu = getCpu(event->pos().y());
 	int pid = getPid(event->pos().y());
+
+	return find(bin, cpu, pid, variance, row);
+}
+
+bool KsGLWidget::find(int bin, int cpu, int pid, int variance, size_t *row)
+{
 	int hSize = _model.histo()->size();
 	if (bin < 0 || bin > hSize || (cpu < 0 && pid < 0)) {
 		/* The click is outside of the range of the histogram.
@@ -681,9 +687,16 @@ void KsGLWidget::mouseMoveEvent(QMouseEvent *event)
 		rangeBoundStretched(posInRange(event->pos().x()));
 
 	size_t row;
-	bool status = find(event, 5, &row);
-	if (status)
+	int bin = event->pos().x() - _hMargin;
+	int cpu = getCpu(event->pos().y());
+	int pid = getPid(event->pos().y());
+
+	bool status = find(bin, cpu, pid, 5, &row);
+	if (status) {
 		emit found(row);
+	} else {
+		emit notFound(_model.histo()->ts(bin), cpu, pid);
+	}
 }
 
 void KsGLWidget::mouseReleaseEvent(QMouseEvent *event)
@@ -705,9 +718,8 @@ void KsGLWidget::mouseReleaseEvent(QMouseEvent *event)
 
 void KsGLWidget::mouseDoubleClickEvent(QMouseEvent *event)
 {
-	if (event->button() == Qt::LeftButton) {
+	if (event->button() == Qt::LeftButton)
 		findAndSelect(event);
-	}
 }
 
 void KsGLWidget::wheelEvent(QWheelEvent * event)

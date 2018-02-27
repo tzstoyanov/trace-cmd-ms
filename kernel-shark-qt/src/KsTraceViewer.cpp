@@ -189,7 +189,8 @@ void KsTraceViewer::searchEditText(const QString &text)
 void KsTraceViewer::graphFollowsChanged(int state)
 {
 	_graphFollows = (bool) state;
-	if (_searchDone)
+
+	if (_graphFollows && _searchDone)
 		emit select(*_it); // Send a signal to the Graph widget.
 }
 
@@ -241,8 +242,9 @@ void KsTraceViewer::search()
 		}
 
 		if (!_matchList.empty()) {
+			qInfo() << "match";
 			this->showRow(*_it, true);
-
+			qInfo() << "found " << _matchList.count() << "  it " << *_it;
 			if (_graphFollows)
 				emit select(*_it); // Send a signal to the Graph widget.
 		}
@@ -280,7 +282,12 @@ void KsTraceViewer::next()
 
 void KsTraceViewer::prev()
 {
-	if (!_matchList.empty()) {	// Items have been found.
+	if (!_searchDone) {
+		search();
+		return;
+	}
+
+	if (!_matchList.empty()) { // Items have been found.
 		if (_it == _matchList.begin()) {
 			// This is the first item of the list. Go to the last item.
 			_it = _matchList.end() - 1;
@@ -313,7 +320,7 @@ void KsTraceViewer::showRow(size_t r, bool mark)
 	 * of the row number in the of the proxy model. */
 	QModelIndex index = _proxyModel.mapFromSource(_model.index(r, 0));
 	if (mark) { // The row will be selected (colored).
-		// Get the first and the last visible row of the table.
+		// Get the first and the last visible rows of the table.
 		int visiTot = _view.indexAt(_view.rect().topLeft()).row();
 		int visiBottom = _view.indexAt(_view.rect().bottomLeft()).row() - 2;
 		// Scroll only if the row to be shown in not vizible.
@@ -365,6 +372,13 @@ void KsTraceViewer::resizeToContents()
 	_view.setVisible(false);
 	_view.resizeColumnsToContents();
 	_view.setVisible(true);
+
+	/** Because of some unknown reason the first column doesn't get
+	 * resized properly by the code above. We will resize this
+	 * column by hand. */
+	int rows = _model.rowCount({});
+	int columnSize = STRING_WIDTH(QString("%1").arg(rows)) + FONT_WIDTH;
+	_view.setColumnWidth(0, columnSize);
 }
 
 bool KsTraceViewer::event(QEvent *event)
@@ -394,6 +408,9 @@ size_t KsTraceViewer::searchItems(int column,
 	int count = _proxyModel.search(column, searchText, cond, &_matchList);
 	_searchDone = true;
 
+	if (count == 0) // No items have been found. Do nothing.
+		return 0;
+
 	QItemSelectionModel *sm = _view.selectionModel();
 	if (sm->hasSelection()) {
 		/* Only one row at the time can be selected. */
@@ -405,9 +422,10 @@ size_t KsTraceViewer::searchItems(int column,
 		while (*_it <= row)
 			++_it;
 	} else {
-		// Move the iterator to the beginning of the match list.
+		/* Move the iterator to the beginning of the match list. */
 		_view.clearSelection();
 		_it = _matchList.begin();
 	}
+
 	return count;
 }

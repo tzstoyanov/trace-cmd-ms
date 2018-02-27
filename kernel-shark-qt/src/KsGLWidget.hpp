@@ -64,6 +64,7 @@ public:
 
 signals:
 	void found(size_t pos);
+	void notFound(uint64_t ts, int cpu, int pid);
 	void zoomIn();
 	void zoomOut();
 	void scrollLeft();
@@ -99,6 +100,7 @@ private:
 	void rangeChanged(int binMin, int binMax);
 
 	bool find(QMouseEvent *event, int variance, size_t *row);
+	bool find(int bin, int cpu, int pid, int variance, size_t *row);
 	bool findAndSelect(QMouseEvent *event);
 
 	KsGraphModel	 _model;

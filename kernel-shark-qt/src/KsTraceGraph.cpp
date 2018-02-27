@@ -113,6 +113,8 @@ KsTraceGraph::KsTraceGraph(QWidget *parent)
 
 	connect(&_glWindow, SIGNAL(select(size_t)), this, SLOT(markEntry(size_t)));
 	connect(&_glWindow, SIGNAL(found(size_t)), this, SLOT(setPointerInfo(size_t)));
+	connect(&_glWindow, SIGNAL(notFound(uint64_t, int, int)),
+		this, SLOT(resetPointer(uint64_t,int, int)));
 	connect(&_glWindow, SIGNAL(zoomIn()), this, SLOT(zoomIn()));
 	connect(&_glWindow, SIGNAL(zoomOut()), this, SLOT(zoomOut()));
 	connect(&_glWindow, SIGNAL(scrollLeft()), this, SLOT(scrollLeft()));
@@ -200,11 +202,35 @@ void KsTraceGraph::stopUpdating()
 	_keyPressed = false;
 }
 
-void KsTraceGraph::resetPointer()
+void KsTraceGraph::resetPointer(uint64_t ts, int cpu, int pid)
 {
-	_mState->activeMarker().remove();
+	uint64_t sec, usec;
+	kshark_convert_nano(ts, &sec, &usec);
+	QString pointer;
+	pointer.sprintf("%llu.%llu", (unsigned long long)sec, (unsigned long long)usec);
+	_labelP2.setText(pointer);
+
+	if (pid >= 0) {
+		struct kshark_context *kshark_ctx = NULL;
+		kshark_instance(&kshark_ctx);
+		QString comm(kshark_get_comm_from_pid(kshark_ctx->pevt, pid));
+		comm.append("-");
+		comm.append(QString("%1").arg(pid));
+		_labelI1.setText(comm);
+	} else {
+		_labelI1.setText("");
+	}
+
+	if (cpu >= 0)
+		_labelI2.setText(QString("Cpu %1").arg(cpu));
+	else
+		_labelI2.setText("");
+
+	for (auto const &l: {&_labelI3, &_labelI4, &_labelI5}) {
+		l->setText("");
+	}
 }
-#include <unistd.h>
+
 void KsTraceGraph::setPointerInfo(size_t i)
 {
 	kshark_entry *e = _data->_rows[i];
@@ -311,7 +337,6 @@ void KsTraceGraph::cpuReDraw(QVector<int> v)
 {
 	_glWindow._cpuList = v;
 	markerReDraw();
-
 	update();
 }
 
@@ -458,16 +483,13 @@ bool KsTraceGraph::eventFilter(QObject* obj, QEvent* evt)
 	/* Overriding a virtual function from QObject.
 	 * This function is used to detect the position of the mouse
 	 * with respect to the Draw window and according to this position
-	 * to grab / release the keyboard. The function has nothing to do
-	 * with the filtering of the trace events. */
+	 * to grab / release the focus of the keyboard. The function has
+	 * nothing to do with the filtering of the trace events. */
+	if (obj == &_drawWindow && evt->type() == QEvent::Enter)
+		_glWindow.setFocus();
 
-	if (obj == &_drawWindow && evt->type() == QEvent::Enter) {
-		_glWindow.grabKeyboard();
-	}
-
-	if (obj == &_drawWindow && evt->type() == QEvent::Leave) {
-		_glWindow.releaseKeyboard();
-	}
+	if (obj == &_drawWindow && evt->type() == QEvent::Leave)
+		_glWindow.clearFocus();
 
 	return QWidget::eventFilter(obj, evt);
 }
@@ -493,6 +515,7 @@ void KsTraceGraph::updateGraphs(GraphActions action)
 				 * interval of the model. */
 				_glWindow.model()->zoomIn(k);
 			}
+
 			break;
 
 		case GraphActions::ZoomOut:
@@ -506,6 +529,7 @@ void KsTraceGraph::updateGraphs(GraphActions action)
 				 * interval of the model. */
 				_glWindow.model()->zoomOut(k);
 			}
+
 			break;
 
 		case GraphActions::ScrollLeft:
