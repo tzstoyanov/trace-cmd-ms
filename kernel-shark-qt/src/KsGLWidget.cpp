@@ -61,6 +61,8 @@ void KsGLWidget::paintGL()
 	/* Clear the canvas and prepare for a new drawing. */
 	glClear(GL_COLOR_BUFFER_BIT);
 
+	loadColors();
+
 	/* Draw the time axis. */
 	if(_data)
 		drawAxisX();
@@ -121,7 +123,6 @@ void KsGLWidget::loadData(KsDataStore *data)
 	_model.histo()->setBining(nBins, tMin, tMax);
 	_model.fill(_data->_pevt, _data->_rows, _data->size());
 
-	loadColors();
 	/* Make a default Cpu list. All Cpus will be plotted. */
 	_cpuList = {};
 	for (int i = 0; i < nCpus; ++i)
@@ -139,12 +140,14 @@ void KsGLWidget::loadData(KsDataStore *data)
 
 void KsGLWidget::loadColors()
 {
+	_pidColors.clear();
 	QVector<int> pids;
 	int n = getPidList(&pids);
 	KsPlot::Color col;
+
 	for (int i = 0; i < n; ++i) {
 		_pidColors[pids[i]] = col;
-		col.setRainbowsColor(i);
+		col.setRainbowColor(i);
 	}
 }
 
@@ -347,7 +350,8 @@ void KsGLWidget::addCpu(int cpu)
 		graph->setBinPid(b, pidB, pidB);
 	}
 
-	/* The loop starts from the second bin. */
+	/* The first bin is already processed.
+	 * The loop starts from the second bin. */
 	for (b = 1; b < nBins; ++b) {
 		/* Check the content of this bin and see if the Cpu is active.
 		 * If yes, retrieve the Process Id. If not, derive from the
@@ -377,15 +381,30 @@ void KsGLWidget::addTask(int pid)
 	auto set_bin = [&] (int b) {
 		if (cpu >= 0) {
 			KsPlot::Color col;
-			col.setRainbowsColor(1 + cpu*2);
+			col.setRainbowColor(cpu);
 
 			/* Data from thе Task has been found in this bin. */
 			if (pid == pidF && pid == pidB) {
-				/* . */
+				/* No data from other tasks in this bin. */
 				graph->setBin(b, pid, pid, col);
-			}
-			else {
-				/* . */
+			} else if (pid != pidF && pid != pidB) {
+				/* There is some data from another tasks at both
+				 * front and back sides of this bin. But we still
+				 * want to see this bin drawn. */
+				graph->setBin(b, pid, KS_FILTERED_BIN, col);
+			} else {
+				if (pidF != pid) {
+					/* There is some data from another task
+					 * at the front side of this bin. */
+					pidF = KS_FILTERED_BIN;
+				}
+
+				if (pidB != pid) {
+					/* There is some data from another task
+					 * at the back side of this bin. */
+					pidB = KS_FILTERED_BIN;
+				}
+
 				graph->setBin(b, pidF, pidB, col);
 			}
 
@@ -434,10 +453,17 @@ void KsGLWidget::addTask(int pid)
 		}
 	}
 
+	/* The first bin is already processed.
+	 * The loop starts from the second bin. */
 	for (int b = 1; b < nBins; ++b) {
+		// Get the CPU used by this task.
 		cpu = _model.histo()->getCpu(b, pid, false);
+
+		// Get the process Id at the begining and at the end bin.
 		pidF = _model.histo()->getPidFront(b, cpu, false);
 		pidB = _model.histo()->getPidBack(b, cpu, false);
+
+		// Set the bin accordingly.
 		set_bin(b);
 	}
 
@@ -565,7 +591,8 @@ void KsGLWidget::rangeBoundStretched(int x)
 	pos.ry() = this->height();
 
 	/* Stretch the rubber band between the origin position and the current position
-	 * of the mouse. The Y coordinate will be the height of the widget. */
+	 * of the mouse. Only the X coordinate matters. The Y coordinate will be the
+	 * height of the widget. */
 	if (_rubberBandOrigin.x() < pos.x()) {
 		_rubberBand.setGeometry(QRect(_rubberBandOrigin.x(),
 					      _rubberBandOrigin.y(),
@@ -610,8 +637,8 @@ void KsGLWidget::rangeChanged(int binMin, int binMax)
 	_mState->updateMarkers(*_data, *_model.histo());
 
 	/* If the Marker is inside the new range, make sure that it will
-	 * be visible. Note that for this check we use the bin number of
-	 * the marker, retrieved before its update. */
+	 * be visible in the table. Note that for this check we use the
+	 * bin number of the marker, retrieved before its update. */
 	if (_mState->activeMarker().isSet() &&
 	    binMark < binMax && binMark > binMin) {
 		emit updateView(_mState->activeMarker().row(), true);
@@ -647,7 +674,7 @@ int KsGLWidget::getCpu(int y)
 		return -1;
 
 	int cpuId = (y - _vMargin + _vSpacing/2)/(_vSpacing + CPU_GRAPH_HEIGHT);
-	if (cpuId < 0 || cpuId > _cpuList.count() - 1)
+	if (cpuId < 0 || cpuId >= _cpuList.count())
 		return -1;
 
 	return _cpuList[cpuId];
@@ -662,7 +689,7 @@ int KsGLWidget::getPid(int y)
 			 _cpuList.count()*(CPU_GRAPH_HEIGHT + _vSpacing) +
 			 _vSpacing/2)/(_vSpacing + CPU_GRAPH_HEIGHT);
 
-	if (pidId < 0 || pidId > _taskList.count())
+	if (pidId < 0 || pidId >= _taskList.count())
 		return -1;
 
 	return _taskList[pidId];

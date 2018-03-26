@@ -38,7 +38,7 @@ class KsGLWidget : public QOpenGLWidget
 	void paintGL() override;
 
 public:
-	KsGLWidget(QWidget *parent = NULL);
+	explicit KsGLWidget(QWidget *parent = NULL);
 
 	void loadData(KsDataStore *data);
 	void loadColors();

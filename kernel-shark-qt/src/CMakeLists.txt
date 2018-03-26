@@ -4,13 +4,13 @@ message(STATUS "libkshark")
 add_library(kshark SHARED libkshark.c
                           libkshark-plugin.c
                           trace-filter-hash.c
-#                           trace-capture.c
+                          libkshark-json.c
                           )
 
 target_link_libraries(kshark ${CMAKE_DL_LIBS}
                              ${TRACEEVENT_LIBRARY}
                              ${TRACECMD_LIBRARY} 
-                             )
+                             ${JSONC_LIBRARY})
 
 set_target_properties(kshark  PROPERTIES SUFFIX	".so.${KS_VERSION_STRING}")
 
@@ -34,10 +34,11 @@ if (PYTHONLIBS_FOUND)
 
 endif (PYTHONLIBS_FOUND)
 
-if (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
+if (Qt5Widgets_FOUND AND Qt5Network_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
 
     message(STATUS "libkshark-gui")
     set (ks-guiLib_hdr  KsMainWindow.hpp
+                        KsWidgetsLib.hpp
                         KsTraceViewer.hpp
                         KsTraceGraph.hpp
                         KsGLWidget.hpp
@@ -47,6 +48,7 @@ if (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
     QT5_WRAP_CPP(ks-guiLib_hdr_moc ${ks-guiLib_hdr})
 
     add_library(kshark-gui  SHARED  ${ks-guiLib_hdr_moc}    KsMainWindow.cpp
+                                                            KsWidgetsLib.cpp
                                                             KsTraceViewer.cpp
                                                             KsTraceGraph.cpp
                                                             KsModel.cpp
@@ -58,7 +60,8 @@ if (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
     target_link_libraries(kshark-gui kshark
                                      ${OPENGL_LIBRARIES}
                                      ${GLUT_LIBRARY}
-                                     Qt5::Widgets)
+                                     Qt5::Widgets
+                                     Qt5::Network)
 
     set_target_properties(kshark-gui PROPERTIES  SUFFIX ".so.${KS_VERSION_STRING}")
 
@@ -67,10 +70,14 @@ if (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
     add_executable(kernelshark          kernelshark.cpp)
     target_link_libraries(kernelshark   kshark-gui)
 
+    message(STATUS "kshark-record")
+    add_executable(kshark-record        kshark-record.cpp)
+    target_link_libraries(kshark-record kshark-gui)
+
     add_subdirectory(plugins)
     add_subdirectory(prototypes)
 
-endif (Qt5Widgets_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
+endif (Qt5Widgets_FOUND AND Qt5Network_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
 
 configure_file( ${KS_DIR}/build/deff.h.cmake
                 ${KS_DIR}/src/KsDeff.h)

@@ -19,8 +19,13 @@ ProcessorCount(N_CPUS)
 
 include(${KS_DIR}/build/FindTraceCmd.cmake)
 
+include(${KS_DIR}/build/FindJSONC.cmake)
+
 find_package(Qt5Widgets 5.7.1)
-message(STATUS "Found Qt5Widgets:  (version ${Qt5Widgets_VERSION})")
+find_package(Qt5Network)
+if (Qt5Widgets_FOUND)
+	message(STATUS "Found Qt5Widgets:  (version ${Qt5Widgets_VERSION})")
+endif (Qt5Widgets_FOUND)
 
 find_package(OpenGL)
 find_package(GLUT)
@@ -40,7 +45,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=c++11 -pthread")
 include_directories( ${KS_DIR}/src/
                      ${KS_DIR}/build/src/
                      ${TRACECMD_INCLUDE_DIR}
-                     ${TRACEEVENT_INCLUDE_DIR})
+                     ${TRACEEVENT_INCLUDE_DIR}
+                     ${JSONC_INCLUDE_DIR})
 
 message("")
 message(STATUS "C flags      : " ${CMAKE_C_FLAGS})

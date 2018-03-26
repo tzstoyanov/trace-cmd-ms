@@ -39,12 +39,14 @@ struct Color
 	Color(uint8_t r, uint8_t g, uint8_t b);
 	Color(int rgb);
 
-	Color& operator ++();
 	Color& operator =(const QColor &c);
 
 	void nice();
-	void setRainbowsColor(int n);
+	void setRainbowColor(int n);
+	static void setRainbowFrequency(float f) {_frequency = f;}
 	uint8_t _r, _g, _b;
+
+	static float _frequency;
 };
 
 typedef QHash<int, KsPlot::Color> ColorTable;

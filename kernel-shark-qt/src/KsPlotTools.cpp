@@ -31,6 +31,8 @@
 namespace KsPlot
 {
 
+float Color::_frequency = .75;
+
 Color::Color()
 : _r(0), _g(0), _b(0)
 {}
@@ -46,20 +48,6 @@ Color::Color(int rgb)
 	_b = (rgb >> 16) & 0xFF;
 }
 
-Color& Color::operator ++()
-{
-	int rgb = 0;
-	rgb |= _r;
-	rgb |= (_g << 8);
-	rgb |= (_b << 16);
-	rgb = (217013*rgb+1531011);
-	rgb = (rgb >> 7) & 0xFFFFFF;
-
-	*this = Color(rgb);
-	this->nice();
-	return *this;
-}
-
 Color& Color::operator =(const QColor &c)
 {
 	_r = c.red();
@@ -69,22 +57,11 @@ Color& Color::operator =(const QColor &c)
 	return *this;
 }
 
-void Color::nice()
+void Color::setRainbowColor(int n)
 {
-	int sum = _r + _g + _b;
-	while (sum < 350 || sum > 650) {
-		++(*this);
-		sum = _r + _g + _b;
-	}
-}
-
-void Color::setRainbowsColor(int n)
-{
-	float frequency = .3;
-
-	_r = sin(frequency*n + 0) * 127 + 128;
-	_g = sin(frequency*n + 2) * 127 + 128;
-	_b = sin(frequency*n + 4) * 127 + 128;
+	_r = sin(_frequency*n + 0) * 127 + 128;
+	_g = sin(_frequency*n + 2) * 127 + 128;
+	_b = sin(_frequency*n + 4) * 127 + 128;
 }
 
 Point::Point()
@@ -343,7 +320,7 @@ void Graph::draw(const ColorTable &pidColors, float s)
 
 	/* Draw as lines all bins containing data. */
 	for (size_t i = 0; i < _size; ++i)
-		if (_bins[i]._pidFront >= 0)
+		if (_bins[i]._pidFront >= 0 || _bins[i]._pidBack >= 0)
 			_bins[i].drawLine(s);
 
 	/* Draw colored boxes.

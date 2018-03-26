@@ -399,9 +399,9 @@ void KsTraceGraph::updateGeom()
 			 _layout.spacing()*2 +
 			 _layout.contentsMargins().top() +
 			 _layout.contentsMargins().bottom() +
-			 2);	/* Just a little bit of extra space. This will allow
-				 * the scroll bar to disappear when the widget is
-				 * extended to maximum. */
+			 2);  /* Just a little bit of extra space. This will allow
+			       * the scroll bar to disappear when the widget is
+			       * extended to maximum. */
 }
 
 void KsTraceGraph::updateGraphLegends()

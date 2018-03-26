@@ -23,7 +23,7 @@
 
 // Qt
 #include <QMainWindow>
-#include <QAction>
+#include <QLocalServer>
 
 // Kernel Shark 2
 #include "KsTraceViewer.hpp"
@@ -40,26 +40,8 @@ public:
 	void loadFile(const QString &fileName);
 // 	void loadFiles(const QList<QString> &files);
 
-	void registerPlugin(QString plugin) {_plugins.registerPlugin(plugin);}
-	void unregisterPlugin(QString plugin) {_plugins.unregisterPlugin(plugin);}
-
-private slots:
-	void open();
-	void importFilter();
-	void reload();
-	void saveFilter();
-// 	bool saveAs();
-	void listFilterSync(bool state);
-	void graphFilterSync(bool state);
-	void showEvents();
-	void showTasks();
-	void hideTasks();
-	void cpuSelect();
-	void taskSelect();
-	void pluginSelect();
-	void capture();
-	void aboutInfo();
-	void contents();
+	void registerPlugin(const QString &plugin) {_plugins.registerPlugin(plugin);}
+	void unregisterPlugin(const QString &plugin) {_plugins.unregisterPlugin(plugin);}
 
 private:
 	/** Data Manager. */
@@ -72,41 +54,68 @@ private:
 	KsTraceGraph	_graph;
 
 	/** Dual Marker State Machine. */
-	KsDualMarkerSM  _mState;
+	KsDualMarkerSM	_mState;
 
-	/** A plugin manager. */
-	KsPluginManager  _plugins;
-	
+	/** Plugin manager. */
+	KsPluginManager	_plugins;
+
+	/** Capture process. */
+	QProcess	_capture;
+
+	/** Local Server used for comunucation with the Capture process. */
+	QLocalServer	_captureLocalServer;
+
 	// File menu.
-	QAction _openAction;
-	QAction _importFilterAction;
-	QAction _saveFilterAction;
-	QAction _saveFilterAsAction;
-	QAction _exportFilterAction;
-	QAction _quitAction;
+	QAction		_openAction;
+	QAction		_importFilterAction;
+	QAction		_exportFilterAction;
+	QAction		_quitAction;
 
 	// Filter menu.
-	QWidgetAction _graphFilterSyncAction;
-	QWidgetAction _listFilterSyncAction;
-	QAction _showEventsAction;
-	QAction _showTasksAction;
-	QAction _hideTasksAction;
+	QWidgetAction	_graphFilterSyncAction;
+	QWidgetAction	_listFilterSyncAction;
+	QAction		_showEventsAction;
+	QAction		_showTasksAction;
+	QAction		_hideTasksAction;
 
 	// Plots menu.
-	QAction _cpuSelectAction;
-	QAction _taskSelectAction;
+	QAction		_cpuSelectAction;
+	QAction		_taskSelectAction;
 
 	// Tools menu.
-	QAction _pluginsAction;
-	QAction _captureAction;
+	QAction		_pluginsAction;
+	QAction		_captureAction;
+	QWidgetAction	_colorAction;
+	QSlider		_colorPhaseSlider;
 
 	// Help menu.
-	QAction _aboutAction;
-	QAction _contentsAction;
+	QAction		_aboutAction;
+	QAction		_contentsAction;
 
 	void resizeEvent(QResizeEvent* event);
 	void createActions();
 	void createMenus();
+
+private slots:
+	void open();
+	void open(QString file);
+	void importFilter();
+	void exportFilter();
+	void listFilterSync(bool state);
+	void graphFilterSync(bool state);
+	void showEvents();
+	void showTasks();
+	void hideTasks();
+	void cpuSelect();
+	void taskSelect();
+	void pluginSelect();
+	void capture();
+	void setColorPhase(int);
+	void aboutInfo();
+	void contents();
+	void captureStarted();
+	void captureFinished(int, QProcess::ExitStatus);
+	void readSocket();
 };
 
 // class KsConcentratorMainWindow : public

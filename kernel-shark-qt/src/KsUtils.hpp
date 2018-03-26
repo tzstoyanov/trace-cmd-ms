@@ -50,9 +50,9 @@ auto stringWidth = [](QString s)
 	return fm.width(s);
 };
 
-#define FONT_HEIGHT fontHeight()
-#define FONT_WIDTH  stringWidth("4")
-#define STRING_WIDTH(s)  stringWidth(s)
+#define FONT_HEIGHT	fontHeight()
+#define FONT_WIDTH 	stringWidth("4")
+#define STRING_WIDTH(s)	stringWidth(s)
 
 // auto graph_height = [] (int scale)
 // {
@@ -72,133 +72,8 @@ typedef std::chrono::high_resolution_clock::time_point  hd_time;
 std::chrono::high_resolution_clock::now() - t0).count()
 
 int getPidList(QVector<int> *pids);
+
 int getPluginList(QStringList *pl);
-
-class KsDataProgressBar : public QWidget {
-	Q_OBJECT
-
-	QStatusBar	_sb;
-	QProgressBar	_pb;
-
-public:
-	KsDataProgressBar(QWidget *parent = 0);
-
-public slots:
-	void setValue(int i);
-};
-
-class KsMessageDialog : public QDialog
-{
-	Q_OBJECT
-public:
-	KsMessageDialog(QWidget *parent) = delete;
-	KsMessageDialog(QString message, QWidget *parent = 0);
-
-private:
-	QVBoxLayout	_layout;
-	QLabel		_text;
-	QPushButton	_closeButton;
-};
-
-class KsCheckBoxDialog : public QDialog
-{
-	Q_OBJECT
-public:
-	KsCheckBoxDialog(const QString &name = "", bool cond = true, QWidget *parent = 0);
-
-	void setDefault(bool);
-	virtual void set(QVector<bool> v) =0;
-
-private slots:
-	virtual void applyPress() =0;
-	virtual void chechAll(bool) =0;
-
-signals:
-	void apply(QVector<int>);
-
-protected:
-	void resizeEvent(QResizeEvent* event);
-
-	bool		_positiveCond;
-	QCheckBox	_allCb;
-	QVector<int>    _id;
-
-	QVBoxLayout	*_cbLayout;
-	QWidget		*_cbWidget;
-	QVBoxLayout	 _topLayout;
-	QHBoxLayout	 _buttonLayout;
-	QScrollArea	 _scrollArea;
-
-protected:
-	QString		_name;
-	QPushButton	_canselButton;
-	QPushButton	_applyButton;
-};
-
-class KsCheckBoxTableDialog : public KsCheckBoxDialog
-{
-	Q_OBJECT
-public:
-	KsCheckBoxTableDialog(const QString &name = "", bool cond = true, QWidget *parent = 0);
-
-	void set(QVector<bool> v) override;
-
-private slots:
-	void applyPress() override;
-	void chechAll(bool) override;
-	void update(bool);
-
-protected:
-	void initTable(QStringList headers, int size);
-	void adjustSize();
-
-	QTableWidget		_table;
-	QVector<QCheckBox*>	_cb;
-};
-
-class KsCheckBoxTreeDialog : public KsCheckBoxDialog
-{
-	Q_OBJECT
-public:
-	KsCheckBoxTreeDialog(const QString &name = "", bool cond = true, QWidget *parent = 0);
-
-	void set(QVector<bool> v) override;
-
-private slots:
-	void applyPress() override;
-	void chechAll(bool) override;
-	void update(QTreeWidgetItem *item, int column);
-
-protected:
-	void initTree();
-	void adjustSize(int count);
-
-	QTreeWidget			_tree;
-	QVector<QTreeWidgetItem*>	_cb;
-};
-
-struct KsCpuCheckBoxDialog : public KsCheckBoxTreeDialog
-{
-	KsCpuCheckBoxDialog(struct pevent *pe, bool cond = true, QWidget *parent = 0);
-};
-
-struct KsEventsCheckBoxDialog : public KsCheckBoxTreeDialog
-{
-	KsEventsCheckBoxDialog(struct pevent *pe, bool cond = true, QWidget *parent = 0);
-};
-
-struct KsTasksCheckBoxDialog : public KsCheckBoxTableDialog
-{
-	KsTasksCheckBoxDialog(struct pevent *pe, bool cond = true, QWidget *parent = 0);
-};
-
-struct KsPluginCheckBoxDialog : public KsCheckBoxTableDialog
-{
-	KsPluginCheckBoxDialog(struct pevent *pe,
-			       QStringList pluginList,
-			       bool cond = true,
-			       QWidget *parent = 0);
-};
 
 class KsDataStore : public QObject
 {
@@ -208,7 +83,7 @@ class KsDataStore : public QObject
 	size_t _dataSize;
 
 public:
-	KsDataStore();
+	explicit KsDataStore(QWidget *parent = nullptr);
 	~KsDataStore();
 
 	void loadData(const QString &file);
@@ -239,7 +114,7 @@ class KsPluginManager : public QObject
 {
 	Q_OBJECT
 public:
-	KsPluginManager();
+	explicit KsPluginManager(QWidget *parent = nullptr);
 
 	/** A list of available plugins. */
 	QStringList 	_pluginList;
@@ -251,8 +126,8 @@ signals:
 	void dataReload();
 
 public slots:
-	void registerPlugin(QString plugin);
-	void unregisterPlugin(QString plugin);
+	void registerPlugin(const QString &plugin);
+	void unregisterPlugin(const QString &plugin);
 	void updatePlugins(QVector<int> pluginId);
 };
 
@@ -322,7 +197,7 @@ class KsDualMarkerSM : public QWidget
 {
 	Q_OBJECT
 public:
-	KsDualMarkerSM(QWidget *parent = 0);
+	explicit KsDualMarkerSM(QWidget *parent = nullptr);
 	void reset();
 	void placeInToolBar(QToolBar *tb);
 

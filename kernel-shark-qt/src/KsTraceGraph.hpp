@@ -26,7 +26,7 @@
 
 class KsGraphScrollArea : public QScrollArea {
 public:
-	KsGraphScrollArea(QWidget *parent = 0)
+	explicit KsGraphScrollArea(QWidget *parent = nullptr)
 	: QScrollArea(parent) {}
 
 	void wheelEvent(QWheelEvent *evt) {
@@ -38,7 +38,7 @@ class KsTraceGraph : public QWidget
 {
 	Q_OBJECT
 public:
-	KsTraceGraph(QWidget *parent = 0);
+	explicit KsTraceGraph(QWidget *parent = nullptr);
 
 	void loadData(KsDataStore *data);
 	void setMarkerSM(KsDualMarkerSM *m);

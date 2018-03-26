@@ -26,10 +26,7 @@
 #include <sys/stat.h>
 #include <dlfcn.h>
 
-// trace-cmd
-// #include "event-utils.h"
-
-// Kernel shark 2
+// Kernel shark
 #include "libkshark-plugin.h"
 #include "libkshark.h"
 
@@ -224,15 +221,6 @@ void kshark_handle_plugins(struct kshark_context *kshark_ctx, int task_id)
 
 		func();
 	}
-
-// 	if (task_id == KSHARK_PLUGIN_UNLOAD) {
-// 		while ((plugin = kshark_ctx->plugins)) {
-// 			kshark_ctx->plugins = plugin->next;
-// 			free(plugin);
-// 		}
-// 
-// 		plugin_next = &plugins;
-// 	}
 
 	free(func_name);
 }

@@ -22,6 +22,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <json.h>
 
 #include "trace-filter-hash.h"
 
@@ -38,6 +39,7 @@ filter_id_find(struct filter_id *hash, int id)
 			break;
 		item = item->next;
 	}
+
 	return item;
 }
 
@@ -67,6 +69,7 @@ void filter_id_remove(struct filter_id *hash, int id)
 			break;
 		next = &(*next)->next;
 	}
+
 	if (!*next)
 		return;
 

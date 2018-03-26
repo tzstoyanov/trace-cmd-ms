@@ -449,7 +449,7 @@ size_t kshark_load_data_records(struct kshark_context *kshark_ctx,
 	struct pevent_record **rows;
 	rows = calloc(total, sizeof(struct pevent_record *));
 	if(!rows) {
-		fprintf(stderr, "failed to allocate memory during data loading\n");
+		fprintf(stderr, "Failed to allocate memory during data loading.\n");
 		return 0;
 	}
 
@@ -529,7 +529,7 @@ size_t kshark_load_data_entries(struct kshark_context *kshark_ctx,
 	struct kshark_entry **rows;
 	rows = calloc(total, sizeof(struct kshark_entry *));
 	if(!rows) {
-		fprintf(stderr, "failed to allocate memory during data loading\n");
+		fprintf(stderr, "Failed to allocate memory during data loading.\n");
 		return 0;
 	}
 
@@ -684,7 +684,7 @@ size_t kshark_load_data_matrix(struct kshark_context *kshark_ctx,
 
 
 free_all:
-	fprintf(stderr, "failed to allocate memory during data loading\n");
+	fprintf(stderr, "Failed to allocate memory during data loading.\n");
 
 	if (offset_array)
 		free(offset_array);
@@ -843,10 +843,6 @@ void kshark_convert_nano(uint64_t time, uint64_t *sec, uint64_t *usec)
 	*usec = (time / 1000) % 1000000;
 }
 
-bool kshark_filter_id_find_pid(struct filter_id *filter, int pid) {
-	return filter_id_find(filter, pid);
-}
-
 bool kshark_check_pid(struct kshark_context *kshark_ctx, struct kshark_entry *e, int pid)
 {
 	if (e->pid == pid)
@@ -895,6 +891,9 @@ struct kshark_entry *kshark_get_entry_front(size_t first,
 int kshark_get_pid_front(size_t first, size_t n, int cpu, bool vis_only, int vis_mask,
 			 struct kshark_entry **data)
 {
+	if (cpu < 0)
+		return KS_EMPTY_BIN;
+
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
@@ -962,6 +961,9 @@ struct kshark_entry *kshark_get_entry_back(size_t first,
 int kshark_get_pid_back(size_t first, size_t n, int cpu, bool vis_only, int vis_mask,
 			struct kshark_entry **data)
 {
+	if (cpu < 0)
+		return KS_EMPTY_BIN;
+
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
@@ -1012,4 +1014,33 @@ struct kshark_entry *kshark_get_entry_by_pid_front(size_t first,
 {
 	return kshark_get_entry_front(first, n, kshark_check_pid,
 				      pid, vis_only, vis_mask, data);
+}
+
+int kshark_get_plugins(char ***plugins)
+{
+	const char *tracing;
+	char **all_plugins;
+	int i = 0;
+
+	tracing = tracecmd_get_tracing_dir();
+	all_plugins = tracecmd_local_plugins(tracing);
+
+	while (all_plugins[i]) {
+// 		printf("plugin %i %s\n", i, all_plugins[i]);
+		 ++i;
+	}
+
+	*plugins = all_plugins;
+	return i;
+}
+
+struct pevent *kshark_local_events()
+{
+	const char *tracing = tracecmd_get_tracing_dir();
+	return tracecmd_local_events(tracing);
+}
+
+struct event_format *kshark_find_event(struct pevent *pevt, int event_id)
+{
+	return pevent_find_event(pevt, event_id);
 }

@@ -22,6 +22,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct filter_id_item {
 	struct filter_id_item	*next;
 	int			id;
@@ -57,17 +61,27 @@ static inline int filter_id_count(struct filter_id *hash)
 
 static inline uint8_t knuth_hash8(uint32_t val)
 {
-	return val*UINT8_C(2654435761);
+	/* Multiplication by the Prime number, closest to the golden
+	 * ratio of 2^8. */
+	return UINT8_C(val) * UINT8_C(157);
+// 	return val*UINT8_C(2654435761);
 }
 
 static inline uint16_t knuth_hash16(uint32_t val)
 {
-	return val*UINT16_C(2654435761);
+	/* Multiplication by the Prime number, closest to the golden
+	 * ratio of 2^16. */
+	return UINT16_C(val) * UINT16_C(40507);
+// 	return val*UINT16_C(2654435761);
 }
 
-static inline uint16_t knuth_hash(uint32_t val)
+static inline uint32_t knuth_hash(uint32_t val)
 {
-	return val*UINT32_C(2654435761);
+	return val * UINT32_C(2654435761);
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _TRACE_FILTER_HASH_H */

@@ -242,9 +242,8 @@ void KsTraceViewer::search()
 		}
 
 		if (!_matchList.empty()) {
-			qInfo() << "match";
 			this->showRow(*_it, true);
-			qInfo() << "found " << _matchList.count() << "  it " << *_it;
+
 			if (_graphFollows)
 				emit select(*_it); // Send a signal to the Graph widget.
 		}
@@ -367,6 +366,26 @@ void KsTraceViewer::markSwitch()
 	}
 }
 
+void KsTraceViewer::resizeEvent(QResizeEvent* event)
+{
+	int nColumns = _tableHeader.count();
+	int tableSize(0);
+	for (int c = 0; c < nColumns; ++c) {
+		tableSize += _view.columnWidth(c);
+	}
+
+	int viewSize = _view.width() - qApp->style()->pixelMetric(QStyle::PM_ScrollBarExtent);
+	int freeSpace;
+	if ((freeSpace = viewSize - tableSize) > 0) {
+		_view.setColumnWidth(nColumns - 1, _view.columnWidth(nColumns - 1) +
+						   freeSpace -
+						   2); /* Just a little bit less space.
+							* This will allow the scroll bar to
+							* disappear when the widget is
+							* extended to maximum. */
+	}
+}
+
 void KsTraceViewer::resizeToContents()
 {
 	_view.setVisible(false);
@@ -385,7 +404,7 @@ bool KsTraceViewer::event(QEvent *event)
 {
 	if (_graphFollows && event->type() == QEvent::KeyRelease) {
 		// Get the Key event.
-		QKeyEvent *ke = static_cast<QKeyEvent *>(event);
+		QKeyEvent *ke = static_cast<QKeyEvent*>(event);
 		if (ke->key() == Qt::Key_Up || ke->key() == Qt::Key_Down) {
 			QItemSelectionModel *sm = _view.selectionModel();
 			if (sm->hasSelection()) {
@@ -419,8 +438,15 @@ size_t KsTraceViewer::searchItems(int column,
 		_it = _matchList.begin();
 		/* Move the iterator to the first element of the match list after
 		 * the selected one. */
-		while (*_it <= row)
-			++_it;
+		while (*_it <= row) {
+			++_it;  // Move the iterator.
+			if (_it == _matchList.end() ) {
+				// This is the last item of the list. Go back to the beginning.
+				_it = _matchList.begin();
+				break;
+			}
+		}
+		
 	} else {
 		/* Move the iterator to the beginning of the match list. */
 		_view.clearSelection();

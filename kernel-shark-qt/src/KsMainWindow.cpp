@@ -30,35 +30,41 @@
 #include <QFileDialog>
 #include <QMenuBar>
 #include <QLabel>
+#include <QLocalSocket>
 
 // Kernel Shark 2
 #include "KsMainWindow.hpp"
-#include "KsCaptureDialog.hpp"
 #include "libkshark.h"
+#include "libkshark-json.h"
 #include "KsDeff.h"
+#include "KsCaptureDialog.hpp"
 
 KsMainWindow::KsMainWindow(QWidget *parent)
 : QMainWindow(parent),
+  _data(this),
   _view(this),
   _graph(this),
   _mState(this),
-  _openAction(tr("Open"), parent),
-  _importFilterAction(tr("Import Filter"), parent),
-  _saveFilterAction(tr("Save Filter"), parent),
-  _saveFilterAsAction(tr("Save Filter As"), parent),
-  _exportFilterAction(tr("Export Filter"), parent),
-  _quitAction(tr("Quit"), parent),
-  _graphFilterSyncAction(/*tr("Apply filters to Graph"),*/ parent),
-  _listFilterSyncAction(/*tr("Apply filters to List"),*/ parent),
-  _showEventsAction(tr("Show events"), parent),
-  _showTasksAction(tr("Show tasks"), parent),
-  _hideTasksAction(tr("Hide tasks"), parent),
-  _cpuSelectAction(tr("CPUs"), parent),
-  _taskSelectAction(tr("Tasks"), parent),
+  _plugins(this),
+  _capture(this),
+  _captureLocalServer(this),
+  _openAction("Open", parent),
+  _importFilterAction("Import Filter", parent),
+  _exportFilterAction("Export Filter", parent),
+  _quitAction("Quit", parent),
+  _graphFilterSyncAction(/*"Apply filters to Graph",*/ parent),
+  _listFilterSyncAction(/*"Apply filters to List",*/ parent),
+  _showEventsAction("Show events", parent),
+  _showTasksAction("Show tasks", parent),
+  _hideTasksAction("Hide tasks", parent),
+  _cpuSelectAction("CPUs", parent),
+  _taskSelectAction("Tasks", parent),
   _pluginsAction("Plugins", parent),
-  _captureAction("Capture", parent),
-  _aboutAction(tr("About"), parent),
-  _contentsAction(tr("Contents"), parent)
+  _captureAction("Record", parent),
+  _colorAction(parent),
+  _colorPhaseSlider(Qt::Horizontal, this),
+  _aboutAction("About", parent),
+  _contentsAction("Contents", parent)
 {
 	setWindowTitle("Kernel Shark");
 	createActions();
@@ -101,6 +107,31 @@ KsMainWindow::KsMainWindow(QWidget *parent)
 		&_data, SLOT(reload()));
 
 	this->resize(SCREEN_WIDTH*.4, FONT_HEIGHT*3);
+
+	QStringList args;
+// 	_capture.setProgram("pkexec");
+	_capture.setProgram("gksu");
+
+	args << "--description"
+	     << "Kernel Shark Capture";
+
+	QString captureExe = KS_DIR;
+	captureExe += "/bin/kshark-record";
+	args << captureExe;
+
+	_capture.setArguments(args);
+
+	connect(&_capture, SIGNAL(started()),
+		this, SLOT(captureStarted()));
+
+	connect(&_capture, SIGNAL(finished(int, QProcess::ExitStatus)),
+		this, SLOT(captureFinished(int, QProcess::ExitStatus)));
+
+	connect(&_captureLocalServer, SIGNAL(newConnection()),
+		this, SLOT(readSocket()));
+
+// 	connect(&_capturelocalSocket, QOverload<QLocalSocket::LocalSocketError>::of(&QLocalSocket::error),
+// 		this, &Client::displayError);
 }
 
 KsMainWindow::~KsMainWindow()
@@ -122,32 +153,22 @@ void KsMainWindow::createActions()
 	/* File menu */
 	_openAction.setIcon(QIcon::fromTheme("document-open"));
 	_openAction.setShortcut(tr("Ctrl+O"));
-	_openAction.setStatusTip(tr("Open an existing data file"));
+	_openAction.setStatusTip("Open an existing data file");
 	connect(&_openAction, SIGNAL(triggered()), this, SLOT(open()));
 
 	_importFilterAction.setIcon(QIcon::fromTheme("document-revert"));
 	_importFilterAction.setShortcut(tr("Ctrl+L"));
-	_importFilterAction.setStatusTip(tr("Load a filter"));
+	_importFilterAction.setStatusTip("Load a filter");
 	connect(&_importFilterAction, SIGNAL(triggered()), this, SLOT(importFilter()));
-
-	_saveFilterAction.setIcon(QIcon::fromTheme("document-save"));
-	_saveFilterAction.setShortcut(tr("Ctrl+S"));
-	_saveFilterAction.setStatusTip(tr("Save a filter"));
-	connect(&_saveFilterAction, SIGNAL(triggered()), this, SLOT(saveFilter()));
-
-	_saveFilterAsAction.setIcon(QIcon::fromTheme("document-save-as"));
-	_saveFilterAsAction.setShortcut(tr("Shift+Ctrl+S"));
-	_saveFilterAsAction.setStatusTip(tr("Save a filter as"));
-	connect(&_saveFilterAsAction, SIGNAL(triggered()), this, SLOT(saveFilter()));
 
 	_exportFilterAction.setIcon(QIcon::fromTheme("document-send"));
 	_exportFilterAction.setShortcut(tr("Ctrl+L"));
-	_exportFilterAction.setStatusTip(tr("Export a filter"));
-	connect(&_exportFilterAction, SIGNAL(triggered()), this, SLOT(saveFilter()));
+	_exportFilterAction.setStatusTip("Export a filter");
+	connect(&_exportFilterAction, SIGNAL(triggered()), this, SLOT(exportFilter()));
 
 	_quitAction.setIcon(QIcon::fromTheme("window-close"));
 	_quitAction.setShortcut(tr("Ctrl+Q"));
-	_quitAction.setStatusTip(tr("Exit KernelShark"));
+	_quitAction.setStatusTip("Exit KernelShark");
 	connect(&_quitAction, SIGNAL(triggered()), this, SLOT(close()));
 
 	/* Filter menu */
@@ -163,13 +184,26 @@ void KsMainWindow::createActions()
 	/* Tools menu */
 	_pluginsAction.setIcon(QIcon::fromTheme("insert-image"));
 	_pluginsAction.setShortcut(tr("Ctrl+P"));
-	_pluginsAction.setStatusTip(tr("Manage plugins"));
+	_pluginsAction.setStatusTip("Manage plugins");
 	connect(&_pluginsAction, SIGNAL(triggered()), this, SLOT(pluginSelect()));
 
 	_captureAction.setIcon(QIcon::fromTheme("media-record"));
 	_captureAction.setShortcut(tr("Ctrl+C"));
-	_captureAction.setStatusTip(tr("Capture trace data"));
+	_captureAction.setStatusTip("Capture trace data");
 	connect(&_captureAction, SIGNAL(triggered()), this, SLOT(capture()));
+
+	_colorPhaseSlider.setMinimum(20);
+	_colorPhaseSlider.setMaximum(180);
+	_colorPhaseSlider.setValue(75);
+	_colorPhaseSlider.setFixedWidth(FONT_WIDTH*15);
+	connect(&_colorPhaseSlider, SIGNAL(valueChanged(int)), this, SLOT(setColorPhase(int)));
+
+	QWidget *colSlider = new QWidget(this);
+	colSlider->setLayout(new QHBoxLayout);
+	QLabel *colLabel = new QLabel("Color scheme", this);
+	colSlider->layout()->addWidget(colLabel);
+	colSlider->layout()->addWidget(&_colorPhaseSlider);
+	_colorAction.setDefaultWidget(colSlider);
 
 	/* Help menu */
 	_aboutAction.setIcon(QIcon::fromTheme("help-about"));
@@ -187,8 +221,6 @@ void KsMainWindow::createMenus()
 	QMenu *file = menuBar()->addMenu("File");
 	file->addAction(&_openAction);
 	file->addAction(&_importFilterAction);
-	file->addAction(&_saveFilterAction);
-	file->addAction(&_saveFilterAsAction);
 	file->addAction(&_exportFilterAction);
 	file->addAction(&_quitAction);
 
@@ -208,8 +240,8 @@ void KsMainWindow::createMenus()
 		action->setDefaultWidget(containerWidget);
 	};
 
-	make_cb_action(&_graphFilterSyncAction, tr("Apply filters to Graph"));
-	make_cb_action(&_listFilterSyncAction, tr("Apply filters to List"));
+	make_cb_action(&_graphFilterSyncAction, "Apply filters to Graph");
+	make_cb_action(&_listFilterSyncAction, "Apply filters to List");
 
 	filter->addAction(&_graphFilterSyncAction);
 	filter->addAction(&_listFilterSyncAction);
@@ -226,7 +258,7 @@ void KsMainWindow::createMenus()
 	QMenu *tools = menuBar()->addMenu("Tools");
 	tools->addAction(&_pluginsAction);
 	tools->addAction(&_captureAction);
-	
+	tools->addAction(&_colorAction);
 
 	/* Help menu */
 	QMenu *help = menuBar()->addMenu("Help");
@@ -250,25 +282,66 @@ void KsMainWindow::open()
 		loadFile(fileName);
 }
 
+void KsMainWindow::open(QString fileName)
+{
+	loadFile(fileName);
+}
+
 void KsMainWindow::importFilter()
 {
-	// TODO
+	QString fileName =
+		QFileDialog::getOpenFileName(this,
+					     "Import Filter",
+					     KS_DIR,
+					     "kshark filter files (*.json)");
+
+	if (fileName.isEmpty())
+		return;
+
+	struct json_object *jobj =
+		kshark_open_json_file(fileName.toStdString().c_str(),
+				     "kshark.filter.config");
+
+	if (!jobj)
+		return;
+
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+	kshark_all_filters_from_json(kshark_ctx, jobj);
+	json_object_put(jobj);
+
+	kshark_filter_entries(kshark_ctx, _data._rows, _data.size());
+	emit _data.updateView(&_data);
+	emit _data.updateGraph(&_data);
 }
 
-void KsMainWindow::saveFilter()
+void KsMainWindow::exportFilter()
 {
-	// TODO
-}
+	QString fileName =
+		QFileDialog::getSaveFileName(this,
+					     "Export Filter",
+					     KS_DIR,
+					     "kshark filter files (*.json);;All files (*)");
 
-void KsMainWindow::reload()
-{
-	// TODO
+	if (fileName.isEmpty())
+		return;
+
+	if (!fileName.endsWith(".json"))
+		fileName += ".json";
+
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+
+	struct json_object *jobj = kshark_all_filters_to_json(kshark_ctx);
+	kshark_save_json_file(fileName.toStdString().c_str(), jobj);
+	json_object_put(jobj);
 }
 
 void KsMainWindow::listFilterSync(bool state)
 {
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
+
 	if (state) {
 		kshark_ctx->filter_mask &= ~KS_VIEW_FILTER_MASK;
 	} else {
@@ -280,6 +353,7 @@ void KsMainWindow::graphFilterSync(bool state)
 {
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
+
 	if (state) {
 		kshark_ctx->filter_mask &= ~KS_GRAPH_FILTER_MASK;
 	} else {
@@ -289,11 +363,30 @@ void KsMainWindow::graphFilterSync(bool state)
 
 void KsMainWindow::showEvents()
 {
-	KsCheckBoxDialog *events_cb = new KsEventsCheckBoxDialog(_data._pevt, true, this);
-	events_cb->setDefault(true);
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
 
-	connect(events_cb, SIGNAL(apply(QVector<int>)),
+	KsCheckBoxWidget *events_cb = new KsEventsCheckBoxWidget(_data._pevt, true, this);
+	if (!kshark_ctx->show_event_filter ||
+	    !filter_id_count(kshark_ctx->show_event_filter)) {
+		events_cb->setDefault(true);
+	} else {
+		int nEvts = _data._pevt->nr_events;
+		QVector<bool> v(nEvts, false);
+		for (int i = 0; i < nEvts; ++i) {
+			if (filter_id_find(kshark_ctx->show_event_filter,
+					   _data._pevt->events[i]->id))
+				v[i] = true;
+		}
+
+		events_cb->set(v);
+	}
+
+	KsCheckBoxDialog *dialog = new KsCheckBoxDialog(events_cb, this);
+	connect(dialog, SIGNAL(apply(QVector<int>)),
 		&_data, SLOT(applyPosEventFilter(QVector<int>)));
+
+	dialog->show();
 }
 
 void KsMainWindow::showTasks()
@@ -301,7 +394,7 @@ void KsMainWindow::showTasks()
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
-	KsCheckBoxDialog *tasks_cbd = new KsTasksCheckBoxDialog(_data._pevt, true, this);
+	KsCheckBoxWidget *tasks_cbd = new KsTasksCheckBoxWidget(_data._pevt, true, this);
 	if (!kshark_ctx->show_task_filter ||
 	    !filter_id_count(kshark_ctx->show_task_filter)) {
 		tasks_cbd->setDefault(true);
@@ -310,16 +403,19 @@ void KsMainWindow::showTasks()
 		int nPids = getPidList(&pids);
 		QVector<bool> v(nPids, false);
 		for (int i = 0; i < nPids; ++i) {
-			if (kshark_filter_id_find_pid(kshark_ctx->show_task_filter,
-						      pids[i]))
+			if (filter_id_find(kshark_ctx->show_task_filter,
+					   pids[i]))
 				v[i] = true;
 		}
 
 		tasks_cbd->set(v);
 	}
 
-	connect(tasks_cbd, SIGNAL(apply(QVector<int>)),
+	KsCheckBoxDialog *dialog = new KsCheckBoxDialog(tasks_cbd, this);
+	connect(dialog, SIGNAL(apply(QVector<int>)),
 		&_data, SLOT(applyPosTaskFilter(QVector<int>)));
+
+	dialog->show();
 }
 
 void KsMainWindow::hideTasks()
@@ -327,7 +423,7 @@ void KsMainWindow::hideTasks()
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
-	KsCheckBoxDialog *tasks_cbd = new KsTasksCheckBoxDialog(_data._pevt, false, this);
+	KsCheckBoxWidget *tasks_cbd = new KsTasksCheckBoxWidget(_data._pevt, false, this);
 	if (!kshark_ctx->hide_task_filter ||
 	    !filter_id_count(kshark_ctx->hide_task_filter)) {
 		tasks_cbd->setDefault(false);
@@ -336,21 +432,24 @@ void KsMainWindow::hideTasks()
 		int nPids = getPidList(&pids);
 		QVector<bool> v(nPids, false);
 		for (int i = 0; i < nPids; ++i) {
-			if (kshark_filter_id_find_pid(kshark_ctx->hide_task_filter,
-						      pids[i]))
+			if (filter_id_find(kshark_ctx->hide_task_filter,
+					   pids[i]))
 				v[i] = true;
 		}
 
 		tasks_cbd->set(v);
 	}
 
-	connect(tasks_cbd, SIGNAL(apply(QVector<int>)),
+	KsCheckBoxDialog *dialog = new KsCheckBoxDialog(tasks_cbd, this);
+	connect(dialog, SIGNAL(apply(QVector<int>)),
 		&_data, SLOT(applyNegTaskFilter(QVector<int>)));
+
+	dialog->show();
 }
 
 void KsMainWindow::cpuSelect()
 {
-	KsCheckBoxDialog *cpus_cbd = new KsCpuCheckBoxDialog(_data._pevt, true, this);
+	KsCheckBoxWidget *cpus_cbd = new KsCpuCheckBoxWidget(_data._pevt, true, this);
 	if(!_data._pevt)
 		return;
 
@@ -365,13 +464,16 @@ void KsMainWindow::cpuSelect()
 		cpus_cbd->set(v);
 	}
 
-	connect(cpus_cbd, SIGNAL(apply(QVector<int>)),
+	KsCheckBoxDialog *dialog = new KsCheckBoxDialog(cpus_cbd, this);
+	connect(dialog, SIGNAL(apply(QVector<int>)),
 		&_graph, SLOT(cpuReDraw(QVector<int>)));
+
+	dialog->show();
 }
 
 void KsMainWindow::taskSelect()
 {
-	KsCheckBoxDialog *tasks_cbd = new KsTasksCheckBoxDialog(_data._pevt, true, this);
+	KsCheckBoxWidget *tasks_cbd = new KsTasksCheckBoxWidget(_data._pevt, true, this);
 
 	QVector<int> pids;
 	int nPids = getPidList(&pids);
@@ -391,8 +493,11 @@ void KsMainWindow::taskSelect()
 		tasks_cbd->set(v);
 	}
 
-	connect(tasks_cbd, SIGNAL(apply(QVector<int>)),
+	KsCheckBoxDialog *dialog = new KsCheckBoxDialog(tasks_cbd, this);
+	connect(dialog, SIGNAL(apply(QVector<int>)),
 		&_graph, SLOT(taskReDraw(QVector<int>)));
+
+	dialog->show();
 }
 
 void KsMainWindow::pluginSelect()
@@ -400,21 +505,30 @@ void KsMainWindow::pluginSelect()
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
-	KsCheckBoxDialog *plugin_cbd = new KsPluginCheckBoxDialog(_data._pevt,
+	KsCheckBoxWidget *plugin_cbd = new KsPluginCheckBoxWidget(_data._pevt,
 								  _plugins._pluginList,
 								  true,
 								  this);
 
 	plugin_cbd->set(_plugins._registeredPlugins);
 
-	connect(plugin_cbd, SIGNAL(apply(QVector<int>)),
+	KsCheckBoxDialog *dialog = new KsCheckBoxDialog(plugin_cbd, this);
+	connect(dialog, SIGNAL(apply(QVector<int>)),
 		&_plugins, SLOT(updatePlugins(QVector<int>)));
+
+	dialog->show();
 }
 
 void KsMainWindow::capture()
 {
-	qInfo() << "capture";
-	new KsCaptureDialog(this);
+	_capture.start();
+// 	_capture.waitForFinished();
+}
+
+void KsMainWindow::setColorPhase(int f)
+{
+	KsPlot::Color::setRainbowFrequency(f/100.);
+	_graph.glPtr()->model()->update();
 }
 
 void KsMainWindow::aboutInfo() {
@@ -462,11 +576,12 @@ void KsMainWindow::loadFile(const QString& fileName)
 	}
 
 	bool loadDone = false;
-	auto job = [&] (KsDataStore *d) {
+	auto loadJob = [&] (KsDataStore *d) {
 		d->loadData(fileName);
 		loadDone = true;
 	};
-	std::thread t1(job, &_data);
+
+	std::thread tload(loadJob, &_data);
 
 	for (int i = 0; i < 160; ++i) {
 		if (loadDone)
@@ -477,7 +592,7 @@ void KsMainWindow::loadFile(const QString& fileName)
 		QApplication::processEvents();
 	}
 
-	t1.join();
+	tload.join();
 
 	if (!_data.size()) {
 		this->resize(SCREEN_WIDTH*.4, FONT_HEIGHT*3);
@@ -507,5 +622,47 @@ void KsMainWindow::loadFile(const QString& fileName)
 // 	t1.join();
 }
 
-// void KsMainWindow::loadFiles(const QList<QString> &files)
-// {}
+void KsMainWindow::captureStarted()
+{
+	qInfo() << "KsMainWindow::captureStarted";
+	if (_captureLocalServer.listen("KSCapture"))
+		qInfo() << "listening on " << _captureLocalServer.serverName();
+}
+
+void KsMainWindow::captureFinished(int, QProcess::ExitStatus)
+{
+	qInfo() << "KsMainWindow::captureFinished";
+	_captureLocalServer.close();
+}
+
+void KsMainWindow::readSocket()
+{
+	qInfo() << "KsMainWindow::readSocket";
+	QLocalSocket *socket = _captureLocalServer.nextPendingConnection();
+	if (!socket) {
+		qInfo() << "ERROR from Local Server: Pending connectio not found!";
+		return;
+	}
+
+	QDataStream in(socket);
+
+	socket->waitForReadyRead();
+	if (socket->bytesAvailable() < (int)sizeof(quint32)) {
+		qInfo() << "ERROR from Local Server: message size is corrupted! "
+			<< socket->bytesAvailable();
+		return;
+	};
+
+	quint32 blockSize;
+	qInfo() << "blockSize: " << blockSize;
+        in >> blockSize;
+
+	if (socket->bytesAvailable() < blockSize || in.atEnd()) {
+		qInfo() << "ERROR from Local Server: message is corrupted!";
+		return;
+	}
+
+	QString fileName;
+	in >> fileName;
+	loadFile(fileName);
+}

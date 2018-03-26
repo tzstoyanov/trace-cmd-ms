@@ -64,7 +64,7 @@ class KsViewModel : public QAbstractTableModel
 	QColor _colorMarkA, _colorMarkB;
 
 public:
-	KsViewModel(QObject *parent = nullptr);
+	explicit KsViewModel(QObject *parent = nullptr);
 	virtual ~KsViewModel();
 
 	void setColors(const QColor &colA, const QColor &colB) {_colorMarkA = colA; _colorMarkB = colB;};
@@ -95,7 +95,7 @@ class KsFilterProxyModel : public QSortFilterProxyModel
 	KsViewModel	 *_source;
 
 public:
-	KsFilterProxyModel(QObject *parent = nullptr);
+	explicit KsFilterProxyModel(QObject *parent = nullptr);
 
 	bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const;
 
@@ -191,7 +191,7 @@ class KsGraphModel : public QAbstractTableModel
 	KsTimeMap	 _histo;
 
 public:
-	KsGraphModel(QObject *parent = nullptr);
+	explicit KsGraphModel(QObject *parent = nullptr);
 	KsGraphModel(int cpus, QObject *parent = nullptr);
 	virtual ~KsGraphModel();
 	

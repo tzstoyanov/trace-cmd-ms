@@ -34,7 +34,7 @@ class KsTraceViewer : public QWidget
 {
 	Q_OBJECT
 public:
-	KsTraceViewer(QWidget *parent = 0);
+	explicit KsTraceViewer(QWidget *parent = nullptr);
 
 	void loadData(KsDataStore *data);
 	void setMarkerSM(KsDualMarkerSM *m);
@@ -58,6 +58,7 @@ private slots:
 	void update(KsDataStore *data = nullptr);
 
 private:
+	void resizeEvent(QResizeEvent* event) override;
 	void resizeToContents();
 	bool event(QEvent *event);
 

@@ -146,8 +146,6 @@ size_t kshark_filter_entries(struct kshark_context *kshark_ctx,
 			     struct kshark_entry **data_rows,
 			     size_t n_entries);
 
-bool kshark_filter_id_find_pid(struct filter_id *filter, int pid);
-
 uint32_t kshark_find_entry_row(uint64_t time,
 			       struct kshark_entry **data_rows,
 			       uint32_t l, uint32_t h);
@@ -202,6 +200,12 @@ struct kshark_entry *kshark_get_entry_by_pid_front(size_t first,
 						   struct kshark_entry **data);
 
 void kshark_convert_nano(uint64_t time, uint64_t *sec, uint64_t *usec);
+
+int kshark_get_plugins(char ***plugins);
+
+struct pevent *kshark_local_events();
+
+struct event_format *kshark_find_event(struct pevent *pevt, int event_id);
 
 #ifdef __cplusplus
 }

@@ -73,7 +73,7 @@ static void schedWakeupPluginDraw(struct plugin_sched_context *plugin_ctx,
 
 	size_t nBins = graph->size();
 	for (size_t bin = 0; bin < nBins; ++bin) {
-		if (histo->binCount(bin) > 20)
+		if (histo->binCount(bin) > 100)
 			continue;
 
 		/* Starting from the first element in this bin, go forward in time
@@ -125,7 +125,7 @@ static void schedSwitchPluginDraw(struct plugin_sched_context *plugin_ctx,
 
 	size_t nBins = graph->size();
 	for (size_t bin = 0; bin < nBins; ++bin) {
-		if (histo->binCount(bin) > 20)
+		if (histo->binCount(bin) > 100)
 			continue;
 
 		/* Starting from the first element in this bin, go forward in time
