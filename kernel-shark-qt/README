@@ -9,7 +9,7 @@ The external dependencies are listed below:
 
   1.1 In order to install the packages on Ubuntu do the following:
     sudo apt-get install build-essential git cmake libjson-c-dev -y
-    sudo apt-get install qtbase5-dev -y
+    sudo apt-get install qtbase5-dev gksu -y
     sudo apt-get install freeglut3-dev libxmu-dev libxi-dev -y
     sudo apt-get install libpython2.7-dev cython python-numpy -y
 
@@ -22,6 +22,7 @@ The external dependencies are listed below:
 
   2 In order to install the packages on Fedora, as root do the following:
     dnf install gcc gcc-c++ git cmake json-c-devel -y
+    dnf install redhat-lsb-core beesu -y
     dnf install qt5-qtbase-devel freeglut-devel redhat-rpm-config -y
     dnf install python2-devel python2-Cython python-numpy gtest-devel -y
 

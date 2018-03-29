@@ -111,9 +111,10 @@ KsMainWindow::KsMainWindow(QWidget *parent)
 	QStringList args;
 // 	_capture.setProgram("pkexec");
 	_capture.setProgram("gksu");
+// 	_capture.setProgram("beesu");
 
-	args << "--description"
-	     << "Kernel Shark Capture";
+// 	args << "--description"
+// 	     << "Kernel Shark Capture";
 
 	QString captureExe = KS_DIR;
 	captureExe += "/bin/kshark-record";
