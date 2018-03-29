@@ -27,6 +27,7 @@
 // Kernel Shark 2
 #include "KsWidgetsLib.hpp"
 
+
 class KsCaptureControl : public QWidget
 {
 	Q_OBJECT
@@ -43,7 +44,7 @@ class KsCaptureControl : public QWidget
 	QPushButton	_outputBrowseButton;
 
 public:
-	KsCaptureControl(QWidget *parent = 0);
+	explicit KsCaptureControl(QWidget *parent = 0);
 
 	QStringList getArgs();
 	QString outputFileName() const {return _outputLineEdit.text();}
@@ -67,22 +68,24 @@ class KsCaptureMonitor : public QWidget
 	QToolBar	_panel;
 	QLabel		_name, _space;
 	QCheckBox	_readOnly;
+	QLineEdit	_maxLinNumEdit;
 	QPlainTextEdit	_consolOutput;
 
 public:
-	KsCaptureMonitor(QWidget *parent = 0);
+	explicit KsCaptureMonitor(QWidget *parent = 0);
 	QString text() const {return _consolOutput.toPlainText();}
 	void clear() {_consolOutput.clear();}
 	void print(const QString &message);
 
-	bool		_mergedChannels, _argsModified;
+	bool	_mergedChannels, _argsModified;
 
 private slots:
+	void maxLineNumber(const QString &test);
 	void readOnly(int);
-	void argsReady(QString args);
+	void argsReady(const QString &test);
 	void argsModified();
-	void printlStandardError();
-	void printlStandardOutput();
+	void printAllStandardError();
+	void printAllStandardOutput();
 	void captureStarted();
 	void captureFinished(int, QProcess::ExitStatus);
 };
@@ -96,15 +99,12 @@ class KsCaptureDialog : public QWidget
 	KsCaptureMonitor	_captureMon;
 	QProcess		_capture;
 
-signals:
-	void open(const QString &file);
-
 private slots:
 	void capture();
 	void setChannelMode(int state);
 
 public:
-	KsCaptureDialog(QWidget *parent = 0);
+	explicit KsCaptureDialog(QWidget *parent = 0);
 
 private:
 	void sendOpenReq(const QString &fileName);

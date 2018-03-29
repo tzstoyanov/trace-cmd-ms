@@ -37,7 +37,7 @@ KsCaptureControl::KsCaptureControl(QWidget *parent)
   _outputLabel("Output file: ", this),
   _commandLabel("Command: ", this),
   _outputLineEdit("trace.dat", this),
-  _commandLineEdit("", this),
+  _commandLineEdit("sleep 1", this),
   _controlToolBar(this),
   _pluginsComboBox(this),
   _outputBrowseButton("Browse", this),
@@ -53,27 +53,37 @@ KsCaptureControl::KsCaptureControl(QWidget *parent)
 		_topLayout.addWidget(line);
 	};
 
-	int row(0);
+
+	QStringList pluginList;
+	pluginList << "nop";
+
+	char **plugins;
+	int n = kshark_get_plugins(&plugins);
+
+	if (n > 0) {
+		for (int i = 0; i < n; ++i) {
+			pluginList << plugins[i];
+			free(plugins[i]);
+		}
+
+		free(plugins);
+	} else {
+		QLabel *errorMessage =
+			new QLabel("Error: No events or plugins found.\nRoot privileges are required.");
+		errorMessage->setStyleSheet("QLabel {color : red;}");
+		_topLayout.addWidget(errorMessage);
+	}
+
 	add_line();
 
 	_eventsWidget.setDefault(false);
 	_eventsWidget.setMinimumHeight(25*FONT_HEIGHT);
 	_topLayout.addWidget(&_eventsWidget);
 
+	int row(0);
+
 	_pluginsLabel.adjustSize();
 	_execLayout.addWidget(&_pluginsLabel, row, 0);
-
-	char **plugins;
-	int n = kshark_get_plugins(&plugins);
-	QStringList pluginList;
-	pluginList << "nop";
-
-	for (int i = 0; i < n; ++i)
-		pluginList << plugins[i];
-
-	for (int i = 0; i < n; ++i)
-		free(plugins[i]);
-	free(plugins);
 
 	_pluginsComboBox.addItems(pluginList);
 	_execLayout.addWidget(&_pluginsComboBox, row++, 1);
@@ -147,7 +157,7 @@ QStringList KsCaptureControl::getArgs()
 	}
 
 	args << "-o" << outputFileName();
-	args << _commandLineEdit.text();
+	args << _commandLineEdit.text().split(" ");
 
 	return args;
 }
@@ -161,15 +171,22 @@ KsCaptureMonitor::KsCaptureMonitor(QWidget *parent)
 : QWidget(parent),
   _panel(this),
   _name("Output display", this),
-  _space("", this),
+  _space("max size ", this),
   _readOnly("read only", this),
+  _maxLinNumEdit("200", this),
   _consolOutput("", this),
   _mergedChannels(false),
   _argsModified(false)
 {
+	_panel.setMaximumHeight(FONT_HEIGHT*1.75);
 	_panel.addWidget(&_name);
+
+	_space.setAlignment(Qt::AlignRight);
 	_panel.addWidget(&_space);
 
+	_maxLinNumEdit.setFixedWidth(FONT_WIDTH*7);
+	_panel.addWidget(&_maxLinNumEdit);
+	_panel.addSeparator();
 	_readOnly.setCheckState(Qt::Checked);
 	_panel.addWidget(&_readOnly);
 	_layout.addWidget(&_panel);
@@ -177,19 +194,32 @@ KsCaptureMonitor::KsCaptureMonitor(QWidget *parent)
 	_consolOutput.setStyleSheet("QLabel {background-color : white;}");
 	_consolOutput.setMinimumWidth(FONT_WIDTH*60);
 	_consolOutput.setMinimumHeight(FONT_HEIGHT*10);
+	_consolOutput.setMaximumBlockCount(200);
 
-	_space.setMinimumWidth(FONT_WIDTH*60 - _name.width() - _readOnly.width());
-
-// 	_consolOutput.setAlignment(Qt::AlignTop);
+	_space.setMinimumWidth(FONT_WIDTH*50 - _name.width() - _readOnly.width());
 	_consolOutput.setReadOnly(true);
 	_layout.addWidget(&_consolOutput);
 
 	this->setLayout(&_layout);
 
-	connect(&_readOnly, SIGNAL(stateChanged(int)), SLOT(readOnly(int)));
-	connect(&_consolOutput, SIGNAL(textChanged()), this, SLOT(argsModified()));
+	connect(&_maxLinNumEdit, SIGNAL(textChanged(const QString &)),
+		this, SLOT(maxLineNumber(const QString &)));
+
+	connect(&_readOnly, SIGNAL(stateChanged(int)),
+		this, SLOT(readOnly(int)));
+
+	connect(&_consolOutput, SIGNAL(textChanged()),
+		this, SLOT(argsModified()));
 
 	this->show();
+}
+
+void KsCaptureMonitor::maxLineNumber(const QString &test)
+{
+	bool ok;
+	int max = test.toInt(&ok);
+	if (ok)
+		_consolOutput.setMaximumBlockCount(max);
 }
 
 void KsCaptureMonitor::readOnly(int state)
@@ -200,7 +230,7 @@ void KsCaptureMonitor::readOnly(int state)
 		_consolOutput.setReadOnly(false);
 }
 
-void KsCaptureMonitor::argsReady(QString args)
+void KsCaptureMonitor::argsReady(const QString &args)
 {
 	_name.setText("Capture options:");
 	_consolOutput.setPlainText(args);
@@ -221,15 +251,17 @@ void KsCaptureMonitor::captureStarted()
 	QCoreApplication::processEvents();
 }
 
-void KsCaptureMonitor::printlStandardError()
+void KsCaptureMonitor::printAllStandardError()
 {
 	QProcess *capture = (QProcess*) sender();
-	_consolOutput.appendPlainText(capture->readAllStandardError());
-
+// 	_consolOutput.appendPlainText(capture->readAllStandardError());
+	_consolOutput.moveCursor(QTextCursor::End);
+	_consolOutput.insertPlainText(capture->readAllStandardError());
+	_consolOutput.moveCursor(QTextCursor::End);
 	QCoreApplication::processEvents();
 }
 
-void KsCaptureMonitor::printlStandardOutput()
+void KsCaptureMonitor::printAllStandardOutput()
 {
 	if (!_mergedChannels)
 		return;
@@ -291,10 +323,10 @@ KsCaptureDialog::KsCaptureDialog(QWidget *parent)
 		&_captureMon, SLOT(captureFinished(int, QProcess::ExitStatus)));
 
 	connect(&_capture, SIGNAL(readyReadStandardError()),
-		&_captureMon, SLOT(printlStandardError()));
+		&_captureMon, SLOT(printAllStandardError()));
 
 	connect(&_capture, SIGNAL(readyReadStandardOutput()),
-		&_captureMon, SLOT(printlStandardOutput()));
+		&_captureMon, SLOT(printAllStandardOutput()));
 }
 
 void KsCaptureDialog::capture()
@@ -306,8 +338,9 @@ void KsCaptureDialog::capture()
 		args = _captureCtrl.getArgs();
 	}
 
-	_captureMon.clear();
-	_captureMon.print(QString("trace-cmd " + args.join(" ")));
+// 	_captureMon.clear();
+	_captureMon.print("\n");
+	_captureMon.print(QString("trace-cmd " + args.join(" ") + "\n"));
 	_capture.setArguments(args);
 	_capture.start();
 	_capture.waitForFinished();
@@ -349,7 +382,7 @@ void KsCaptureDialog::sendOpenReq(const QString &fileName)
 		socket->flush();
 		socket->disconnectFromServer();
 	} else {
-		_captureMon.print(socket->serverName());
+// 		_captureMon.print(socket->serverName());
 		_captureMon.print(socket->errorString());
 	}
 }

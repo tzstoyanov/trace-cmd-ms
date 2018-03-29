@@ -34,7 +34,7 @@ class KsMainWindow : public QMainWindow
 {
 	Q_OBJECT
 public:
-	KsMainWindow(QWidget *parent = 0);
+	explicit KsMainWindow(QWidget *parent = 0);
 	~KsMainWindow();
 
 	void loadFile(const QString &fileName);

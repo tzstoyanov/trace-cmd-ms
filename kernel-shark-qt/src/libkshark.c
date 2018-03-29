@@ -1025,6 +1025,9 @@ int kshark_get_plugins(char ***plugins)
 	tracing = tracecmd_get_tracing_dir();
 	all_plugins = tracecmd_local_plugins(tracing);
 
+	if (!all_plugins)
+		return 0;
+
 	while (all_plugins[i]) {
 // 		printf("plugin %i %s\n", i, all_plugins[i]);
 		 ++i;
