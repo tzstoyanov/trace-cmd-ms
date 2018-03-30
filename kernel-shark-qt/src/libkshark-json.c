@@ -21,6 +21,18 @@
 // Kernel Shark
 #include "libkshark-json.h"
 
+struct json_object *kshark_record_config_alloc()
+{
+	struct json_object *jobj = json_object_new_object();
+
+	/* Set the type of this Json document. */
+	json_object_object_add(jobj,
+			       "type",
+			       json_object_new_string("kshark.record.config"));
+
+	return jobj;
+}
+
 struct json_object *kshark_filter_config_alloc()
 {
 	struct json_object *jobj = json_object_new_object();
@@ -184,7 +196,7 @@ struct json_object *kshark_open_json_file(const char *filter_name,
 	if (strcmp(type, type_var) != 0) {
 		/* The document has a wrong type. */
 		fprintf(stderr,
-			"Failed to open Json file %s. The document has a wrong type.\n",
+			"Failed to open Json file %s\n. The document has a wrong type.\n",
 			filter_name);
 
 		json_object_put(jobj);

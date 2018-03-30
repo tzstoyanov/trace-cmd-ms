@@ -30,7 +30,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
-	
+
+struct json_object *kshark_record_config_alloc();
+
 struct json_object *kshark_filter_config_alloc();
 
 void kshark_filter_to_json(struct pevent *pevt,

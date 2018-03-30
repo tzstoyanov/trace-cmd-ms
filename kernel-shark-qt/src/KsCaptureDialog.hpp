@@ -39,9 +39,9 @@ class KsCaptureControl : public QWidget
 	QGridLayout	_execLayout;
 	QLabel		_pluginsLabel, _outputLabel, _commandLabel;
 	QLineEdit	_outputLineEdit, _commandLineEdit;
-	QToolBar	_controlToolBar;
+	QToolBar	_settingsToolBar, _controlToolBar;
 	QComboBox	_pluginsComboBox;
-	QPushButton	_outputBrowseButton;
+	QPushButton	_importSettings, _exportSettings, _outputBrowseButton;
 
 public:
 	explicit KsCaptureControl(QWidget *parent = 0);
@@ -53,6 +53,8 @@ public:
 	QPushButton	_captureButton, _applyButton, _closeButton;
 
 private slots:
+	void importSettings();
+	void exportSettings();
 	void browse();
 	void apply();
 

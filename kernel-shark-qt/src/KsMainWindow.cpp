@@ -269,7 +269,7 @@ void KsMainWindow::importFilter()
 		QFileDialog::getOpenFileName(this,
 					     "Import Filter",
 					     KS_DIR,
-					     "kshark filter files (*.json)");
+					     "Kernel Shark Config files (*.json)");
 
 	if (fileName.isEmpty())
 		return;
@@ -297,7 +297,7 @@ void KsMainWindow::exportFilter()
 		QFileDialog::getSaveFileName(this,
 					     "Export Filter",
 					     KS_DIR,
-					     "kshark filter files (*.json);;All files (*)");
+					     "Kernel Shark Config files (*.json);");
 
 	if (fileName.isEmpty())
 		return;
@@ -660,17 +660,23 @@ void KsMainWindow::captureFinished(int, QProcess::ExitStatus)
 
 void KsMainWindow::readSocket()
 {
+	QString message;
 	QLocalSocket *socket = _captureLocalServer.nextPendingConnection();
 	if (!socket) {
-		qInfo() << "ERROR from Local Server: Pending connectio not found!";
+		message = "ERROR from Local Server: Pending connectio not found!";
+		QErrorMessage *em = new QErrorMessage(this);
+		em->showMessage(message, "readSocketErr");
+		qCritical() << message;
 		return;
 	}
 
 	QDataStream in(socket);
 	socket->waitForReadyRead();
 	if (socket->bytesAvailable() < (int)sizeof(quint32)) {
-		qInfo() << "ERROR from Local Server: message size is corrupted! "
-			<< socket->bytesAvailable();
+		message = "ERROR from Local Server: message size is corrupted!";
+		QErrorMessage *em = new QErrorMessage(this);
+		em->showMessage(message, "readSocketErr");
+		qCritical() << message;
 		return;
 	};
 
@@ -679,8 +685,9 @@ void KsMainWindow::readSocket()
 
 	if (socket->bytesAvailable() < blockSize || in.atEnd()) {
 		QString message = "ERROR from Local Server: message is corrupted!"; 
-// 		QErrorMessage() << message;
-		qCritical() <<  message;
+		QErrorMessage *em = new QErrorMessage(this);
+		em->showMessage(message, "readSocketErr");
+		qCritical() << message;
 		return;
 	}
 

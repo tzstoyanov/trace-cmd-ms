@@ -280,6 +280,8 @@ void KsCheckBoxTreeWidget::set(QVector<bool> v)
 		}
 		_cb[i]->setCheckState(0, state);
 	}
+
+	changeState();
 }
 
 void KsCheckBoxTreeWidget::initTree()

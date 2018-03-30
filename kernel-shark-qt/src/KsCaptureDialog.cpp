@@ -26,6 +26,8 @@
 
 // Kernel Shark 2
 #include "KsCaptureDialog.hpp"
+#include "libkshark.h"
+#include "libkshark-json.h"
 #include "KsDeff.h"
 #include "KsUtils.hpp"
 
@@ -38,8 +40,11 @@ KsCaptureControl::KsCaptureControl(QWidget *parent)
   _commandLabel("Command: ", this),
   _outputLineEdit("trace.dat", this),
   _commandLineEdit("sleep 1", this),
+  _settingsToolBar(this),
   _controlToolBar(this),
   _pluginsComboBox(this),
+  _importSettings("Import Settings", this),
+  _exportSettings("Export Settings", this),
   _outputBrowseButton("Browse", this),
   _commandCheckBox("Display output", this),
   _captureButton("Capture", this),
@@ -53,10 +58,10 @@ KsCaptureControl::KsCaptureControl(QWidget *parent)
 		_topLayout.addWidget(line);
 	};
 
-
 	QStringList pluginList;
 	pluginList << "nop";
 
+	/* Get the list of available plugins. */
 	char **plugins;
 	int n = kshark_get_plugins(&plugins);
 
@@ -68,12 +73,20 @@ KsCaptureControl::KsCaptureControl(QWidget *parent)
 
 		free(plugins);
 	} else {
-		QLabel *errorMessage =
-			new QLabel("Error: No events or plugins found.\nRoot privileges are required.");
-		errorMessage->setStyleSheet("QLabel {color : red;}");
-		_topLayout.addWidget(errorMessage);
+		/* No plugins have been found. Most likely this is because
+		 * the process has no Root privileges. */
+		QString message("Error: No events or plugins found.\n");
+		message += "Root privileges are required.";
+		QLabel *errorLabel = new QLabel(message);
+		errorLabel->setStyleSheet("QLabel {color : red;}");
+		_topLayout.addWidget(errorLabel);
+		add_line();
 	}
 
+	_settingsToolBar.addWidget(&_importSettings);
+	_settingsToolBar.addSeparator();
+	_settingsToolBar.addWidget(&_exportSettings);
+	_topLayout.addWidget(&_settingsToolBar);
 	add_line();
 
 	_eventsWidget.setDefault(false);
@@ -81,7 +94,6 @@ KsCaptureControl::KsCaptureControl(QWidget *parent)
 	_topLayout.addWidget(&_eventsWidget);
 
 	int row(0);
-
 	_pluginsLabel.adjustSize();
 	_execLayout.addWidget(&_pluginsLabel, row, 0);
 
@@ -119,8 +131,92 @@ KsCaptureControl::KsCaptureControl(QWidget *parent)
 
 	setLayout(&_topLayout);
 
+	connect(&_importSettings, SIGNAL(pressed()), this, SLOT(importSettings()));
+	connect(&_exportSettings, SIGNAL(pressed()), this, SLOT(exportSettings()));
 	connect(&_outputBrowseButton, SIGNAL(pressed()), this, SLOT(browse()));
 	connect(&_applyButton, SIGNAL(pressed()), this, SLOT(apply()));
+}
+
+void KsCaptureControl::importSettings()
+{
+	QString fileName =
+		QFileDialog::getOpenFileName(this,
+					     "Import from Filter",
+					     KS_DIR,
+					     "Kernel Shark Config files (*.json);;");
+
+	if (fileName.isEmpty())
+		return;
+
+	json_object *jobj =
+		kshark_open_json_file(fileName.toStdString().c_str(),
+				     "kshark.record.config");
+
+	if (!jobj)
+		return;
+
+	filter_id *filterHash = filter_id_hash_alloc();
+	kshark_filter_from_json(_localPevt, filterHash, "Events", jobj);
+
+	int nEvts = _localPevt->nr_events;
+	QVector<bool> v(nEvts, false);
+	for (int i = 0; i < nEvts; ++i) {
+		if (filter_id_find(filterHash, _localPevt->events[i]->id))
+			v[i] = true;
+	}
+
+	_eventsWidget.set(v);
+	filter_id_hash_free(filterHash);
+
+	json_object *jplugin, *jout, *jcomm;
+
+	json_object_object_get_ex(jobj, "Plugin", &jplugin);
+	_pluginsComboBox.setCurrentText(QString(json_object_get_string(jplugin)));
+
+	json_object_object_get_ex(jobj, "Output", &jout);
+	_outputLineEdit.setText(QString(json_object_get_string(jout)));
+
+	json_object_object_get_ex(jobj, "Command", &jcomm);
+	_commandLineEdit.setText(QString(json_object_get_string(jcomm)));
+}
+
+void KsCaptureControl::exportSettings()
+{
+	QString fileName =
+		QFileDialog::getSaveFileName(this,
+					     "Export to File",
+					     KS_DIR,
+					     "Kernel Shark Config files (*.json);;");
+
+	if (fileName.isEmpty())
+		return;
+
+	if (!fileName.endsWith(".json"))
+		fileName += ".json";
+
+	struct json_object *jobj = kshark_record_config_alloc();
+
+	QVector<int> ids = _eventsWidget.getCheckedIds();
+	filter_id *filterHash = filter_id_hash_alloc();
+	for (auto const &id: ids)
+		filter_id_add(filterHash, id);
+
+	kshark_filter_to_json(_localPevt, filterHash, "Events", jobj);
+	filter_id_hash_free(filterHash);
+
+	QString plugin = _pluginsComboBox.currentText();
+	json_object_object_add(jobj, "Plugin",
+			       json_object_new_string(plugin.toStdString().c_str()));
+
+	QString out = outputFileName();
+	json_object_object_add(jobj, "Output",
+			       json_object_new_string(out.toStdString().c_str()));
+
+	QString comm = _commandLineEdit.text();
+	json_object_object_add(jobj, "Command",
+			       json_object_new_string(comm.toStdString().c_str()));
+
+	kshark_save_json_file(fileName.toStdString().c_str(), jobj);
 }
 
 void KsCaptureControl::browse()
@@ -167,13 +263,15 @@ void KsCaptureControl::apply()
 	emit argsReady(getArgs().join(" "));
 }
 
+#define MAX_LINE_NUM 200
+
 KsCaptureMonitor::KsCaptureMonitor(QWidget *parent)
 : QWidget(parent),
   _panel(this),
   _name("Output display", this),
   _space("max size ", this),
   _readOnly("read only", this),
-  _maxLinNumEdit("200", this),
+  _maxLinNumEdit(QString("%1").arg(MAX_LINE_NUM), this),
   _consolOutput("", this),
   _mergedChannels(false),
   _argsModified(false)
@@ -194,7 +292,7 @@ KsCaptureMonitor::KsCaptureMonitor(QWidget *parent)
 	_consolOutput.setStyleSheet("QLabel {background-color : white;}");
 	_consolOutput.setMinimumWidth(FONT_WIDTH*60);
 	_consolOutput.setMinimumHeight(FONT_HEIGHT*10);
-	_consolOutput.setMaximumBlockCount(200);
+	_consolOutput.setMaximumBlockCount(MAX_LINE_NUM);
 
 	_space.setMinimumWidth(FONT_WIDTH*50 - _name.width() - _readOnly.width());
 	_consolOutput.setReadOnly(true);

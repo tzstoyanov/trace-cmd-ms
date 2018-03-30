@@ -16,7 +16,7 @@
 
 find_path(TRACECMD_BIN_DIR      NAMES  trace-cmd
                                 PATHS  $ENV{TRACE_CMD}/tracecmd/
-                                       ${CMAKE_SOURCE_DIR}/..//tracecmd/)
+                                       ${CMAKE_SOURCE_DIR}/../tracecmd/)
 
 find_path(TRACECMD_INCLUDE_DIR  NAMES  trace-cmd.h
                                 PATHS  $ENV{TRACE_CMD}/include/trace-cmd/
@@ -65,6 +65,6 @@ IF (TRACEEVENT_FOUND)
 
 ELSE (TRACEEVENT_FOUND)
 
-#   MESSAGE(FATAL_ERROR "\nCould not find libtraceevent!\n")
+  MESSAGE(FATAL_ERROR "\nCould not find libtraceevent!\n")
 
 ENDIF (TRACEEVENT_FOUND)
