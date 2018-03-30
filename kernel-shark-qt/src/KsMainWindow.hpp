@@ -95,6 +95,7 @@ private:
 	void resizeEvent(QResizeEvent* event);
 	void createActions();
 	void createMenus();
+	void initCapture();
 
 private slots:
 	void open();

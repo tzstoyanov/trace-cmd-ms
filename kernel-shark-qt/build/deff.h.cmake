@@ -3,13 +3,11 @@
 #ifndef _KS_CONFIG_H
 #define _KS_CONFIG_H
 
-#ifdef __cplusplus
+#cmakedefine LSB_DISTRIB "@LSB_DISTRIB@"
 
-#include <QString>
+#cmakedefine DESKTOP_SESSION "@DESKTOP_SESSION@"
 
-const QString plugins = "@PLUGINS@";
-
-#endif /* __cplusplus */
+#cmakedefine DO_AS_ROOT "@DO_AS_ROOT@"
 
 #cmakedefine KS_VERSION_STRING "@KS_VERSION_STRING@"
 
@@ -18,5 +16,12 @@ const QString plugins = "@PLUGINS@";
 #cmakedefine TRACECMD_BIN_DIR "@TRACECMD_BIN_DIR@"
 
 #cmakedefine N_CPUS @N_CPUS@
+
+#ifdef __cplusplus
+
+	#include <QString>
+	const QString plugins = "@PLUGINS@";
+
+#endif /* __cplusplus */
 
 #endif // _KS_CONFIG_H

@@ -69,6 +69,7 @@ KsMainWindow::KsMainWindow(QWidget *parent)
 	setWindowTitle("Kernel Shark");
 	createActions();
 	createMenus();
+	initCapture();
 
 	QSplitter *splitter = new QSplitter(Qt::Vertical);
 	splitter->addWidget(&_graph);
@@ -107,32 +108,6 @@ KsMainWindow::KsMainWindow(QWidget *parent)
 		&_data, SLOT(reload()));
 
 	this->resize(SCREEN_WIDTH*.4, FONT_HEIGHT*3);
-
-	QStringList args;
-// 	_capture.setProgram("pkexec");
-	_capture.setProgram("gksu");
-// 	_capture.setProgram("beesu");
-
-// 	args << "--description"
-// 	     << "Kernel Shark Capture";
-
-	QString captureExe = KS_DIR;
-	captureExe += "/bin/kshark-record";
-	args << captureExe;
-
-	_capture.setArguments(args);
-
-	connect(&_capture, SIGNAL(started()),
-		this, SLOT(captureStarted()));
-
-	connect(&_capture, SIGNAL(finished(int, QProcess::ExitStatus)),
-		this, SLOT(captureFinished(int, QProcess::ExitStatus)));
-
-	connect(&_captureLocalServer, SIGNAL(newConnection()),
-		this, SLOT(readSocket()));
-
-// 	connect(&_capturelocalSocket, QOverload<QLocalSocket::LocalSocketError>::of(&QLocalSocket::error),
-// 		this, &Client::displayError);
 }
 
 KsMainWindow::~KsMainWindow()
@@ -506,10 +481,11 @@ void KsMainWindow::pluginSelect()
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
-	KsCheckBoxWidget *plugin_cbd = new KsPluginCheckBoxWidget(_data._pevt,
-								  _plugins._pluginList,
-								  true,
-								  this);
+	KsCheckBoxWidget *plugin_cbd
+		= new KsPluginCheckBoxWidget(_data._pevt,
+					     _plugins._pluginList,
+					     true,
+					     this);
 
 	plugin_cbd->set(_plugins._registeredPlugins);
 
@@ -522,6 +498,28 @@ void KsMainWindow::pluginSelect()
 
 void KsMainWindow::capture()
 {
+	QString distribLinux(LSB_DISTRIB);
+	QString desktop(DESKTOP_SESSION);
+
+	auto capture_error = [&] {
+		QStringList message;
+		message << "Record is currently not supported fot your distribution"
+			<< ", identified as " << LSB_DISTRIB 
+			<< "(" << DESKTOP_SESSION << ")";
+		QErrorMessage *em = new QErrorMessage(this);
+		em->showMessage(message.join(" "), "captureErr");
+	};
+
+#ifndef DO_AS_ROOT
+	capture_error();
+	return;
+#endif
+
+	if (distribLinux == "Fedora" && desktop.contains("gnome")) {
+		capture_error();
+		return;
+	}
+
 	_capture.start();
 // 	_capture.waitForFinished();
 }
@@ -567,11 +565,8 @@ void KsMainWindow::loadFile(const QString& fileName)
 		QString text("Unable to find file ");
 		text.append(fileName);
 		text.append("\n");
-		KsMessageDialog *message = new KsMessageDialog(text);
-		message->setWindowFlags(Qt::WindowStaysOnTopHint);
-		message->setMinimumWidth(STRING_WIDTH(text) + FONT_WIDTH*3);
-		message->setWindowTitle("ERROR");
-		message->show();
+		QErrorMessage *em = new QErrorMessage(this);
+		em->showMessage(text, "loadFileErr1");
 		qCritical() << "ERROR: " << text;
 		return;
 	}
@@ -600,11 +595,8 @@ void KsMainWindow::loadFile(const QString& fileName)
 		QString text("File ");
 		text.append(fileName);
 		text.append(" contains no data.\n");
-		KsMessageDialog *message = new KsMessageDialog(text);
-		message->setWindowFlags(Qt::WindowStaysOnTopHint);
-		message->setMinimumWidth(STRING_WIDTH(text) + FONT_WIDTH*3);
-		message->setWindowTitle("ERROR");
-		message->show();
+		QErrorMessage *em = new QErrorMessage(this);
+		em->showMessage(text, "loadFileErr2");
 		qCritical() << "ERROR: " << text;
 		return;
 	}
@@ -623,22 +615,51 @@ void KsMainWindow::loadFile(const QString& fileName)
 // 	t1.join();
 }
 
+void KsMainWindow::initCapture()
+{
+#ifndef DO_AS_ROOT
+	return;
+#endif
+
+	QStringList capturArgs;
+	QString doAsRoot(DO_AS_ROOT);
+	_capture.setProgram(doAsRoot);
+
+	if (doAsRoot.contains("gksu")) {
+		capturArgs << "--description" << "Kernel Shark Record";
+	}
+
+	QString captureExe = KS_DIR;
+	captureExe += "/bin/kshark-record";
+	capturArgs << captureExe;
+
+	_capture.setArguments(capturArgs);
+
+	connect(&_capture, SIGNAL(started()),
+		this, SLOT(captureStarted()));
+
+	connect(&_capture, SIGNAL(finished(int, QProcess::ExitStatus)),
+		this, SLOT(captureFinished(int, QProcess::ExitStatus)));
+
+	connect(&_captureLocalServer, SIGNAL(newConnection()),
+		this, SLOT(readSocket()));
+
+	return;
+}
+
 void KsMainWindow::captureStarted()
 {
-	qInfo() << "KsMainWindow::captureStarted";
 	if (_captureLocalServer.listen("KSCapture"))
 		qInfo() << "listening on " << _captureLocalServer.serverName();
 }
 
 void KsMainWindow::captureFinished(int, QProcess::ExitStatus)
 {
-	qInfo() << "KsMainWindow::captureFinished";
 	_captureLocalServer.close();
 }
 
 void KsMainWindow::readSocket()
 {
-	qInfo() << "KsMainWindow::readSocket";
 	QLocalSocket *socket = _captureLocalServer.nextPendingConnection();
 	if (!socket) {
 		qInfo() << "ERROR from Local Server: Pending connectio not found!";
@@ -646,7 +667,6 @@ void KsMainWindow::readSocket()
 	}
 
 	QDataStream in(socket);
-
 	socket->waitForReadyRead();
 	if (socket->bytesAvailable() < (int)sizeof(quint32)) {
 		qInfo() << "ERROR from Local Server: message size is corrupted! "
@@ -655,11 +675,12 @@ void KsMainWindow::readSocket()
 	};
 
 	quint32 blockSize;
-	qInfo() << "blockSize: " << blockSize;
         in >> blockSize;
 
 	if (socket->bytesAvailable() < blockSize || in.atEnd()) {
-		qInfo() << "ERROR from Local Server: message is corrupted!";
+		QString message = "ERROR from Local Server: message is corrupted!"; 
+// 		QErrorMessage() << message;
+		qCritical() <<  message;
 		return;
 	}
 

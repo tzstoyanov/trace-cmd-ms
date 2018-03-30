@@ -79,5 +79,21 @@ if (Qt5Widgets_FOUND AND Qt5Network_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
 
 endif (Qt5Widgets_FOUND AND Qt5Network_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
 
+find_program(LSB_RELEASE lsb_release)
+execute_process(COMMAND ${LSB_RELEASE} -is
+    OUTPUT_VARIABLE LSB_DISTRIB
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+# find_program(DO_AS_ROOT pkexec)
+find_program(DO_AS_ROOT gksu)
+if (NOT DO_AS_ROOT)
+
+    find_program(DO_AS_ROOT beesu)
+
+endif (NOT DO_AS_ROOT)
+
+set(DESKTOP_SESSION $ENV{DESKTOP_SESSION})
+
 configure_file( ${KS_DIR}/build/deff.h.cmake
                 ${KS_DIR}/src/KsDeff.h)
