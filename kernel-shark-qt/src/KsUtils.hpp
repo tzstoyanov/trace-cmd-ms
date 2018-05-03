@@ -27,11 +27,10 @@
 // Qt
 #include <QtWidgets>
 
-// trace-cmd
-#include "event-parse.h"
-
 // Kernel Shark 2
 #include "libkshark.h"
+#include "libkshark-json.h"
+#include "KsPlotTools.hpp"
 
 #define SCREEN_HEIGHT  QApplication::desktop()->screenGeometry().height()
 #define SCREEN_WIDTH   QApplication::desktop()->screenGeometry().width()
@@ -50,18 +49,10 @@ auto stringWidth = [](QString s)
 	return fm.width(s);
 };
 
-#define FONT_HEIGHT	fontHeight()
-#define FONT_WIDTH 	stringWidth("4")
-#define STRING_WIDTH(s)	stringWidth(s)
-
-// auto graph_height = [] (int scale)
-// {
-// 	int h = (SCREEN_HEIGHT < SCREEN_WIDTH)? SCREEN_HEIGHT : SCREEN_WIDTH;
-// 	return scale*h/35;
-// };
-// #define CPU_GRAPH_HEIGHT (graph_height(1))
-
-#define CPU_GRAPH_HEIGHT (FONT_HEIGHT*2)
+#define FONT_HEIGHT		fontHeight()
+#define FONT_WIDTH 		stringWidth("4")
+#define STRING_WIDTH(s)		stringWidth(s)
+#define CPU_GRAPH_HEIGHT	(FONT_HEIGHT*2)
 
 #define KS_VIEW_FILTER_MASK   0x1
 #define KS_GRAPH_FILTER_MASK  0x2
@@ -71,9 +62,17 @@ typedef std::chrono::high_resolution_clock::time_point  hd_time;
 #define GET_DURATION(t0) std::chrono::duration_cast<std::chrono::duration<double>>( \
 std::chrono::high_resolution_clock::now() - t0).count()
 
+namespace KsUtils {
+
 int getPidList(QVector<int> *pids);
 
 int getPluginList(QStringList *pl);
+
+void listFilterSync(int state);
+
+void graphFilterSync(int state);
+
+}; // KsUtils
 
 class KsDataStore : public QObject
 {
@@ -97,16 +96,15 @@ signals:
 
 public slots:
 	void reload();
-
-private slots:
+	void update();
 	void applyPosTaskFilter(QVector<int>);
 	void applyNegTaskFilter(QVector<int>);
 	void applyPosEventFilter(QVector<int>);
 	void applyNegEventFilter(QVector<int>);
+	void clearAllFilters();
 
 public:
 	struct kshark_entry  **_rows;
-	//struct pevent_record **_rows;
 	pevent		      *_pevt;
 };
 
@@ -122,6 +120,9 @@ public:
 	/** A list of registered plugins. */
 	QVector<bool>	_registeredPlugins;
 
+	void load();
+	void unload();
+
 signals:
 	void dataReload();
 
@@ -133,10 +134,6 @@ public slots:
 
 class KsTimeMap;
 class KsGLWidget;
-
-namespace KsPlot {
-	class Mark;
-};
 
 enum class DualMarkerState
 {
@@ -158,6 +155,7 @@ public:
 	KsPlot::Mark *markPtr() {return _mark;}
 
 	void setGLWidget(KsGLWidget *gl) {_gl = gl;}
+	void setRow(size_t r) {_pos = r;}
 	bool set(const KsDataStore &data,
 		 const KsTimeMap &histo,
 		 size_t pos,
@@ -170,6 +168,9 @@ public:
 
 	int bin()		const {return _bin;}
 	size_t row()		const {return _pos;}
+	int cpu()		const {return _cpu;}
+	int task()		const {return _task;}
+
 	const QColor &color()	const {return _color;}
 
 	void makeVisible(KsGLWidget *gl);
@@ -199,9 +200,26 @@ class KsDualMarkerSM : public QWidget
 public:
 	explicit KsDualMarkerSM(QWidget *parent = nullptr);
 	void reset();
+	void restart();
 	void placeInToolBar(QToolBar *tb);
 
 	DualMarkerState getState() const {return _markState;}
+	void setState(const DualMarkerState &st) {
+		if (st == _markState) {
+			emit markSwitch();
+			return;
+		}
+
+		if (st == DualMarkerState::A) {
+			emit machineToA();
+			doStateA();
+		}
+
+		if (st == DualMarkerState::B) {
+			emit machineToB();
+			doStateB();
+		}
+	}
 
 	KsGraphMark &getMarker(DualMarkerState s);
 	KsGraphMark &activeMarker();
@@ -218,10 +236,12 @@ signals:
 	void markSwitch();
 	void updateView(size_t pos, bool mark);
 	void showInGraph(size_t pos);
+	void machineToA();
+	void machineToB();
 
 private slots:
-	void setStateA();
-	void setStateB();
+	void doStateA();
+	void doStateB();
 
 private:
 	QPushButton	 _buttonA;
@@ -235,6 +255,61 @@ private:
 	DualMarkerState	 _markState;
 	KsGraphMark	 _markA, _markB;
 	QShortcut        _scCtrlA, _scCtrlB;
+};
+
+class KsSession
+{
+	json_object *_jsession;
+
+public:
+	KsSession();
+	~KsSession();
+
+	json_object *json() {return _jsession;}
+
+	void importFromFile(QString jfileName);
+	void exportToFile(QString jfileName);
+
+	void setDataFile(QString fileName, time_t t);
+	QString getDataFile();
+	time_t getDataFileTS();
+
+	void setVisModel(size_t nBins, uint64_t min, uint64_t max);
+	void getVisModel(size_t *nBins, uint64_t *min, uint64_t *max);
+
+	void setCpuPlots(const QVector<int> &cpus);
+	QVector<int> getCpuPlots();
+
+	void setTaskPlots(const QVector<int> &tasks);
+	QVector<int> getTaskPlots();
+
+	void setFilters(kshark_context *kshark_ctx);
+	void getFilters(kshark_context *kshark_ctx);
+
+	void setMainWindowSize(int width, int height);
+	void getMainWindowSize(int *width, int *height);
+
+	void setSplitterSize(int graphSize, int viewSize);
+	void getSplitterSize(int *graphSize, int *viewSize);
+
+	void setDualMarker(KsDualMarkerSM *dm);
+	bool getMarker(const char* name, size_t *pos);
+	DualMarkerState getMarkerState();
+
+	void setPlugins(const QStringList &pluginList,
+			const QVector<bool> &registeredPlugins);
+	void getPlugins(QStringList *pluginList,
+			QVector<bool> *registeredPlugins);
+
+	void setViewTop(size_t topRow) {
+		json_object_object_add(_jsession, "ViewTop",
+				       json_object_new_int64(topRow));
+	}
+	size_t getViewTop() {
+		json_object *jrow;
+		json_object_object_get_ex(_jsession, "ViewTop", &jrow);
+		return json_object_get_int64(jrow);
+	}
 };
 
 #endif

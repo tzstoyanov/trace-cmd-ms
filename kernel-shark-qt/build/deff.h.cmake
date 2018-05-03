@@ -13,6 +13,8 @@
 
 #cmakedefine KS_DIR "@KS_DIR@"
 
+#cmakedefine KS_CONF_DIR "@KS_CONF_DIR@"
+
 #cmakedefine TRACECMD_BIN_DIR "@TRACECMD_BIN_DIR@"
 
 #cmakedefine N_CPUS @N_CPUS@

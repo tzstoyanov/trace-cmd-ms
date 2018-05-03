@@ -116,6 +116,7 @@ void kshark_free_event_handler_list(struct gui_event_handler *handlers)
 
 void kshark_register_plugin(struct kshark_context *kshark_ctx, const char *file)
 {
+	printf("@ kshark_register_plugin\n");
 	struct stat st;
 	int ret;
 	struct plugin_list *plugin = kshark_ctx->plugins;
@@ -140,6 +141,8 @@ void kshark_register_plugin(struct kshark_context *kshark_ctx, const char *file)
 	}
 
 	asprintf(&plugin->file, "%s", file);
+	plugin->handle = NULL;
+
 	plugin->next = kshark_ctx->plugins;
 	kshark_ctx->plugins = plugin;
 }
@@ -177,7 +180,6 @@ void kshark_handle_plugins(struct kshark_context *kshark_ctx, int task_id)
 {
 	kshark_plugin_load_func func;
 	struct plugin_list *plugin;
-	void *handle;
 	char* func_name;
 	int fn_size = 0;
 
@@ -204,22 +206,34 @@ void kshark_handle_plugins(struct kshark_context *kshark_ctx, int task_id)
 	}
 
 	for (plugin = kshark_ctx->plugins; plugin; plugin = plugin->next) {
-		handle = dlopen(plugin->file, RTLD_NOW | RTLD_GLOBAL);
+		if (task_id == KSHARK_PLUGIN_LOAD) {
+			printf(">>> dlopen\n");
+			plugin->handle = dlopen(plugin->file, RTLD_NOW | RTLD_GLOBAL);
 
-		if (!handle) {
-			fprintf(stderr, "cannot load plugin '%s'\n%s\n",
-				plugin->file, dlerror());
-			continue;
+			if (!plugin->handle) {
+				fprintf(stderr, "cannot load plugin '%s'\n%s\n",
+					plugin->file, dlerror());
+				continue;
+			}
 		}
 
-		func = dlsym(handle, func_name);
+		func = dlsym(plugin->handle, func_name);
 		if (!func) {
 			fprintf(stderr, "cannot find func '%s' in plugin '%s'\n%s\n",
 				func_name, plugin->file, dlerror());
+
+			dlclose(plugin->handle);
+			plugin->handle = NULL;
 			continue;
 		}
 
 		func();
+
+		if (task_id == KSHARK_PLUGIN_UNLOAD && plugin->handle) {
+			printf("<<< dlclose\n");
+			dlclose(plugin->handle);
+			plugin->handle = NULL;
+		}
 	}
 
 	free(func_name);

@@ -95,6 +95,7 @@ void kshark_free_event_handler_list(struct gui_event_handler *handlers);
 struct plugin_list {
 	struct plugin_list	*next;
 	char			*file;
+	void 			*handle;
 };
 
 void kshark_register_plugin(struct kshark_context *kshark_ctx, const char *file);

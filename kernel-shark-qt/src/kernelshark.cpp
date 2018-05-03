@@ -43,6 +43,7 @@ void usage(const char *prog)
 	printf("  -i	input_file, default is %s\n", default_input_file);
 	printf("  -p	register plugin, use plugin name, absolute or relative path\n");
 	printf("  -u	unregister plugin, use plugin name or absolute path\n");
+	printf("  -s	import a session.\n");
 }
 
 int main(int argc, char **argv)
@@ -53,7 +54,9 @@ int main(int argc, char **argv)
 	KsMainWindow ks;
 
 	int c;
-	while ((c = getopt(argc, argv, "hvi:p:u:")) != -1) {
+	bool fromSession = false;
+
+	while ((c = getopt(argc, argv, "hvi:p:u:s:")) != -1) {
 		switch(c) {
 		case 'h':
 			usage(argv[0]);
@@ -75,25 +78,31 @@ int main(int argc, char **argv)
 			ks.unregisterPlugin(QString(optarg));
 			break;
 
+		case 's':
+			ks.loadSession(QString(optarg));
+			fromSession = true;
+
 		default:
 			break;
 		}
 	}
 
-	if ((argc - optind) >= 1) {
+	if (!fromSession) {
+		if ((argc - optind) >= 1) {
+			if (input_file)
+				usage(argv[0]);
+			input_file = argv[optind];
+		}
+
+		if (!input_file) {
+			struct stat st;
+			if (stat(default_input_file, &st) == 0)
+				input_file = default_input_file;
+		}
+
 		if (input_file)
-			usage(argv[0]);
-		input_file = argv[optind];
+			ks.loadData(QString(input_file));
 	}
-
-	if (!input_file) {
-		struct stat st;
-		if (stat(default_input_file, &st) == 0)
-			input_file = default_input_file;
-	}
-
-	if (input_file)
-		ks.loadFile(QString(input_file));
 
 	ks.show();
 	return a.exec();

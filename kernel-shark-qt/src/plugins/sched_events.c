@@ -179,11 +179,11 @@ static void plugin_sched_unload()
 {
 	printf("@@ plugin_sched_unload ##\n");
 
-	struct kshark_context *kshark_ctx = NULL;
-	kshark_instance(&kshark_ctx);
-
 	if (!plugin_sched_context_handler)
 		return;
+
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
 
 	struct plugin_sched_context *plugin_ctx = plugin_sched_context_handler;
 

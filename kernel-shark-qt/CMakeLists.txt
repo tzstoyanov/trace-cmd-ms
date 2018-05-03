@@ -13,6 +13,11 @@ message("\n project: Kernel Shark:  (version: ${KS_VERSION_STRING}) \n")
 
 set(KS_DIR ${CMAKE_SOURCE_DIR})
 
+# Make a directory to hold configuration files. To change this do:
+# cmake .. -DKS_CONF_DIR=/your/preferred/path
+set(KS_CONF_DIR "${KS_DIR}/.ksconf" CACHE STRING "Directory for configuration files.")
+file(MAKE_DIRECTORY ${KS_CONF_DIR})
+
 # Get the number of CPUs
 include(ProcessorCount)
 ProcessorCount(N_CPUS)
@@ -42,11 +47,11 @@ set(EXECUTABLE_OUTPUT_PATH "${KS_DIR}/bin")
 set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -Wall -pthread")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=c++11 -pthread")
 
-include_directories( ${KS_DIR}/src/
-                     ${KS_DIR}/build/src/
-                     ${TRACECMD_INCLUDE_DIR}
-                     ${TRACEEVENT_INCLUDE_DIR}
-                     ${JSONC_INCLUDE_DIR})
+include_directories(${KS_DIR}/src/
+                    ${KS_DIR}/build/src/
+                    ${TRACECMD_INCLUDE_DIR}
+                    ${TRACEEVENT_INCLUDE_DIR}
+                    ${JSONC_INCLUDE_DIR})
 
 message("")
 message(STATUS "C flags      : " ${CMAKE_C_FLAGS})

@@ -30,6 +30,9 @@ static int kshark_default_context(struct kshark_context **context)
 	if (!kshark_ctx)
 		return -1;
 
+	kshark_ctx->plugins = NULL;
+	kshark_ctx->event_handlers = NULL;
+
 	kshark_ctx->show_task_filter = filter_id_hash_alloc();
 	kshark_ctx->hide_task_filter = filter_id_hash_alloc();
 
@@ -108,8 +111,14 @@ bool kshark_open(struct kshark_context *kshark_ctx, const char *file)
 	kshark_ctx->handle = handle;
 	kshark_ctx->pevt = tracecmd_get_pevent(handle);
 
-	/* Turn off function trace indent and turn on show parent
-	 * if possible. */
+	kshark_ctx->advanced_event_filter =
+		pevent_filter_alloc(kshark_ctx->pevt);
+	kshark_ctx->adv_filter_is_set = false;
+
+	/*
+	 * Turn off function trace indent and turn on show parent
+	 * if possible.
+	 */
 	trace_util_add_option("ftrace:parent", "1");
 	trace_util_add_option("ftrace:indent", "0");
 
@@ -123,6 +132,32 @@ void kshark_close(struct kshark_context *kshark_ctx)
 {
 	if (!kshark_ctx || !kshark_ctx->handle)
 		return;
+
+	if (kshark_ctx->show_task_filter &&
+	    filter_id_count(kshark_ctx->show_task_filter)) {
+		filter_id_clear(kshark_ctx->show_task_filter);
+	}
+
+	if (kshark_ctx->hide_task_filter &&
+	    filter_id_count(kshark_ctx->hide_task_filter)) {
+		filter_id_clear(kshark_ctx->hide_task_filter);
+	}
+
+	if (kshark_ctx->show_event_filter &&
+	    filter_id_count(kshark_ctx->show_event_filter)) {
+		filter_id_clear(kshark_ctx->show_event_filter);
+	}
+
+	if (kshark_ctx->hide_event_filter &&
+	    filter_id_count(kshark_ctx->hide_event_filter)) {
+		filter_id_clear(kshark_ctx->hide_event_filter);
+	}
+
+	if (kshark_ctx->advanced_event_filter) {
+		pevent_filter_reset(kshark_ctx->advanced_event_filter);
+		pevent_filter_free(kshark_ctx->advanced_event_filter);
+		kshark_ctx->advanced_event_filter = NULL;
+	}
 
 	tracecmd_close(kshark_ctx->handle);
 }
@@ -328,10 +363,11 @@ char* kshark_dump_entry(struct kshark_entry *entry, int *size)
 			      kshark_get_latency(kshark_ctx->pevt, data));
 
 	if (size_tmp) {
-		*size = asprintf(&entry_str, "%s %s; %s;",
+		*size = asprintf(&entry_str, "%s %s; %s; %u",
 				 tmp_str,
 				 kshark_get_event_name(kshark_ctx->pevt, entry),
-				 kshark_get_info(kshark_ctx->pevt, data, entry));
+				 kshark_get_info(kshark_ctx->pevt, data, entry),
+				 entry->visible);
 
 		free(tmp_str);
 	}
@@ -400,9 +436,11 @@ static bool kshark_view_event(struct kshark_context *kshark_ctx, int event_id)
 		 !filter_id_find(kshark_ctx->hide_event_filter, event_id));
 }
 
-static bool kshark_show_entry(struct kshark_context *kshark_ctx, int pid, int event_id)
+static bool kshark_show_entry(struct kshark_context *kshark_ctx,
+			      int pid, int event_id)
 {
-	if (kshark_view_task(kshark_ctx, pid) && kshark_view_event(kshark_ctx, event_id))
+	if (kshark_view_task(kshark_ctx, pid) &&
+	    kshark_view_event(kshark_ctx, event_id))
 		return true;
 
 	return false;
@@ -434,7 +472,8 @@ size_t kshark_load_data_records(struct kshark_context *kshark_ctx,
 			*temp_next = temp_rec = malloc(sizeof(*temp_rec));
 			assert(temp_rec != NULL);
 
-			add_task_hash(kshark_ctx, pevent_data_pid(kshark_ctx->pevt, data));
+			add_task_hash(kshark_ctx,
+				      pevent_data_pid(kshark_ctx->pevt, data));
 			temp_rec->rec = data;
 			temp_rec->next = NULL;
 			temp_next = &(temp_rec->next);
@@ -488,7 +527,7 @@ size_t kshark_load_data_entries(struct kshark_context *kshark_ctx,
 {
 	
 	int n_cpus = tracecmd_cpus(kshark_ctx->handle);
-	int cpu;
+	int cpu, ret;
 	size_t count, total = 0;
 	struct gui_event_handler *evt_handler;
 	struct pevent_record *rec;
@@ -512,9 +551,18 @@ size_t kshark_load_data_entries(struct kshark_context *kshark_ctx,
 			kshark_set_entry_values(kshark_ctx, rec, entry);
 			add_task_hash(kshark_ctx, entry->pid);
 
-			evt_handler = find_gui_event_handler(kshark_ctx->event_handlers, entry->event_id);
+			evt_handler = find_gui_event_handler(kshark_ctx->event_handlers,
+							     entry->event_id);
 			if (evt_handler)
 				evt_handler->event_func(kshark_ctx, rec, entry);
+
+			ret = pevent_filter_match(kshark_ctx->advanced_event_filter, rec);
+			if ((kshark_ctx->adv_filter_is_set && ret != FILTER_MATCH) ||
+			    !kshark_show_entry(kshark_ctx,
+				       entry->pid,
+				       entry->event_id)) {
+				entry->visible &= ~kshark_ctx->filter_mask;
+			}
 
 			entry->next = NULL;
 			next = &(entry->next);
@@ -828,8 +876,10 @@ size_t kshark_filter_entries(struct kshark_context *kshark_ctx,
 	for (i = 0; i < n_entries; ++i) {
 		data_rows[i]->visible = 0xFF;
 
-		if (!kshark_show_entry(kshark_ctx, data_rows[i]->pid, data_rows[i]->event_id)) {
-			data_rows[i]->visible = kshark_ctx->filter_mask;
+		if (!kshark_show_entry(kshark_ctx,
+				       data_rows[i]->pid,
+				       data_rows[i]->event_id)) {
+			data_rows[i]->visible &= ~kshark_ctx->filter_mask;
 			++count;
 		}
 	}
@@ -944,7 +994,7 @@ struct kshark_entry *kshark_get_entry_back(size_t first,
 	 * because this is always true. */
 	for (size_t i = first + 1; i-- != last;) {
 		if (cond(kshark_ctx, data[i], val)) {
-			/* Data from this Task has been found. */
+			/* Data that satisfies the condition has been found. */
 			if (vis_only &&
 			    !(data[i]->visible & vis_mask)) {
 				/* This data entry has been filtered. */
@@ -1028,10 +1078,11 @@ int kshark_get_plugins(char ***plugins)
 	if (!all_plugins)
 		return 0;
 
-	while (all_plugins[i]) {
+// 	while (all_plugins[i]) {
+// 	// TODO plugin selection.
 // 		printf("plugin %i %s\n", i, all_plugins[i]);
-		 ++i;
-	}
+// 		 ++i;
+// 	}
 
 	*plugins = all_plugins;
 	return i;
@@ -1043,7 +1094,20 @@ struct pevent *kshark_local_events()
 	return tracecmd_local_events(tracing);
 }
 
-struct event_format *kshark_find_event(struct pevent *pevt, int event_id)
+char **kshark_get_event_format_fields(struct event_format *event)
 {
-	return pevent_find_event(pevt, event_id);
+	int n_fields = event->format.nr_fields;
+	char **field_names = calloc(n_fields, sizeof(char *));
+
+	struct format_field **fields = pevent_event_fields(event);
+	struct format_field *field = *fields;
+	for (int i = 0; i < n_fields; ++i) {
+		char *name = malloc(sizeof(field->name));
+		strcpy(name, field->name);
+		field_names[i] = name;
+		field = field->next;
+	}
+
+	free(fields);
+	return field_names;
 }

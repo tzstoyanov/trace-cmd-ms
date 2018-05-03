@@ -20,6 +20,7 @@
 
 // Kernel Shark 2
 #include "KsTraceViewer.hpp"
+#include "KsWidgetsLib.hpp"
 
 KsTraceViewer::KsTraceViewer(QWidget *parent)
 : QWidget(parent),
@@ -38,7 +39,8 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
   _graphFollowsCheckBox(this),
   _searchDone(false),
   _graphFollows(true),
-  _mState(nullptr)
+  _mState(nullptr),
+  _data(nullptr)
 {
 	this->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
 
@@ -49,8 +51,13 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	/* On the toolbar make two Combo boxes for the search settings. */
 	_toolbar.addWidget(&_labelSearch);
 	_columnComboBox.addItems(_tableHeader);
-	connect(&_columnComboBox, SIGNAL(currentIndexChanged(int)),
-		this, SLOT(searchEditColumn(int)));
+
+	/*
+	 * Using the old Signal-Slot syntax because QComboBox::currentIndexChanged
+	 * has overloads.
+	 */
+	connect(&_columnComboBox,	SIGNAL(currentIndexChanged(int)),
+		this,			SLOT(searchEditColumn(int)));
 
 	_toolbar.addWidget(&_columnComboBox);
 
@@ -58,18 +65,23 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	_selectComboBox.addItem("full match");
 	_selectComboBox.addItem("does not have");
 
-	connect(&_selectComboBox, SIGNAL(currentIndexChanged(int)),
-		this, SLOT(searchEditSelect(int)));
+	/*
+	 * Using the old Signal-Slot syntax because QComboBox::currentIndexChanged
+	 * has overloads.
+	 */
+	connect(&_selectComboBox,	SIGNAL(currentIndexChanged(int)),
+		this,			SLOT(searchEditSelect(int)));
+
 	_toolbar.addWidget(&_selectComboBox);
 
 	/* On the toolbar, make a Line edit field for search. */
 	_searchLineEdit.setMaximumWidth(FONT_WIDTH*30);
 
-	connect(&_searchLineEdit, SIGNAL(returnPressed()),
-		this, SLOT(search()));
+	connect(&_searchLineEdit,	&QLineEdit::returnPressed,
+		this,			&KsTraceViewer::search);
 
-	connect(&_searchLineEdit, SIGNAL(textEdited(const QString &)),
-		this, SLOT(searchEditText(const QString &)));
+	connect(&_searchLineEdit,	&QLineEdit::textEdited,
+		this,			&KsTraceViewer::searchEditText);
 
 	_toolbar.addWidget(&_searchLineEdit);
 	_toolbar.addSeparator();
@@ -79,19 +91,23 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 
 	_nextButton.setFixedWidth(bWidth);
 	_toolbar.addWidget(&_nextButton);
-	connect(&_nextButton, SIGNAL(pressed()), this, SLOT(next()));
+	connect(&_nextButton,	&QPushButton::pressed,
+		this,		&KsTraceViewer::next);
 
 	_prevButton.setFixedWidth(bWidth);
 	_toolbar.addWidget(&_prevButton);
-	connect(&_prevButton, SIGNAL(pressed()), this, SLOT(prev()));
+	connect(&_prevButton,	&QPushButton::pressed,
+		this,		&KsTraceViewer::prev);
 
 	_toolbar.addSeparator();
 
-	/* On the toolbar, make a Check box for connecting the search pannel
-	 * to the Graph widget. */
+	/*
+	 * On the toolbar, make a Check box for connecting the search pannel
+	 * to the Graph widget.
+	 */
 	_graphFollowsCheckBox.setCheckState(Qt::Checked);
-	connect(&_graphFollowsCheckBox, SIGNAL(stateChanged(int)),
-		this, SLOT(graphFollowsChanged(int)));
+	connect(&_graphFollowsCheckBox,	&QCheckBox::stateChanged,
+		this,			&KsTraceViewer::graphFollowsChanged);
 
 	_toolbar.addWidget(&_graphFollowsCheckBox);
 	_toolbar.addWidget(&_labelGrFollows);
@@ -108,8 +124,12 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	 _proxyModel.setSource(&_model);
 	_view.setModel(&_proxyModel);
 
-	connect(&_view, SIGNAL(clicked(const QModelIndex&)),
-		this, SLOT(clicked(const QModelIndex&)));
+	_view.setContextMenuPolicy(Qt::CustomContextMenu);
+	connect(&_view,	&QTableView::customContextMenuRequested,
+		this,	&KsTraceViewer::onCustomContextMenu);
+
+	connect(&_view,	&QTableView::clicked,
+		this,	&KsTraceViewer::clicked);
 
 	/* Set the layout. */
 	_layout.addWidget(&_toolbar);
@@ -121,6 +141,7 @@ void KsTraceViewer::loadData(KsDataStore *data)
 {
 	hd_time t0 = GET_TIME;
 
+	_data = data;
 	_model.reset();
 	_proxyModel.fill(data->_rows);
 	_model.fill(data->_pevt, data->_rows, data->size());
@@ -137,17 +158,21 @@ void KsTraceViewer::setMarkerSM(KsDualMarkerSM *m)
 	_mState = m;
 	_model.setColors(_mState->markerA().color(), _mState->markerB().color());
 
-	/* Assign a property to State A of the Dual marker state machine.
+	/*
+	 * Assign a property to State A of the Dual marker state machine.
 	 * When the marker is in State A the background color of the selected
-	 * row will be the same as the color of Marker A. */
+	 * row will be the same as the color of Marker A.
+	 */
 	QString styleSheetA = "selection-background-color : " +
 			      _mState->markerA().color().name() + ";";
 
 	_mState->stateAPtr()->assignProperty(&_view, "styleSheet", styleSheetA);
 
-	/* Assign a property to State B. When the marker is in State B
+	/*
+	 * Assign a property to State B. When the marker is in State B
 	 * the background color of the selected row will be the same as
-	 * the color of Marker B. */
+	 * the color of Marker B.
+	 */
 	QString styleSheetB = "selection-background-color : " +
 			      _mState->markerB().color().name() + ";";
 
@@ -161,14 +186,42 @@ void KsTraceViewer::reset()
 	resizeToContents();
 }
 
+size_t  KsTraceViewer::getTopRow() const
+{
+	return _view.indexAt(_view.rect().topLeft()).row();
+}
+
+void  KsTraceViewer::setTopRow(size_t r)
+{
+	_view.scrollTo(_proxyModel.index(r, 0),
+		       QAbstractItemView::PositionAtTop);
+}
+
 void KsTraceViewer::update(KsDataStore *data)
 {
 	/* The Proxy model has to be updated first! */ 
 	_proxyModel.update(data);
 	_model.update(data);
-
+	_data = data;
 	if (_mState->activeMarker().isSet())
 		showRow(_mState->activeMarker().row(), true);
+}
+
+void KsTraceViewer::onCustomContextMenu(const QPoint &point)
+{
+	QModelIndex i = _view.indexAt(point);
+	if (i.isValid()) {
+		qInfo() << "onCustomContextMenu " << i.row();
+		/*
+		 * Use the index of the proxy model to retrieve the value
+		 * of the row number in the base model. This works because
+		 * the row number is shown in column "0".
+		 */
+		size_t row = _proxyModel.data(_proxyModel.index(i.row(), 0)).toInt();
+		KsQuickFilterMenu menu(_data, row, this);
+		connect(&menu, &KsQuickFilterMenu::plotTask, this, &KsTraceViewer::plotTask);
+		menu.exec(mapToGlobal(point));
+	}
 }
 
 void KsTraceViewer::searchEditColumn(int index)
@@ -217,8 +270,10 @@ void KsTraceViewer::search()
 	/* Disable the user input until the search is done. */
 	_searchLineEdit.setReadOnly(true);
 	if (!_searchDone) {
-		/* The search is not done. This means that the search settings
-		 * have been modified since the last time we searched. */
+		/*
+		 * The search is not done. This means that the search settings
+		 * have been modified since the last time we searched.
+		 */
 		_matchList.clear();
 		QString xText = _searchLineEdit.text();
 		int xColumn = _columnComboBox.currentIndex();
@@ -248,8 +303,10 @@ void KsTraceViewer::search()
 				emit select(*_it); // Send a signal to the Graph widget.
 		}
 	} else {
-		/* If the search is done, pressing "Enter" is equivalent
-		 * to pressing "Next" button. */
+		/*
+		 * If the search is done, pressing "Enter" is equivalent
+		 * to pressing "Next" button.
+		 */
 		this->next();
 	}
 
@@ -305,9 +362,11 @@ void KsTraceViewer::prev()
 void KsTraceViewer::clicked(const QModelIndex& i)
 {
 	if (_graphFollows) {
-		/* Use the index of the proxy model to retrieve the value
+		/*
+		 * Use the index of the proxy model to retrieve the value
 		 * of the row number in the base model. This works because 
-		 *  the row number is shown in column "0".*/
+		 *  the row number is shown in column "0".
+		 */
 		size_t row = _proxyModel.data(_proxyModel.index(i.row(), 0)).toInt();
 		emit select(row); // Send a signal to the Graph widget.
 	}
@@ -315,21 +374,26 @@ void KsTraceViewer::clicked(const QModelIndex& i)
 
 void KsTraceViewer::showRow(size_t r, bool mark)
 {
-	/* Use the index in the source model to retrieve the value
-	 * of the row number in the of the proxy model. */
+	/*
+	 * Use the index in the source model to retrieve the value of the row number
+	 * in the proxy model.
+	 */
 	QModelIndex index = _proxyModel.mapFromSource(_model.index(r, 0));
 	if (mark) { // The row will be selected (colored).
-		// Get the first and the last visible rows of the table.
+		/* Get the first and the last visible rows of the table. */
 		int visiTot = _view.indexAt(_view.rect().topLeft()).row();
 		int visiBottom = _view.indexAt(_view.rect().bottomLeft()).row() - 2;
-		// Scroll only if the row to be shown in not vizible.
+
+		/* Scroll only if the row to be shown in not vizible. */
 		if (index.row() < visiTot || index.row() > visiBottom)
 			_view.scrollTo(index, QAbstractItemView::PositionAtCenter);
 
 		_view.selectRow(index.row());
 	} else {
-		/* Just make sure that the row is visible.
-		 * It will show up at the top of the visible part of the table. */
+		/*
+		 * Just make sure that the row is visible. It will show up at
+		 * the top of the visible part of the table.
+		 */
 		_view.scrollTo(index, QAbstractItemView::PositionAtTop);
 	}
 }
@@ -346,23 +410,38 @@ void KsTraceViewer::markSwitch()
 
 	/* First deal with the passive marker. */
 	if (_mState->getMarker(!state).isSet()) {
-		/* The passive marker is set.
-		 * Use the model to color the row of the passive marker. */
+		/*
+		 * The passive marker is set. Use the model to color the row of
+		 * the passive marker.
+		 */
 		_model.selectRow(!state, _mState->getMarker(!state).row());
 	}
 	else {
-		/* The passive marker is not set.
-		 * Make sure that the model colors nothing. */
+		/*
+		 * The passive marker is not set.
+		 * Make sure that the model colors nothing.
+		 */
 		_model.selectRow(!state, -1);
 	}
 
-	/* Now deal with the active marker. This has to be done after dealing
-	 *  with the model, because changing the model clears the selection. */
+	/*
+	 * Now deal with the active marker. This has to be done after dealing
+	 *  with the model, because changing the model clears the selection.
+	 */
 	if (_mState->getMarker(state).isSet()) {
-		/* The active marker is set. Use QTableView to select its row.
+		/*
+		 * The active marker is set. Use QTableView to select its row.
+		 * The index in the source model is used to retrieve the value
+		 * of the row number in the proxy model.
+		 */
+		size_t row =_mState->getMarker(state).row();
+		QModelIndex index = _proxyModel.mapFromSource(_model.index(row, 0));
+
+		/*
 		 * The row of the active marker will be colored according to
-		 * the assigned property of the current state of the Dual marker. */
-		_view.selectRow(_mState->getMarker(state).row());
+		 * the assigned property of the current state of the Dual marker.
+		 */
+		_view.selectRow(index.row());
 	}
 }
 
@@ -392,9 +471,11 @@ void KsTraceViewer::resizeToContents()
 	_view.resizeColumnsToContents();
 	_view.setVisible(true);
 
-	/** Because of some unknown reason the first column doesn't get
+	/*
+	 * Because of some unknown reason the first column doesn't get
 	 * resized properly by the code above. We will resize this
-	 * column by hand. */
+	 * column by hand.
+	 */
 	int rows = _model.rowCount({});
 	int columnSize = STRING_WIDTH(QString("%1").arg(rows)) + FONT_WIDTH;
 	_view.setColumnWidth(0, columnSize);
@@ -436,12 +517,14 @@ size_t KsTraceViewer::searchItems(int column,
 		size_t row = sm->selectedRows()[0].row();
 		_view.clearSelection();
 		_it = _matchList.begin();
-		/* Move the iterator to the first element of the match list after
-		 * the selected one. */
+		/*
+		 * Move the iterator to the first element of the match list after
+		 * the selected one.
+		 */
 		while (*_it <= row) {
 			++_it;  // Move the iterator.
 			if (_it == _matchList.end() ) {
-				// This is the last item of the list. Go back to the beginning.
+				/* This is the last item of the list. Go back to the beginning. */
 				_it = _matchList.begin();
 				break;
 			}

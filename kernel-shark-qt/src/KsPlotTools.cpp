@@ -312,8 +312,10 @@ void Graph::setBin(size_t bin, int pidF, int pidB, const Color &c)
 
 void Graph::draw(const ColorTable &pidColors, float s)
 {
-	/* Start by drawing a line between the base points of the first
-	 * and the last bin. */
+	/*
+	 * Start by drawing a line between the base points of the first
+	 * and the last bin.
+	 */
 	Line l(&_bins[0]._base, &_bins[_size - 1]._base);
 	l._size = s;
 	l.draw();
@@ -323,17 +325,21 @@ void Graph::draw(const ColorTable &pidColors, float s)
 		if (_bins[i]._pidFront >= 0 || _bins[i]._pidBack >= 0)
 			_bins[i].drawLine(s);
 
-	/* Draw colored boxes.
-	 * First find the first bin, which contains data and determine its Pid. */
+	/*
+	 * Draw colored boxes. First find the first bin, which contains data and
+	 * determine its Pid.
+	 */
 	int lastPid = 0;
 	Rectangle rec;
 	size_t b = 0;
 	while (b < _size) {
 		if (_bins[b]._pidBack > 0) {
 			lastPid = _bins[b]._pidFront;
-			/* Initialize a box starting from this bin.
+			/*
+			 * Initialize a box starting from this bin.
 			 * The color of the box corresponds to the Pid
-			 * of the process. */
+			 * of the process.
+			 */
 			rec._color = Color(pidColors[lastPid]);
 			rec.setPoint(0, _bins[b]._base._x,
 					_bins[b]._base._y - CPU_GRAPH_HEIGHT*.3);
@@ -348,8 +354,10 @@ void Graph::draw(const ColorTable &pidColors, float s)
 	while (b < _size) {
 		if (_bins[b]._pidFront == KS_EMPTY_BIN &&
 		    _bins[b]._pidBack == KS_EMPTY_BIN) {
-			/* This bin is empty. If a colored box is already initialized,
-			 * it will be extended. */
+			/*
+			 * This bin is empty. If a colored box is already initialized,
+			 * it will be extended.
+			 */
 			++b;
 			continue;
 		}
@@ -359,8 +367,10 @@ void Graph::draw(const ColorTable &pidColors, float s)
 		    _bins[b]._pidBack  != lastPid) {
 			/* A new process starts here. */
 			if (lastPid > 0 && b > 0) {
-				/* There is another process running up to this point. Close
-				 * its colored box here and draw. */
+				/*
+				 * There is another process running up to this point. Close
+				 * its colored box here and draw.
+				 */
 				rec.setPoint(3, _bins[b]._base._x - 1,
 						_bins[b]._base._y - CPU_GRAPH_HEIGHT*.3);
 				rec.setPoint(2, _bins[b]._base._x - 1,
@@ -369,8 +379,10 @@ void Graph::draw(const ColorTable &pidColors, float s)
 			}
 
 			if (_bins[b]._pidBack > 0) {
-				/* This is a regular process. Initialize colored box
-				 * starting from this bin. */
+				/*
+				 * This is a regular process. Initialize colored box
+				 * starting from this bin.
+				 */
 				rec._color = Color(pidColors[_bins[b]._pidBack]);
 				rec.setPoint(0, _bins[b]._base._x - 1,
 						_bins[b]._base._y - CPU_GRAPH_HEIGHT*.3);
@@ -384,8 +396,10 @@ void Graph::draw(const ColorTable &pidColors, float s)
 	}
 
 	if (lastPid > 0) {
-		/* This is the end of the Graph and we have a process running.
-		 * Close its colored box and draw. */
+		/*
+		 * This is the end of the Graph and we have a process running.
+		 * Close its colored box and draw.
+		 */
 		rec.setPoint(3, _bins[_size - 1]._base._x,
 				_bins[_size - 1]._base._y - CPU_GRAPH_HEIGHT*.3);
 		rec.setPoint(2, _bins[_size - 1]._base._x,

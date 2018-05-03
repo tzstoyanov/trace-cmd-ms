@@ -19,11 +19,18 @@
  */
 
 // Kernel Shark
+
+// extern C
+// {
+// #include "event-parse.h"
+// }
+
 #include "KsWidgetsLib.hpp"
 #include "libkshark.h"
 #include "KsDeff.h"
 #include "KsUtils.hpp"
 #include "KsPlotTools.hpp"
+#include "KsGLWidget.hpp"
 
 KsDataProgressBar::KsDataProgressBar(QWidget *parent)
 : QWidget(parent), _sb(this), _pb(&_sb) {
@@ -35,7 +42,7 @@ KsDataProgressBar::KsDataProgressBar(QWidget *parent)
 	_pb.setRange(0, 200);
 	_pb.setValue(1);
 	_sb.addPermanentWidget(&_pb, 1);
-	this->layout()->addWidget(new QLabel("Loadong trace data ..."));
+	this->layout()->addWidget(new QLabel("Loading trace data ..."));
 	this->layout()->addWidget(&_sb);
 	setWindowFlags(Qt::WindowStaysOnTopHint);
 	this->show();
@@ -54,7 +61,8 @@ KsMessageDialog::KsMessageDialog(QString message, QWidget *parent)
 	this->resize(SCREEN_WIDTH/10, FONT_HEIGHT*8);
 	_layout.addWidget(&_text);
 	_layout.addWidget(&_closeButton);
-	connect(&_closeButton, SIGNAL(pressed()), this, SLOT(close()));
+	connect(&_closeButton,	&QPushButton::pressed,
+		this,		&QWidget::close);
 
 	this->setLayout(&_layout);
 }
@@ -71,10 +79,10 @@ KsCheckBoxWidget::KsCheckBoxWidget(const QString &n, bool cond, QWidget *parent)
 	this->setWindowTitle(_name);
 	this->setMinimumHeight(SCREEN_HEIGHT/2);
 
-	connect(&_allCb, SIGNAL(clicked(bool)), this, SLOT(chechAll(bool)));
+	connect(&_allCb,	&QCheckBox::clicked,
+		this,		&KsCheckBoxWidget::chechAll);
 
 	_cbWidget = new QWidget(this);
-
 	_cbWidget->setLayout(&_cbLayout);
 
 	QToolBar *tb = new QToolBar(this);
@@ -118,10 +126,15 @@ KsCheckBoxDialog::KsCheckBoxDialog(KsCheckBoxWidget *cbw, QWidget *parent)
 	_buttonLayout.setAlignment(Qt::AlignLeft);
 	_topLayout.addLayout(&_buttonLayout);
 
-	connect(&_applyButton, SIGNAL(pressed()), this, SLOT(applyPress()));
-	connect(&_applyButton, SIGNAL(pressed()), this, SLOT(close()));
-// 	connect(&_applyButton, SIGNAL(pressed()), parentWidget(), SLOT(reload()));
-	connect(&_cancelButton,  SIGNAL(pressed()), this, SLOT(close()));
+	_applyButtonConnection =
+		connect(&_applyButton,	&QPushButton::pressed,
+			this,		&KsCheckBoxDialog::applyPress);
+
+	connect(&_applyButton,	&QPushButton::pressed,
+		this,		&QWidget::close);
+
+	connect(&_cancelButton,	&QPushButton::pressed,
+		this,		&QWidget::close);
 
 	this->setLayout(&_topLayout);
 }
@@ -133,7 +146,7 @@ void KsCheckBoxDialog::applyPress()
 
 	/* Disconnect _applyButton. This is done in order to protect
 	 * against multiple clicks. */
-	disconnect(&_applyButton, SIGNAL(pressed()), this, SLOT(applyPress()));
+	disconnect(_applyButtonConnection);
 }
 
 KsCheckBoxTableWidget::KsCheckBoxTableWidget(const QString &name,
@@ -142,12 +155,13 @@ KsCheckBoxTableWidget::KsCheckBoxTableWidget(const QString &name,
 : KsCheckBoxWidget(name, cond, parent),
   _table(this)
 {
-	connect(&_table, SIGNAL(changeState(int)), this, SLOT(changeState(int)));
+	connect(&_table,	&KsCheckBoxTable::changeState,
+		this,		&KsCheckBoxTableWidget::changeState);
 }
 
 void KsCheckBoxTableWidget::set(QVector<bool> v)
 {
-	int n = (v.size() <=  _cb.size())? v.size() : _cb.size();
+	int n = (v.size() <=  _table._cb.size())? v.size() :_table. _cb.size();
 	Qt::CheckState state;
 	_allCb.setCheckState(Qt::Checked);
 	for (int i = 0; i < n; ++i) {
@@ -157,37 +171,17 @@ void KsCheckBoxTableWidget::set(QVector<bool> v)
 			state = Qt::Unchecked;
 			_allCb.setCheckState(state);
 		}
-		_cb[i]->setCheckState(state);
+		_table._cb[i]->setCheckState(state);
 	}
 }
 
 void KsCheckBoxTableWidget::initTable(QStringList headers, int size)
 {
-	_table.setColumnCount(headers.count());
-	_table.setRowCount(size);
-	_table.setShowGrid(false);
-	_table.setHorizontalHeaderLabels(headers);
-	_table.horizontalHeader()->setDefaultAlignment(Qt::AlignLeft);
-	_table.horizontalHeader()->setStretchLastSection(true);
-	_table.setSelectionBehavior(QAbstractItemView::SelectRows);
-	_table.setEditTriggers(QAbstractItemView::NoEditTriggers);
-	_table.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	_table.verticalHeader()->setVisible(false);
+	_table.init(headers, size);
 
-	_cb.resize(size);
-
-	for (int i = 0; i < size; ++i) {
-		QWidget *cbWidget = new QWidget();
-		_cb[i] = new QCheckBox(cbWidget);
-		connect(_cb[i], SIGNAL(clicked(bool)), this, SLOT(update(bool)));
-
-		QHBoxLayout *cbLayout = new QHBoxLayout(cbWidget);
-		cbLayout->addWidget(_cb[i]);
-		cbLayout->setAlignment(Qt::AlignCenter);
-		cbLayout->setContentsMargins(0, 0, 0, 0);
-
-		cbWidget->setLayout(cbLayout);
-		_table.setCellWidget(i, 0, cbWidget);
+	for (auto const & cb: _table._cb) {
+		connect(cb,	&QCheckBox::clicked,
+			this,	&KsCheckBoxTableWidget::update);
 	}
 
 	_cbLayout.setContentsMargins(1, 1, 1, 1);
@@ -222,9 +216,9 @@ void  KsCheckBoxTableWidget::update(bool state)
 QVector<int> KsCheckBoxTableWidget::getCheckedIds()
 {
 	QVector<int> vec;
-	int n = _cb.size();
+	int n = _table._cb.size();
 	for (int i = 0; i < n; ++i)
-		if (_cb[i]->checkState() == Qt::Checked)
+		if (_table._cb[i]->checkState() == Qt::Checked)
 			vec.append(_id[i]);
 
 	return vec;
@@ -235,25 +229,98 @@ void KsCheckBoxTableWidget::chechAll(bool st)
 	Qt::CheckState state = Qt::Unchecked;
 	if (st) state = Qt::Checked;
 
-	for (auto &c: _cb) {
+	for (auto &c: _table._cb) {
 		c->setCheckState(state);
 	}
 }
 
 void KsCheckBoxTableWidget::changeState(int row)
 {
-	if (_cb[row]->checkState() == Qt::Checked)
-		_cb[row]->setCheckState(Qt::Unchecked);
+	if (_table._cb[row]->checkState() == Qt::Checked)
+		_table._cb[row]->setCheckState(Qt::Unchecked);
 	else
-		_cb[row]->setCheckState(Qt::Checked);
+		_table._cb[row]->setCheckState(Qt::Checked);
 
 	_allCb.setCheckState(Qt::Checked);
-	for (auto &c: _cb) {
+	for (auto &c: _table._cb) {
 		if (c->checkState() == Qt::Unchecked) {
 			_allCb.setCheckState(Qt::Unchecked);
 			break;
 		}
 	}
+}
+
+static void update_r(QTreeWidgetItem *item, Qt::CheckState state)
+{
+	item->setCheckState(0, state);
+
+	int n = item->childCount();
+	for (int i = 0; i < n; ++i)
+		update_r(item->child(i), state);
+}
+
+KsCheckBoxTree::KsCheckBoxTree(QWidget *parent)
+: QTreeWidget(parent)
+{
+	setColumnCount(2);
+	setHeaderHidden(true);
+	setSelectionBehavior(QAbstractItemView::SelectRows);
+	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+	connect(this, &KsCheckBoxTree::itemDoubleClicked,
+		this, &KsCheckBoxTree::doubleClicked);
+}
+
+void KsCheckBoxTree::keyPressEvent(QKeyEvent *event)
+{
+	if (event->key() == Qt::Key_Return) {
+		/* Loop over all selected child items and change
+		* there states. */
+		for (auto &s: selectedItems()) {
+			if(s->childCount()) {
+				if (s->isExpanded())
+					continue;
+			}
+
+			if (s->checkState(0) == Qt::Unchecked)
+				s->setCheckState(0, Qt::Checked);
+			else
+				s->setCheckState(0, Qt::Unchecked);
+
+			if(s->childCount()) {
+				update_r(s, s->checkState(0));
+			}
+		}
+	}
+
+	emit verify();
+	QTreeWidget::keyPressEvent(event);
+}
+
+void KsCheckBoxTree::doubleClicked(QTreeWidgetItem *item, int col)
+{
+	if (item->checkState(0) == Qt::Unchecked)
+		item->setCheckState(0, Qt::Checked);
+	else
+		item->setCheckState(0, Qt::Unchecked);
+
+	for (auto &i: selectedItems())
+		i->setSelected(false);
+
+	emit itemClicked(item, col);
+}
+
+void KsCheckBoxTree::mousePressEvent(QMouseEvent *event)
+{
+	if (event->button() == Qt::RightButton) {
+		for (auto &i: selectedItems())
+			i->setSelected(false);
+
+		return;
+	}
+
+	QApplication::processEvents();
+	QTreeWidget::mousePressEvent(event);
 }
 
 KsCheckBoxTreeWidget::KsCheckBoxTreeWidget(const QString &name,
@@ -262,7 +329,8 @@ KsCheckBoxTreeWidget::KsCheckBoxTreeWidget(const QString &name,
 : KsCheckBoxWidget(name, cond, parent),
   _tree(this)
 {
-	connect(&_tree, SIGNAL(changeState()), this, SLOT(changeState()));
+	connect(&_tree,	&KsCheckBoxTree::verify,
+		this,	&KsCheckBoxTreeWidget::verify);
 }
 
 void KsCheckBoxTreeWidget::set(QVector<bool> v)
@@ -275,26 +343,21 @@ void KsCheckBoxTreeWidget::set(QVector<bool> v)
 			state = Qt::Checked;
 		} else {
 			state = Qt::Unchecked;
-			_cb[i]->parent()->setCheckState(0, state);
 			_allCb.setCheckState(state);
 		}
 		_cb[i]->setCheckState(0, state);
 	}
 
-	changeState();
+	verify();
 }
 
 void KsCheckBoxTreeWidget::initTree()
 {
-	_tree.setColumnCount(2);
-	_tree.setHeaderHidden(true);
 // 	_tree.setSelectionMode(QAbstractItemView::SingleSelection);
 	_tree.setSelectionMode(QAbstractItemView::MultiSelection);
-	_tree.setSelectionBehavior(QAbstractItemView::SelectRows);
-	_tree.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
-	connect(&_tree, SIGNAL(itemClicked(QTreeWidgetItem*, int)),
-		this, SLOT(update(QTreeWidgetItem*, int)));
+	connect(&_tree, &QTreeWidget::itemClicked,
+		this,	&KsCheckBoxTreeWidget::update);
 
 	_cbLayout.setContentsMargins(1, 1, 1, 1);
 	_cbLayout.addWidget(&_tree);
@@ -329,32 +392,22 @@ void KsCheckBoxTreeWidget::adjustSize()
 			_topLayout.contentsMargins().right());
 }
 
-static void update_r(QTreeWidgetItem *item, Qt::CheckState state)
-{
-	item->setCheckState(0, state);
-
-	int n = item->childCount();
-	for (int i = 0; i < n; ++i)
-		update_r(item->child(i), state);
-}
-
 void KsCheckBoxTreeWidget::update(QTreeWidgetItem *item, int column)
 {
+	/* Get the new state of the item. */
 	Qt::CheckState state = item->checkState(0);
-	if (state != Qt::Checked) {
-		_allCb.setCheckState(Qt::Unchecked);
-		QTreeWidgetItem *parent = item->parent();
-		if (parent)
-			parent->setCheckState(0, Qt::Unchecked);
-	}
 
+	/* Recursively update all items below this one. */
 	update_r(item, state);
-	emit changeState();
+
+	/* Update all items above this one including the "all"
+	 * check box. */
+	verify();
 }
 
 void KsCheckBoxTreeWidget::chechAll(bool st)
 {
-       Qt::CheckState state = Qt::Unchecked;
+	Qt::CheckState state = Qt::Unchecked;
 	if (st)
 		state = Qt::Checked;
 
@@ -374,7 +427,7 @@ QVector<int> KsCheckBoxTreeWidget::getCheckedIds()
 	return vec;
 }
 
-void KsCheckBoxTreeWidget::changeState()
+void KsCheckBoxTreeWidget::verify()
 {
 	/* Now set the state of the top level items according to the
 	* state of the childs. */
@@ -471,31 +524,6 @@ KsEventsCheckBoxWidget::KsEventsCheckBoxWidget(struct pevent *pe,
 	adjustSize();
 }
 
-int getPidList(QVector<int> *pids)
-{
-	struct kshark_context *kshark_ctx = NULL;
-	kshark_instance(&kshark_ctx);
-
-	struct task_list *list;
-
-	for (int i = 0; i < TASK_HASH_SIZE; ++i) {
-		list = kshark_ctx->tasks[i];
-		while (list) {
-			pids->append(list->pid);
-			list = list->next;
-		}
-	}
-
-	qSort(*pids);
-	return pids->size();
-}
-
-int getPluginList(QStringList *pl)
-{
-	*pl = plugins.split(";");
-	return pl->count();
-}
-
 KsTasksCheckBoxWidget::KsTasksCheckBoxWidget(struct pevent *pe,
 					     bool cond,
 					     QWidget *parent)
@@ -503,7 +531,7 @@ KsTasksCheckBoxWidget::KsTasksCheckBoxWidget(struct pevent *pe,
 {
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
-	int n = getPidList(&_id);
+	int n = KsUtils::getPidList(&_id);
 
 	QStringList headers;
 	if (_positiveCond)
@@ -536,8 +564,37 @@ KsTasksCheckBoxWidget::KsTasksCheckBoxWidget(struct pevent *pe,
 KsCheckBoxTable::KsCheckBoxTable(QWidget *parent)
 : QTableWidget(parent)
 {
-	connect(this, SIGNAL(cellDoubleClicked(int, int)),
-		this, SLOT(doubleClicked(int, int)));
+	setShowGrid(false);
+	horizontalHeader()->setDefaultAlignment(Qt::AlignLeft);
+	horizontalHeader()->setStretchLastSection(true);
+	setSelectionBehavior(QAbstractItemView::SelectRows);
+	setEditTriggers(QAbstractItemView::NoEditTriggers);
+	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	verticalHeader()->setVisible(false);
+
+	connect(this, &QTableWidget::cellDoubleClicked,
+		this, &KsCheckBoxTable::doubleClicked);
+}
+
+void KsCheckBoxTable::init(QStringList headers, int size)
+{
+	setColumnCount(headers.count());
+	setRowCount(size);
+	setHorizontalHeaderLabels(headers);
+
+	_cb.resize(size);
+
+	for (int i = 0; i < size; ++i) {
+		QWidget *cbWidget = new QWidget();
+		_cb[i] = new QCheckBox(cbWidget);
+		QHBoxLayout *cbLayout = new QHBoxLayout(cbWidget);
+		cbLayout->addWidget(_cb[i]);
+		cbLayout->setAlignment(Qt::AlignCenter);
+		cbLayout->setContentsMargins(0, 0, 0, 0);
+
+		cbWidget->setLayout(cbLayout);
+		setCellWidget(i, 0, cbWidget);
+	}
 }
 
 void KsCheckBoxTable::keyPressEvent(QKeyEvent *event)
@@ -573,64 +630,9 @@ void KsCheckBoxTable::doubleClicked(int row, int col)
 		i->setSelected(false);
 }
 
-KsCheckBoxTree::KsCheckBoxTree(QWidget *parent)
-: QTreeWidget(parent)
-{
-	connect(this, SIGNAL(itemDoubleClicked(QTreeWidgetItem *, int)),
-		this, SLOT(doubleClicked(QTreeWidgetItem *, int)));
-}
-
-void KsCheckBoxTree::keyPressEvent(QKeyEvent *event)
-{
-	if (event->key() == Qt::Key_Return) {
-		/* Loop over all selected child items and change
-		* there states. */
-		for (auto &s: selectedItems()) {
-			if(s->childCount())
-				continue;
-
-			if (s->checkState(0) == Qt::Unchecked)
-				s->setCheckState(0, Qt::Checked);
-			else
-				s->setCheckState(0, Qt::Unchecked);
-		}
-	}
-
-	emit changeState();
-	QTreeWidget::keyPressEvent(event);
-}
-
-void KsCheckBoxTree::doubleClicked(QTreeWidgetItem *item, int col)
-{
-	if (item->checkState(0) == Qt::Unchecked)
-		item->setCheckState(0, Qt::Checked);
-	else
-		item->setCheckState(0, Qt::Unchecked);
-
-	for (auto &i: selectedItems())
-		i->setSelected(false);
-
-	emit changeState();
-}
-
-void KsCheckBoxTree::mousePressEvent(QMouseEvent *event)
-{
-	if (event->button() == Qt::RightButton) {
-		for (auto &i: selectedItems())
-			i->setSelected(false);
-
-		return;
-	}
-
-	QApplication::processEvents();
-	QTreeWidget::mousePressEvent(event);
-}
-
-KsPluginCheckBoxWidget::KsPluginCheckBoxWidget(struct pevent *pe,
-					       QStringList pluginList,
-					       bool cond,
+KsPluginCheckBoxWidget::KsPluginCheckBoxWidget(QStringList pluginList,
 					       QWidget *parent)
-: KsCheckBoxTableWidget("Plugins", cond, parent)
+: KsCheckBoxTableWidget("Plugins", true, parent)
 {
 	QStringList headers;
 	headers << "Load" << "Name" << "Info";
@@ -648,4 +650,109 @@ KsPluginCheckBoxWidget::KsPluginCheckBoxWidget(struct pevent *pe,
 	}
 
 	adjustSize();
+}
+
+KsQuickFilterMenu::KsQuickFilterMenu(KsDataStore *data, size_t row, QWidget *parent)
+: QMenu("Quick filter menu", parent),
+  _data(data),
+  _row(row),
+  _hideTaskAction(this),
+  _showTaskAction(this),
+  _hideEventAction(this),
+  _showEventAction(this),
+  _addTaskPlotAction(this)
+{
+	addSection("Quick Filter menu");
+
+	QString descr = "Hide task [";
+	descr += kshark_get_task_lazy(_data->_rows[_row]);
+	descr += "-";
+	descr += QString("%1").arg(_data->_rows[_row]->pid);
+	descr += "]";
+
+	_hideTaskAction.setText(descr);
+	connect(&_hideTaskAction, &QAction::triggered, this,
+		&KsQuickFilterMenu::hideTask);
+	addAction(&_hideTaskAction);
+
+	descr = "Show task [";
+	descr += kshark_get_task_lazy(_data->_rows[_row]);
+	descr += "-";
+	descr += QString("%1").arg(_data->_rows[_row]->pid);
+	descr += "] only";
+	_showTaskAction.setText(descr);
+	connect(&_showTaskAction, &QAction::triggered, this,
+		&KsQuickFilterMenu::showTask);
+	addAction(&_showTaskAction);
+
+	descr = "Hide event [";
+	descr += kshark_get_event_name_lazy(_data->_rows[_row]);
+	descr += "]";
+	_hideEventAction.setText(descr);
+	connect(&_hideEventAction, &QAction::triggered,
+		this, &KsQuickFilterMenu::hideEvent);
+	addAction(&_hideEventAction);
+
+	descr = "Show event [";
+	descr += kshark_get_event_name_lazy(_data->_rows[_row]);
+	descr += "] only";
+	_showEventAction.setText(descr);
+	connect(&_showEventAction, &QAction::triggered,
+		this, &KsQuickFilterMenu::showEvent);
+	addAction(&_showEventAction);
+
+	addSection("Quick Plot menu");
+	descr = "Add [";
+	descr += kshark_get_task_lazy(_data->_rows[_row]);
+	descr += "-";
+	descr += QString("%1").arg(_data->_rows[_row]->pid);
+	descr += "] plot";
+	_addTaskPlotAction.setText(descr);
+	connect(&_addTaskPlotAction, &QAction::triggered,
+		this, &KsQuickFilterMenu::addTaskPlot);
+	addAction(&_addTaskPlotAction);
+}
+
+void KsQuickFilterMenu::hideTask()
+{
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+
+	int pid = _data->_rows[_row]->pid;
+	filter_id_add(kshark_ctx->hide_task_filter, pid);
+	kshark_filter_entries(kshark_ctx, _data->_rows, _data->size());
+
+	emit _data->updateView(_data);
+	emit _data->updateGraph(_data);
+}
+
+void KsQuickFilterMenu::showTask()
+{
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+
+	int pid = _data->_rows[_row]->pid;
+	filter_id_add(kshark_ctx->hide_event_filter, pid);
+	kshark_filter_entries(kshark_ctx, _data->_rows, _data->size());
+
+	emit _data->updateView(_data);
+	emit _data->updateGraph(_data);
+}
+
+void KsQuickFilterMenu::hideEvent()
+{
+	int eventId = _data->_rows[_row]->event_id;
+	_data->applyNegEventFilter(QVector<int>(1, eventId));
+}
+
+void KsQuickFilterMenu::showEvent()
+{
+	int eventId = _data->_rows[_row]->event_id;
+	_data->applyPosEventFilter(QVector<int>(1, eventId));
+}
+
+void KsQuickFilterMenu::addTaskPlot()
+{
+	int pid = _data->_rows[_row]->pid;
+	emit plotTask(pid);
 }

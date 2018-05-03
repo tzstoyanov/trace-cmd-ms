@@ -27,7 +27,6 @@
 // Kernel Shark 2
 #include "KsWidgetsLib.hpp"
 
-
 class KsCaptureControl : public QWidget
 {
 	Q_OBJECT
@@ -59,7 +58,7 @@ private slots:
 	void apply();
 
 signals:
-	void argsReady(QString args);
+	void argsReady(const QString &args);
 };
 
 class KsCaptureMonitor : public QWidget
@@ -84,12 +83,14 @@ public:
 private slots:
 	void maxLineNumber(const QString &test);
 	void readOnly(int);
-	void argsReady(const QString &test);
 	void argsModified();
-	void printAllStandardError();
-	void printAllStandardOutput();
+
+public slots:
+	void argsReady(const QString &test);
 	void captureStarted();
 	void captureFinished(int, QProcess::ExitStatus);
+	void printAllStandardError();
+	void printAllStandardOutput();
 };
 
 class KsCaptureDialog : public QWidget

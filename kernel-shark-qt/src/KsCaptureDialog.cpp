@@ -87,6 +87,7 @@ KsCaptureControl::KsCaptureControl(QWidget *parent)
 	_settingsToolBar.addSeparator();
 	_settingsToolBar.addWidget(&_exportSettings);
 	_topLayout.addWidget(&_settingsToolBar);
+
 	add_line();
 
 	_eventsWidget.setDefault(false);
@@ -131,10 +132,17 @@ KsCaptureControl::KsCaptureControl(QWidget *parent)
 
 	setLayout(&_topLayout);
 
-	connect(&_importSettings, SIGNAL(pressed()), this, SLOT(importSettings()));
-	connect(&_exportSettings, SIGNAL(pressed()), this, SLOT(exportSettings()));
-	connect(&_outputBrowseButton, SIGNAL(pressed()), this, SLOT(browse()));
-	connect(&_applyButton, SIGNAL(pressed()), this, SLOT(apply()));
+	connect(&_importSettings,	&QPushButton::pressed,
+		this,			&KsCaptureControl::importSettings);
+
+	connect(&_exportSettings,	&QPushButton::pressed,
+		this,			&KsCaptureControl::exportSettings);
+
+	connect(&_outputBrowseButton,	&QPushButton::pressed,
+		this,			&KsCaptureControl::browse);
+
+	connect(&_applyButton,		&QPushButton::pressed,
+		this,			&KsCaptureControl::apply);
 }
 
 void KsCaptureControl::importSettings()
@@ -156,7 +164,7 @@ void KsCaptureControl::importSettings()
 		return;
 
 	filter_id *filterHash = filter_id_hash_alloc();
-	kshark_filter_from_json(_localPevt, filterHash, "Events", jobj);
+	kshark_event_filter_from_json(_localPevt, filterHash, "Events", jobj);
 
 	int nEvts = _localPevt->nr_events;
 	QVector<bool> v(nEvts, false);
@@ -201,7 +209,7 @@ void KsCaptureControl::exportSettings()
 	for (auto const &id: ids)
 		filter_id_add(filterHash, id);
 
-	kshark_filter_to_json(_localPevt, filterHash, "Events", jobj);
+	kshark_event_filter_to_json(_localPevt, filterHash, "Events", jobj);
 	filter_id_hash_free(filterHash);
 
 	QString plugin = _pluginsComboBox.currentText();
@@ -243,7 +251,7 @@ QStringList KsCaptureControl::getArgs()
 		QVector<int> evtIds = _eventsWidget.getCheckedIds();
 		event_format *event;
 		for (auto const &id: evtIds) {
-			event = kshark_find_event(_localPevt, id);
+			event = pevent_find_event(_localPevt, id);
 			if (!event)
 				continue;
 
@@ -300,14 +308,14 @@ KsCaptureMonitor::KsCaptureMonitor(QWidget *parent)
 
 	this->setLayout(&_layout);
 
-	connect(&_maxLinNumEdit, SIGNAL(textChanged(const QString &)),
-		this, SLOT(maxLineNumber(const QString &)));
+	connect(&_maxLinNumEdit,	&QLineEdit::textChanged,
+		this,			&KsCaptureMonitor::maxLineNumber);
 
-	connect(&_readOnly, SIGNAL(stateChanged(int)),
-		this, SLOT(readOnly(int)));
+	connect(&_readOnly,		&QCheckBox::stateChanged,
+		this,			&KsCaptureMonitor::readOnly);
 
-	connect(&_consolOutput, SIGNAL(textChanged()),
-		this, SLOT(argsModified()));
+	connect(&_consolOutput,		&QPlainTextEdit::textChanged,
+		this,			&KsCaptureMonitor::argsModified);
 
 	this->show();
 }
@@ -398,33 +406,34 @@ KsCaptureDialog::KsCaptureDialog(QWidget *parent)
 	_layout.addWidget(&_captureMon);
 	this->setLayout(&_layout);
 
-	connect(&_captureCtrl._commandCheckBox, SIGNAL(stateChanged(int)),
-		this, SLOT(setChannelMode(int)));
+	connect(&_captureCtrl._commandCheckBox,	&QCheckBox::stateChanged,
+		this,				&KsCaptureDialog::setChannelMode);
 
-	connect(&_captureCtrl._captureButton, SIGNAL(pressed()),
-		this, SLOT(capture()));
+	connect(&_captureCtrl._captureButton,	&QPushButton::pressed,
+		this,				&KsCaptureDialog::capture);
 
-	connect(&_captureCtrl._closeButton, SIGNAL(pressed()),
-		this, SLOT(close()));
+	connect(&_captureCtrl._closeButton,	&QPushButton::pressed,
+		this,				&KsCaptureDialog::close);
 
-	connect(&_captureCtrl, SIGNAL(argsReady(QString)),
-		&_captureMon, SLOT(argsReady(QString)));
+	connect(&_captureCtrl,	&KsCaptureControl::argsReady,
+		&_captureMon,	&KsCaptureMonitor::argsReady);
 
 	QString captureExe = TRACECMD_BIN_DIR;
 	captureExe += "/trace-cmd";
 	_capture.setProgram(captureExe);
 
-	connect(&_capture, SIGNAL(started()),
-		&_captureMon, SLOT(captureStarted()));
+	connect(&_capture,	&QProcess::started,
+		&_captureMon,	&KsCaptureMonitor::captureStarted);
 
-	connect(&_capture, SIGNAL(finished(int, QProcess::ExitStatus)),
-		&_captureMon, SLOT(captureFinished(int, QProcess::ExitStatus)));
+	/* Using the old Signal-Slot syntax because QProcess::finished has overloads. */
+	connect(&_capture,	SIGNAL(finished(int, QProcess::ExitStatus)),
+		&_captureMon,	SLOT(captureFinished(int, QProcess::ExitStatus)));
 
-	connect(&_capture, SIGNAL(readyReadStandardError()),
-		&_captureMon, SLOT(printAllStandardError()));
+	connect(&_capture,	&QProcess::readyReadStandardError,
+		&_captureMon,	&KsCaptureMonitor::printAllStandardError);
 
-	connect(&_capture, SIGNAL(readyReadStandardOutput()),
-		&_captureMon, SLOT(printAllStandardOutput()));
+	connect(&_capture,	&QProcess::readyReadStandardOutput,
+		&_captureMon,	&KsCaptureMonitor::printAllStandardOutput);
 }
 
 void KsCaptureDialog::capture()

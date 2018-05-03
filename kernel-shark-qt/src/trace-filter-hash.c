@@ -49,7 +49,7 @@ void filter_id_add(struct filter_id *hash, int id)
 	struct filter_id_item *item;
 
 	item = calloc(1, sizeof(*item));
-	assert(id);
+	assert(item);
 
 	item->id = id;
 	item->next = hash->hash[key];
@@ -111,6 +111,7 @@ struct filter_id *filter_id_hash_alloc(void)
 	hash = calloc(1, sizeof(*hash));
 	assert(hash);
 	hash->hash = calloc(FILTER_HASH_SIZE, sizeof(*hash->hash));
+	hash->count = 0;
 
 	return hash;
 }
@@ -145,7 +146,6 @@ struct filter_id *filter_id_hash_copy(struct filter_id *hash)
 		pitem = &new_hash->hash[i];
 
 		while (item) {
-
 			*pitem = calloc(1, sizeof(*item));
 			assert(*pitem);
 			**pitem = *item;
@@ -156,7 +156,6 @@ struct filter_id *filter_id_hash_copy(struct filter_id *hash)
 	}
 
 	new_hash->count = hash->count;
-
 	return new_hash;
 }
 
@@ -181,8 +180,8 @@ int *filter_ids(struct filter_id *hash)
 			item = item->next;
 		}
 	}
-	ids[count] = -1;
 
+	ids[count] = -1;
 	return ids;
 }
 

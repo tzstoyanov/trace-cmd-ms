@@ -45,7 +45,9 @@ public:
 	void reset();
 	KsGLWidget *glPtr() {return &_glWindow;}
 
-private slots:
+public slots:
+	void addCpuPlot(int);
+	void addTaskPlot(int);
 	void zoomIn();
 	void zoomOut();
 	void scrollLeft();
@@ -56,7 +58,7 @@ private slots:
 	void markEntry(size_t);
 	void cpuReDraw(QVector<int>);
 	void taskReDraw(QVector<int>);
- 	void update(KsDataStore *data = nullptr);
+	void update(KsDataStore *data);
 	void updateGeom();
 	void updateGraphLegends();
 	void updateTimeLegends();
@@ -64,6 +66,7 @@ private slots:
 private:
 	void resizeEvent(QResizeEvent* event) override;
 	bool eventFilter(QObject* obj, QEvent* evt) override;
+	void selfUpdate();
 
 	enum class GraphActions {
 		ZoomIn,

@@ -24,16 +24,17 @@
 // C
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // trace-cmd
 #include "trace-cmd.h"
+#include "event-parse.h"
 #include "trace-filter-hash.h"
 
 // Kernel shark 2
 #include "libkshark-plugin.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #define TASK_HASH_SIZE 1024
 
@@ -63,13 +64,17 @@ struct kshark_context {
 	struct tracecmd_input	*handle;
 	struct pevent		*pevt;
 
+	uint8_t			filter_mask;
+
 	struct task_list	*tasks[TASK_HASH_SIZE];
 	struct filter_id	*show_task_filter;  /* hash of tasks to filter on */
 	struct filter_id	*hide_task_filter;  /* hash of tasks to not display */
 
 	struct filter_id	*show_event_filter;  /* hash of events to filter on */
 	struct filter_id	*hide_event_filter;  /* hash of events to not display */
-	uint8_t			filter_mask;
+
+	struct event_filter	*advanced_event_filter;
+	bool			adv_filter_is_set;
 
 	struct plugin_list	*plugins;
 
@@ -98,7 +103,9 @@ void kshark_close(struct kshark_context *kshark_ctx);
 
 void kshark_free(struct kshark_context *kshark_ctx);
 
-typedef bool (matching_condition_func)(struct kshark_context*, struct kshark_entry*, int);
+typedef bool (matching_condition_func)(struct kshark_context*,
+				       struct kshark_entry*,
+				       int);
 
 const char *kshark_get_comm_from_pid(struct pevent *pevt, int pid);
 
@@ -205,7 +212,7 @@ int kshark_get_plugins(char ***plugins);
 
 struct pevent *kshark_local_events();
 
-struct event_format *kshark_find_event(struct pevent *pevt, int event_id);
+char **kshark_get_event_format_fields(struct event_format *event);
 
 #ifdef __cplusplus
 }

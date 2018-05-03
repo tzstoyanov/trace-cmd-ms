@@ -49,18 +49,6 @@ public:
 	KsMessageDialog(QString message, QWidget *parent = nullptr);
 };
 
-
-
-
-
-
-
-
-
-
-
-
-
 class KsCheckBoxWidget : public QWidget
 {
 	Q_OBJECT
@@ -107,11 +95,12 @@ class KsCheckBoxDialog : public QDialog
 	QVBoxLayout		_topLayout;
 	QHBoxLayout		_buttonLayout;
 	KsCheckBoxWidget	*_checkBoxWidget;
+	QPushButton		_applyButton, _cancelButton;
 
-	QPushButton	_applyButton;
-	QPushButton	_cancelButton;
+	QMetaObject::Connection		_applyButtonConnection;
 
 public:
+	KsCheckBoxDialog() = delete;
 	KsCheckBoxDialog(KsCheckBoxWidget *cbw, QWidget *parent = nullptr);
 
 signals:
@@ -126,6 +115,9 @@ class KsCheckBoxTable : public QTableWidget
 	Q_OBJECT
 public:
 	explicit KsCheckBoxTable(QWidget *parent = nullptr);
+
+	void init(QStringList headers, int size);
+	QVector<QCheckBox*>	_cb;
 
 protected:
 	void keyPressEvent(QKeyEvent *event);
@@ -161,9 +153,6 @@ protected:
 	void initTable(QStringList headers, int size);
 
 	KsCheckBoxTable		_table;
-
-public:
-	QVector<QCheckBox*>	_cb;
 };
 
 class KsCheckBoxTree : public QTreeWidget
@@ -173,7 +162,7 @@ public:
 	explicit KsCheckBoxTree(QWidget *parent = nullptr);
 
 signals:
-	void changeState();
+	void verify();
 
 private slots:
 	void doubleClicked(QTreeWidgetItem *item, int col);
@@ -187,6 +176,7 @@ class KsCheckBoxTreeWidget : public KsCheckBoxWidget
 {
 	Q_OBJECT
 public:
+	KsCheckBoxTreeWidget() = delete;
 	KsCheckBoxTreeWidget(const QString &name = "",
 			     bool cond = true,
 			     QWidget *parent = nullptr);
@@ -197,7 +187,7 @@ public:
 private slots:
 	void chechAll(bool) override;
 	void update(QTreeWidgetItem *item, int column);
-	void changeState();
+	void verify();
 
 protected slots:
 	void adjustSize() override;
@@ -211,6 +201,7 @@ protected:
 
 struct KsCpuCheckBoxWidget : public KsCheckBoxTreeWidget
 {
+	KsCpuCheckBoxWidget() = delete;
 	KsCpuCheckBoxWidget(struct pevent *pe,
 			    bool cond = true,
 			    QWidget *parent = nullptr);
@@ -218,6 +209,7 @@ struct KsCpuCheckBoxWidget : public KsCheckBoxTreeWidget
 
 struct KsEventsCheckBoxWidget : public KsCheckBoxTreeWidget
 {
+	KsEventsCheckBoxWidget() = delete;
 	KsEventsCheckBoxWidget(struct pevent *pe,
 			       bool cond = true,
 			       QWidget *parent = nullptr);
@@ -225,6 +217,7 @@ struct KsEventsCheckBoxWidget : public KsCheckBoxTreeWidget
 
 struct KsTasksCheckBoxWidget : public KsCheckBoxTableWidget
 {
+	KsTasksCheckBoxWidget() = delete;
 	KsTasksCheckBoxWidget(struct pevent *pe,
 			      bool cond = true,
 			      QWidget *parent = nullptr);
@@ -232,10 +225,38 @@ struct KsTasksCheckBoxWidget : public KsCheckBoxTableWidget
 
 struct KsPluginCheckBoxWidget : public KsCheckBoxTableWidget
 {
-	KsPluginCheckBoxWidget(struct pevent *pe,
-			       QStringList pluginList,
-			       bool cond = true,
+	KsPluginCheckBoxWidget() = delete;
+	KsPluginCheckBoxWidget(QStringList pluginList,
 			       QWidget *parent = nullptr);
+};
+
+class KsDataStore;
+class KsGLWidget;
+
+class KsQuickFilterMenu : public QMenu
+{
+	Q_OBJECT
+
+	KsDataStore	*_data;
+	size_t		 _row;
+
+	QAction _hideTaskAction, _showTaskAction, _hideEventAction, _showEventAction;
+	QAction _addTaskPlotAction;
+
+public:
+	KsQuickFilterMenu() = delete;
+	explicit KsQuickFilterMenu(KsDataStore *data,
+				   size_t row,
+				   QWidget *parent = nullptr);
+private slots:
+	void hideTask();
+	void showTask();
+	void hideEvent();
+	void showEvent();
+	void addTaskPlot();
+
+signals:
+	void plotTask(int);
 };
 
 #endif

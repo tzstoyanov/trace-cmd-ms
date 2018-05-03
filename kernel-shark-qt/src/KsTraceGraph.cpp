@@ -52,7 +52,8 @@ KsTraceGraph::KsTraceGraph(QWidget *parent)
 	auto makeNavButton = [&](QPushButton *b) {
 		b->setMaximumWidth(FONT_WIDTH*5);
 
-		connect(b, SIGNAL(released()), this, SLOT(stopUpdating()));
+		connect(b,	&QPushButton::released,
+			this,	&KsTraceGraph::stopUpdating);
 		_navigationBar.addWidget(b);
 	};
 
@@ -111,31 +112,51 @@ KsTraceGraph::KsTraceGraph(QWidget *parent)
 	drawLayout->addWidget(&_legendWindow, 1, 0);
 	drawLayout->addWidget(&_glWindow, 1, 1);
 
-	connect(&_glWindow, SIGNAL(select(size_t)), this, SLOT(markEntry(size_t)));
-	connect(&_glWindow, SIGNAL(found(size_t)), this, SLOT(setPointerInfo(size_t)));
-	connect(&_glWindow, SIGNAL(notFound(uint64_t, int, int)),
-		this, SLOT(resetPointer(uint64_t,int, int)));
-	connect(&_glWindow, SIGNAL(zoomIn()), this, SLOT(zoomIn()));
-	connect(&_glWindow, SIGNAL(zoomOut()), this, SLOT(zoomOut()));
-	connect(&_glWindow, SIGNAL(scrollLeft()), this, SLOT(scrollLeft()));
-	connect(&_glWindow, SIGNAL(scrollRight()), this, SLOT(scrollRight()));
-	connect(&_glWindow, SIGNAL(stopUpdating()), this, SLOT(stopUpdating()));
-	connect(_glWindow.model(), SIGNAL(modelReset()), this, SLOT(updateTimeLegends()));
+	connect(&_glWindow,	&KsGLWidget::select,
+		this,		&KsTraceGraph::markEntry);
+
+	connect(&_glWindow,	&KsGLWidget::found,
+		this,		&KsTraceGraph::setPointerInfo);
+
+	connect(&_glWindow,	&KsGLWidget::notFound,
+		this,		&KsTraceGraph::resetPointer);
+
+	connect(&_glWindow,	&KsGLWidget::zoomIn,
+		this,		&KsTraceGraph::zoomIn);
+
+	connect(&_glWindow,	&KsGLWidget::zoomOut,
+		this,		&KsTraceGraph::zoomOut);
+
+	connect(&_glWindow,	&KsGLWidget::scrollLeft,
+		this,		&KsTraceGraph::scrollLeft);
+
+	connect(&_glWindow,	&KsGLWidget::scrollRight,
+		this,		&KsTraceGraph::scrollRight);
+
+	connect(&_glWindow,	&KsGLWidget::stopUpdating,
+		this,		&KsTraceGraph::stopUpdating);
+
+	connect(_glWindow.model(),	&KsGraphModel::modelReset,
+		this,			&KsTraceGraph::updateTimeLegends);
 
 	_scrollArea.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	_scrollArea.setWidget(&_drawWindow);
 
-	connect(&_scrollLeftButton, SIGNAL(pressed()), this, SLOT(scrollLeft()));
 	makeNavButton(&_scrollLeftButton);
+	connect(&_scrollLeftButton,	&QPushButton::pressed,
+		this,			&KsTraceGraph::scrollLeft);
 
-	connect(&_zoomInButton, SIGNAL(pressed()), this, SLOT(zoomIn()));
 	makeNavButton(&_zoomInButton);
+	connect(&_zoomInButton,		&QPushButton::pressed,
+		this,			&KsTraceGraph::zoomIn);
 
-	connect(&_zoomOutButton, SIGNAL(pressed()), this, SLOT(zoomOut()));
 	makeNavButton(&_zoomOutButton);
+	connect(&_zoomOutButton,	&QPushButton::pressed,
+		this,			&KsTraceGraph::zoomOut);
 
-	connect(&_scrollRightButton, SIGNAL(pressed()), this, SLOT(scrollRight()));
 	makeNavButton(&_scrollRightButton);
+	connect(&_scrollRightButton,	&QPushButton::pressed,
+		this,			&KsTraceGraph::scrollRight);
 
 	_layout.addWidget(&_pointerBar);
 	_layout.addWidget(&_navigationBar);
@@ -170,9 +191,16 @@ void KsTraceGraph::reset()
 		l1->setText("");
 
 	_glWindow.model()->reset();
-	update();
+	selfUpdate();
 	for (auto l2: {&_labelXMin, &_labelXMid, &_labelXMax})
 		l2->setText("");
+}
+
+void KsTraceGraph::selfUpdate()
+{
+	updateGraphLegends();
+	updateTimeLegends();
+	updateGeom();
 }
 
 void KsTraceGraph::zoomIn()
@@ -337,22 +365,41 @@ void KsTraceGraph::cpuReDraw(QVector<int> v)
 {
 	_glWindow._cpuList = v;
 	markerReDraw();
-	update();
+	selfUpdate();
 }
 
 void KsTraceGraph::taskReDraw(QVector<int> v)
 {
 	_glWindow._taskList = v;
 	markerReDraw();
-	update();
+	selfUpdate();
+}
+
+void KsTraceGraph::addCpuPlot(int cpu)
+{
+	if (_glWindow._cpuList.contains(cpu))
+		return;
+
+	_glWindow._cpuList.append(cpu);
+	markerReDraw();
+	selfUpdate();
+}
+
+void KsTraceGraph::addTaskPlot(int pid)
+{
+	if (_glWindow._taskList.contains(pid))
+		return;
+
+	_glWindow._taskList.append(pid);
+	markerReDraw();
+	selfUpdate();
 }
 
 void KsTraceGraph::update(KsDataStore *data)
 {
 	_glWindow.model()->update(data);
-	updateGraphLegends();
-	updateTimeLegends();
-	updateGeom();
+	markerReDraw();
+	selfUpdate();
 }
 
 void KsTraceGraph::updateGeom()

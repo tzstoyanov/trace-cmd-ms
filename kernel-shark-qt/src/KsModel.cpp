@@ -61,9 +61,11 @@ size_t KsFilterProxyModel::search(int column,
 {
 	int nRows = rowCount({});
 	for (int r = 0; r < nRows; ++r) {
-		/* Use the index of the proxy model to retrieve the value
+		/*
+		 * Use the index of the proxy model to retrieve the value
 		 * of the row number in the base model. This works because
-		 *  the source row number is shown in column "0". */
+		 *  the source row number is shown in column "0".
+		 */
 		size_t row = data(index(r, 0)).toInt();
 		QVariant item = _source->getValue(column, row);
 		if (cond(searchText, item.toString())) {
@@ -138,7 +140,8 @@ QVariant KsViewModel::getValue(int column, int row) const
 			uint64_t secs, usecs;
 			usecs = _data[row]->ts;
 			kshark_convert_nano(_data[row]->ts, &secs, &usecs);
-			sprintf(time, "%llu.%06llu", (unsigned long long)secs, (unsigned long long)usecs);
+			sprintf(time, "%llu.%06llu", (unsigned long long)secs,
+						     (unsigned long long)usecs);
 			return time;
 
 		case TRACE_VIEW_COL_COMM:
@@ -163,67 +166,6 @@ QVariant KsViewModel::getValue(int column, int row) const
 	}
 }
 
-
-//QVariant KsViewModel::getValue(int column, int row) const
-//{
-	//if (row >= _data.count())
-		//return {};
-
-	//switch (column) {
-		//case TRACE_VIEW_COL_INDEX :
-			//return row;
-
-		//case TRACE_VIEW_COL_CPU :
-			//return _data[row]->cpu;
-
-		//case TRACE_VIEW_COL_TS :
-			//char time[32];
-			//uint64_t secs, usecs;
-			//usecs = _data[row]->ts;
-			//usecs /= 1000;
-			//secs = usecs / 1000000ULL;
-			//usecs -= secs * 1000000ULL;
-			//sprintf(time, "%llu.%06llu", (long long)secs, (long long)usecs);
-			//return time;
-
-		//case TRACE_VIEW_COL_COMM :
-		//{
-			//int pid = pevent_data_pid(_pevt, _data[row]);
-			//return pevent_data_comm_from_pid(_pevt, pid);
-		//}
-
-		//case TRACE_VIEW_COL_PID :
-			//return pevent_data_pid(_pevt, _data[row]);
-
-		//case TRACE_VIEW_COL_LAT :
-			//trace_seq_reset(&_seq);
-			//pevent_data_lat_fmt(_pevt, &_seq, _data[row]);
-			//return _seq.buffer;
-
-		//case TRACE_VIEW_COL_EVENT :
-		//{
-			//int etype = pevent_data_type(_pevt, _data[row]);
-			//struct event_format *event = pevent_data_event_from_type(_pevt, etype);
-			//if (!event) {
-				//return "[UNKNOWN EVENT]";
-			//} else {
-				//return event->name;
-			//}
-		//}
-
-		//case TRACE_VIEW_COL_INFO :
-		//{
-			//int etype = pevent_data_type(_pevt, _data[row]);
-			//struct event_format *event = pevent_data_event_from_type(_pevt, etype);
-			//trace_seq_reset(&_seq);
-			//pevent_event_info(&_seq, event,_data[row] );
-			//return _seq.buffer;
-		//}
-
-		//default: return {};
-	//}
-//}
-
 QVariant KsViewModel::headerData(int section,
 				 Qt::Orientation orientation,
 				 int role) const
@@ -237,7 +179,6 @@ QVariant KsViewModel::headerData(int section,
 	return {};
 }
 
-//void KsViewModel::fill(pevent *pevt, pevent_record **entries, size_t n)
 void KsViewModel::fill(pevent *pevt, kshark_entry **entries, size_t n)
 {
 	_pevt = pevt;
@@ -332,7 +273,6 @@ QVariant KsGraphModel::data(const QModelIndex &index, int role) const
 	return val;
 }
 
-//void KsGraphModel::fill(pevent *pevt, pevent_record **entries, size_t n, bool defaultMap)
 void KsGraphModel::fill(pevent *pevt, kshark_entry **entries, size_t n)
 {
 	_pevt = pevt;
@@ -571,7 +511,6 @@ void KsTimeMap::setBinCounts()
 		_binCount[prevNotEmpty] = _map[_nBins] - _map[prevNotEmpty];
 }
 
-//void KsTimeMap::fill(struct pevent_record **data, size_t n)
 void KsTimeMap::fill(struct kshark_entry **data, size_t n)
 {
 	_data = data;
@@ -888,8 +827,12 @@ kshark_entry *KsTimeMap::getEntryFront(int bin, int pid, bool visOnly) const
 		return nullptr;
 
 	size_t first = this->at(bin);
-	return kshark_get_entry_by_pid_front(first, nEntries, pid, visOnly,
-					     KS_GRAPH_FILTER_MASK, _data);
+	return kshark_get_entry_by_pid_front(first,
+					     nEntries,
+					     pid,
+					     visOnly,
+					     KS_GRAPH_FILTER_MASK,
+					     _data);
 }
 
 kshark_entry *KsTimeMap::getEntryFront(int bin, int pid, bool visOnly,
@@ -900,8 +843,12 @@ kshark_entry *KsTimeMap::getEntryFront(int bin, int pid, bool visOnly,
 		return nullptr;
 
 	size_t first = this->at(bin);
-	return kshark_get_entry_front(first, nEntries, checkPidFunc,
-				     pid, visOnly, KS_GRAPH_FILTER_MASK, _data);
+	return kshark_get_entry_front(first,
+				      nEntries,
+				      checkPidFunc,
+				      pid, visOnly,
+				      KS_GRAPH_FILTER_MASK,
+				      _data);
 }
 
 kshark_entry *KsTimeMap::getEntryBack(int bin, int pid, bool visOnly) const
@@ -911,8 +858,12 @@ kshark_entry *KsTimeMap::getEntryBack(int bin, int pid, bool visOnly) const
 		return nullptr;
 
 	size_t first = this->at(bin) + nEntries - 1;
-	return kshark_get_entry_by_pid_back(first, nEntries, pid, visOnly,
-					    KS_GRAPH_FILTER_MASK, _data);
+	return kshark_get_entry_by_pid_back(first,
+					    nEntries,
+					    pid,
+					    visOnly,
+					    KS_GRAPH_FILTER_MASK,
+					    _data);
 }
 
 kshark_entry *KsTimeMap::getEntryBack(int bin, int pid, bool visOnly,
@@ -923,8 +874,12 @@ kshark_entry *KsTimeMap::getEntryBack(int bin, int pid, bool visOnly,
 		return nullptr;
 
 	size_t first = this->at(bin) + nEntries - 1;
-	return kshark_get_entry_back(first, nEntries, checkPidFunc,
-				     pid, visOnly, KS_GRAPH_FILTER_MASK, _data);
+	return kshark_get_entry_back(first,
+				     nEntries,
+				     checkPidFunc,
+				     pid, visOnly,
+				     KS_GRAPH_FILTER_MASK,
+				     _data);
 }
 
 int KsTimeMap::getPidFront(int bin, int cpu, bool visOnly) const
@@ -935,7 +890,11 @@ int KsTimeMap::getPidFront(int bin, int cpu, bool visOnly) const
 
 	/* Set the position at the begining of the bin and go forward. */
 	size_t first = this->at(bin);
-	return kshark_get_pid_front(first, nEntries, cpu, visOnly, KS_GRAPH_FILTER_MASK, _data);
+	return kshark_get_pid_front(first,
+				    nEntries,
+				    cpu, visOnly,
+				    KS_GRAPH_FILTER_MASK,
+				    _data);
 }
 
 int KsTimeMap::getPidBack(int bin, int cpu, bool visOnly) const
@@ -946,7 +905,11 @@ int KsTimeMap::getPidBack(int bin, int cpu, bool visOnly) const
 
 	/* Set the position at the end of the bin and go backwards. */
 	size_t first = this->at(bin) + nEntries - 1;
-	return kshark_get_pid_back(first, nEntries, cpu, visOnly, KS_GRAPH_FILTER_MASK, _data);
+	return kshark_get_pid_back(first,
+				   nEntries,
+				   cpu, visOnly,
+				   KS_GRAPH_FILTER_MASK,
+				   _data);
 }
 
 int KsTimeMap::getCpu(int bin, int pid, bool visOnly) const
@@ -959,10 +922,20 @@ int KsTimeMap::getCpu(int bin, int pid, bool visOnly) const
 		/* Set the position at the end of the Lower Overflow bin and go
 		 * backwards. */
 		size_t first = binCount(bin) - 1;
-		return kshark_get_cpu_back(first, nEntries, pid, visOnly, KS_GRAPH_FILTER_MASK, _data);
+		return kshark_get_cpu_back(first,
+					   nEntries,
+					   pid,
+					   visOnly,
+					   KS_GRAPH_FILTER_MASK,
+					   _data);
 	} else {
 		/* Set the position at the begining of the bin and go forward. */
 		size_t first = this->at(bin);
-		return kshark_get_cpu_front(first, nEntries, pid, visOnly, KS_GRAPH_FILTER_MASK, _data);
+		return kshark_get_cpu_front(first,
+					    nEntries,
+					    pid,
+					    visOnly,
+					    KS_GRAPH_FILTER_MASK,
+					    _data);
 	}
 }

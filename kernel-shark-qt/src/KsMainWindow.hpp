@@ -34,16 +34,47 @@ class KsMainWindow : public QMainWindow
 {
 	Q_OBJECT
 public:
-	explicit KsMainWindow(QWidget *parent = 0);
+	explicit KsMainWindow(QWidget *parent = nullptr);
 	~KsMainWindow();
 
-	void loadFile(const QString &fileName);
+	void loadData(const QString &fileName);
+	void loadSession(const QString &fileName);
 // 	void loadFiles(const QList<QString> &files);
 
 	void registerPlugin(const QString &plugin) {_plugins.registerPlugin(plugin);}
 	void unregisterPlugin(const QString &plugin) {_plugins.unregisterPlugin(plugin);}
 
+private slots:
+	void open();
+	void restorSession();
+	void importSession();
+	void exportSession();
+	void importFilter();
+	void exportFilter();
+	void listFilterSync(int state);
+	void graphFilterSync(int state);
+	void showEvents();
+	void showTasks();
+	void hideTasks();
+	void advancedFiltering();
+	void clearFilters();
+	void cpuSelect();
+	void taskSelect();
+	void pluginSelect();
+	void capture();
+	void setColorPhase(int);
+	void aboutInfo();
+	void contents();
+	void captureStarted();
+	void captureFinished(int, QProcess::ExitStatus);
+	void readSocket();
+	void splitterMoved(int pos, int index);
+
 private:
+	QSplitter	_splitter;
+
+	KsSession	_session;
+
 	/** Data Manager. */
 	KsDataStore	_data;
 
@@ -59,7 +90,7 @@ private:
 	/** Plugin manager. */
 	KsPluginManager	_plugins;
 
-	/** Capture process. */
+	/** The process used to record trace data. */
 	QProcess	_capture;
 
 	/** Local Server used for comunucation with the Capture process. */
@@ -67,16 +98,21 @@ private:
 
 	// File menu.
 	QAction		_openAction;
-	QAction		_importFilterAction;
-	QAction		_exportFilterAction;
+	QAction		_restorSessionAction;
+	QAction		_importSessionAction;
+	QAction		_exportSessionAction;
 	QAction		_quitAction;
 
 	// Filter menu.
+	QAction		_importFilterAction;
+	QAction		_exportFilterAction;
 	QWidgetAction	_graphFilterSyncAction;
 	QWidgetAction	_listFilterSyncAction;
 	QAction		_showEventsAction;
 	QAction		_showTasksAction;
 	QAction		_hideTasksAction;
+	QAction		_advanceFilterAction;
+	QAction		_clearAllFilters;
 
 	// Plots menu.
 	QAction		_cpuSelectAction;
@@ -96,29 +132,7 @@ private:
 	void createActions();
 	void createMenus();
 	void initCapture();
-
-private slots:
-	void open();
-	void open(QString file);
-	void importFilter();
-	void exportFilter();
-	void listFilterSync(bool state);
-	void graphFilterSync(bool state);
-	void showEvents();
-	void showTasks();
-	void hideTasks();
-	void cpuSelect();
-	void taskSelect();
-	void pluginSelect();
-	void capture();
-	void setColorPhase(int);
-	void aboutInfo();
-	void contents();
-	void captureStarted();
-	void captureFinished(int, QProcess::ExitStatus);
-	void readSocket();
+	void updateSession();
 };
-
-// class KsConcentratorMainWindow : public
 
 #endif // _KS_MAINWINDOW_H

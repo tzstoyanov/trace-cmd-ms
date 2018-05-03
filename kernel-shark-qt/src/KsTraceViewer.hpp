@@ -39,11 +39,14 @@ public:
 	void loadData(KsDataStore *data);
 	void setMarkerSM(KsDualMarkerSM *m);
 	void reset();
+	size_t getTopRow() const;
+	void setTopRow(size_t r);
 
 signals:
 	void select(size_t);
+	void plotTask(int pid);
 
-private slots:
+public slots:
 	void searchEditColumn(int);
 	void searchEditSelect(int);
 	void searchEditText(const QString &);
@@ -55,7 +58,8 @@ private slots:
 	void showRow(size_t r, bool mark);
 	void deselect();
 	void markSwitch();
-	void update(KsDataStore *data = nullptr);
+	void update(KsDataStore *data);
+	void onCustomContextMenu(const QPoint &);
 
 private:
 	void resizeEvent(QResizeEvent* event) override;
@@ -78,13 +82,14 @@ private:
 	QPushButton	_prevButton, _nextButton;
 	QCheckBox	_graphFollowsCheckBox;
 
-	bool 		_searchDone;
-	bool 		_graphFollows;
+	bool		_searchDone;
+	bool		_graphFollows;
 
-	QList<size_t> _matchList;
-	QList<size_t>::iterator _it;
+	QList<size_t>		_matchList;
+	QList<size_t>::iterator	_it;
 
-	KsDualMarkerSM *_mState;
+	KsDualMarkerSM		*_mState;
+	KsDataStore		*_data;
 
 	enum Condition
 	{

@@ -43,7 +43,8 @@ if (Qt5Widgets_FOUND AND Qt5Network_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
                         KsTraceGraph.hpp
                         KsGLWidget.hpp
                         KsUtils.hpp
-                        KsCaptureDialog.hpp)
+                        KsCaptureDialog.hpp
+                        KsAdvFilteringDialog.hpp)
 
     QT5_WRAP_CPP(ks-guiLib_hdr_moc ${ks-guiLib_hdr})
 
@@ -55,7 +56,8 @@ if (Qt5Widgets_FOUND AND Qt5Network_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
                                                             KsUtils.cpp
                                                             KsPlotTools.cpp
                                                             KsGLWidget.cpp
-                                                            KsCaptureDialog.cpp)
+                                                            KsCaptureDialog.cpp
+                                                            KsAdvFilteringDialog.cpp)
 
     target_link_libraries(kshark-gui kshark
                                      ${OPENGL_LIBRARIES}

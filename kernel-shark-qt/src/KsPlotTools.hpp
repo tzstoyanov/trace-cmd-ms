@@ -27,7 +27,6 @@
 
 // Kernel Shark 2
 #include "KsModel.hpp"
-#include "KsUtils.hpp"
 
 class KsGLWidget;
 
