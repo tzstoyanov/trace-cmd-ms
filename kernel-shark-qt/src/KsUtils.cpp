@@ -312,6 +312,9 @@ void KsDataStore::applyNegEventFilter(QVector<int> vec)
 
 void KsDataStore::clearAllFilters()
 {
+	if (!_pevt)
+		return;
+
 	hd_time t0 = GET_TIME;
 
 	struct kshark_context *kshark_ctx = NULL;
@@ -323,7 +326,6 @@ void KsDataStore::clearAllFilters()
 	kshark_filter_clear(kshark_ctx, HIDE_EVENT_FILTER);
 
 	pevent_filter_reset(kshark_ctx->advanced_event_filter);
-
 	kshark_filter_entries(kshark_ctx, _rows, _dataSize);
 
 	emit updateView(this);

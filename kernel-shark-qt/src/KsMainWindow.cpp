@@ -550,6 +550,15 @@ void KsMainWindow::hideTasks()
 
 void KsMainWindow::advancedFiltering()
 {
+	if (!_data._pevt) {
+		QString text("Unable to open Advanced filtering dialog.");
+		text += " Tracing data has to be loaded first.";
+		QErrorMessage *em = new QErrorMessage(this);
+		em->showMessage(text, "advancedFiltering");
+		qCritical() << "ERROR: " << text;
+		return;
+	}
+
 	KsAdvFilteringDialog *dialog = new KsAdvFilteringDialog(_data._pevt,
 								this);
 
