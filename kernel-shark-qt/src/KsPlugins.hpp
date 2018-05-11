@@ -21,13 +21,13 @@
 #ifndef _KS_PLUGINS_H
 #define _KS_PLUGINS_H
 
-// Kernel Shark 2
+// KernelShark
 #include "KsUtils.hpp"
 #include "KsPlotTools.hpp"
 #include "KsModel.hpp"
 
 struct KsCppArgV {
-	KsTimeMap *_histo;
+	kshark_trace_histo *_histo;
 	KsPlot::Graph *_graph;
 	KsPlot::ShapeList *_shapes;
 

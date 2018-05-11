@@ -18,7 +18,7 @@
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
-// Kernel Shark 2
+// KernelShark
 #include "KsTraceViewer.hpp"
 #include "KsWidgetsLib.hpp"
 
@@ -199,7 +199,7 @@ void  KsTraceViewer::setTopRow(size_t r)
 
 void KsTraceViewer::update(KsDataStore *data)
 {
-	/* The Proxy model has to be updated first! */ 
+	/* The Proxy model has to be updated first! */
 	_proxyModel.update(data);
 	_model.update(data);
 	_data = data;
@@ -364,7 +364,7 @@ void KsTraceViewer::clicked(const QModelIndex& i)
 	if (_graphFollows) {
 		/*
 		 * Use the index of the proxy model to retrieve the value
-		 * of the row number in the base model. This works because 
+		 * of the row number in the base model. This works because
 		 *  the row number is shown in column "0".
 		 */
 		size_t row = _proxyModel.data(_proxyModel.index(i.row(), 0)).toInt();
@@ -529,7 +529,6 @@ size_t KsTraceViewer::searchItems(int column,
 				break;
 			}
 		}
-		
 	} else {
 		/* Move the iterator to the beginning of the match list. */
 		_view.clearSelection();

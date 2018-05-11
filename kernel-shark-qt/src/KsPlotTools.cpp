@@ -19,11 +19,10 @@
  */
 
 // OpenGL
-#include <iostream>
 #include <GL/glut.h>
 #include <GL/gl.h>
 
-// Kernel Shark 2
+// KernelShark
 #include "KsUtils.hpp"
 #include "KsPlotTools.hpp"
 #include "KsTraceGraph.hpp"

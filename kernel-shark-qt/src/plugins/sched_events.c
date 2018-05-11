@@ -1,19 +1,19 @@
 /*
- *  Copyright (C) 2018 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
+ * Copyright (C) 2018 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation;
- * version 2.1 of the License (not later!)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License (not later!)
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not,  see <http://www.gnu.org/licenses>
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not,  see <http://www.gnu.org/licenses>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-// Kernel Shark 2
+// KernelShark
 #include "plugins/sched_events.h"
 
 struct plugin_sched_context	*plugin_sched_context_handler = NULL;
@@ -44,7 +44,7 @@ static bool plugin_sched_update_context(struct kshark_context *kshark_ctx)
 	event = pevent_find_event_by_name(plugin_ctx->pevt, "sched", "sched_switch");
 	if (!event)
 		return false;
-	
+
 	plugin_ctx->sched_switch_event = event;
 	plugin_ctx->sched_switch_next_field = pevent_find_any_field(event, "next_pid");
 
@@ -117,7 +117,7 @@ bool plugin_wakeup_check_pid(struct kshark_context *ctx, struct kshark_entry *e,
 		return true;
 
 	struct plugin_sched_context *plugin_ctx = plugin_sched_context_handler;
-	
+
 	if (plugin_ctx &&
 	    plugin_ctx->sched_wakeup_event &&
 	    e->event_id == plugin_ctx->sched_wakeup_event->id) {

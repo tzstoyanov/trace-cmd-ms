@@ -18,7 +18,7 @@
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
-// Kernel Shark 2
+// KernelShark
 #include "KsAdvFilteringDialog.hpp"
 #include "libkshark.h"
 #include "KsUtils.hpp"
@@ -214,7 +214,7 @@ KsAdvFilteringDialog::KsAdvFilteringDialog(pevent *pe,
 
 	connect(&_applyButton,	&QPushButton::pressed,
 		this,		&QWidget::close);
-	
+
 	connect(&_cancelButton,	&QPushButton::pressed,
 		this,		&QWidget::close);
 }

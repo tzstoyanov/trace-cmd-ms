@@ -18,7 +18,7 @@
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
-// Kernel Shark 2
+// KernelShark
 #include "KsTraceGraph.hpp"
 #include "KsUtils.hpp"
 
@@ -225,8 +225,10 @@ void KsTraceGraph::scrollRight()
 
 void KsTraceGraph::stopUpdating()
 {
-	/* The user is no longer pressing the action button. Reset the "Key Pressed"
-	 * flag. This will stop the ongoing user action. */
+	/*
+	 * The user is no longer pressing the action button. Reset the "Key Pressed"
+	 * flag. This will stop the ongoing user action.
+	 */
 	_keyPressed = false;
 }
 
@@ -241,7 +243,7 @@ void KsTraceGraph::resetPointer(uint64_t ts, int cpu, int pid)
 	if (pid >= 0) {
 		struct kshark_context *kshark_ctx = NULL;
 		kshark_instance(&kshark_ctx);
-		QString comm(kshark_get_comm_from_pid(kshark_ctx->pevt, pid));
+		QString comm(pevent_data_comm_from_pid(kshark_ctx->pevt, pid));
 		comm.append("-");
 		comm.append(QString("%1").arg(pid));
 		_labelI1.setText(comm);
@@ -286,15 +288,17 @@ void KsTraceGraph::setPointerInfo(size_t i)
 
 	_labelI5.setText(info);
 	QCoreApplication::processEvents();
-	
+
 	int labelWidth = _pointerBar.geometry().right() -
 			 _labelI4.geometry().right();
 
 	if (labelWidth > STRING_WIDTH(info) + FONT_WIDTH*5)
 		return;
 
-	/* The Info string is too long and cannot be displayed on the toolbar.
-	 * Try to fit the text in the available space. */
+	/*
+	 * The Info string is too long and cannot be displayed on the toolbar.
+	 * Try to fit the text in the available space.
+	 */
 	QFontMetrics metrix(_labelI5.font());
 	int width = labelWidth - FONT_WIDTH*3;
 	QString elidedText = metrix.elidedText(info, Qt::ElideRight, width);
@@ -314,9 +318,11 @@ void KsTraceGraph::markEntry(size_t row)
 	int graph, cpuGrId, taskGrId;
 	_glWindow.findGraphIds(*_data->_rows[row], &cpuGrId, &taskGrId);
 
-	/* If a Task graph has been found, this Task graph will be
+	/*
+	 * If a Task graph has been found, this Task graph will be
 	 * visible. If no Task graph has been found, make visible
-	 * the corresponding Cpu graph. */
+	 * the corresponding Cpu graph.
+	 */
 	if (taskGrId >= 0)
 		graph = taskGrId;
 	else
@@ -332,11 +338,11 @@ void KsTraceGraph::markEntry(size_t row)
 
 	_glWindow.model()->shiftTo(_data->_rows[row]->ts);
 	_mState->activeMarker().set(*_data,
-				    *_glWindow.model()->histo(),
+				    _glWindow.model()->histo(),
 				    row, cpuGrId, taskGrId);
 
-	_mState->updateLabels(*_glWindow.model()->histo());
-	_mState->updateMarkers(*_data, *_glWindow.model()->histo());
+	_mState->updateLabels(_glWindow.model()->histo());
+	_mState->updateMarkers(*_data, _glWindow.model()->histo());
 }
 
 void KsTraceGraph::markerReDraw()
@@ -348,7 +354,7 @@ void KsTraceGraph::markerReDraw()
 		row = _mState->markerA().row();
 		_glWindow.findGraphIds(*_data->_rows[row], &cpuGrId, &taskGrId);
 		_mState->markerA().set(*_data,
-				       *_glWindow.model()->histo(),
+				       _glWindow.model()->histo(),
 				       row, cpuGrId, taskGrId);
 	}
 
@@ -356,7 +362,7 @@ void KsTraceGraph::markerReDraw()
 		row = _mState->markerB().row();
 		_glWindow.findGraphIds(*_data->_rows[row], &cpuGrId, &taskGrId);
 		_mState->markerB().set(*_data,
-				       *_glWindow.model()->histo(),
+				       _glWindow.model()->histo(),
 				       row, cpuGrId, taskGrId);
 	}
 }
@@ -413,17 +419,21 @@ void KsTraceGraph::updateGeom()
 				  _layout.spacing()*2 -
 				  _layout.contentsMargins().top() -
 				  _layout.contentsMargins().bottom();
-		
+
 	_scrollArea.resize(saWidth, saHeight);
 
-	/* Calculate the width of the Draw Window, taking into account the size
-	 * of the scroll bar. */
+	/*
+	 * Calculate the width of the Draw Window, taking into account the size
+	 * of the scroll bar.
+	 */
 	int dwWidth = _scrollArea.width();
 	if (_glWindow.height() + _legendAxisX.height() > _scrollArea.height())
 		dwWidth -= qApp->style()->pixelMetric(QStyle::PM_ScrollBarExtent);
 
-	/* Set the height of the Draw window according to the number of
-	 * plotted graphs. */
+	/*
+	 * Set the height of the Draw window according to the number of
+	 * plotted graphs.
+	 */
 	_drawWindow.resize(dwWidth, _glWindow.height() + _legendAxisX.height());
 
 	/* Set the minimum height of the Graph widget. */
@@ -438,8 +448,10 @@ void KsTraceGraph::updateGeom()
 
 	setMinimumHeight(hMin);
 
-	/* Now use the height of the Draw Window to fix the maximum height
-	 * of the Graph widget. */
+	/*
+	 * Now use the height of the Draw Window to fix the maximum height
+	 * of the Graph widget.
+	 */
 	setMaximumHeight(_drawWindow.height() +
 			 _pointerBar.height() +
 			 _navigationBar.height() +
@@ -448,7 +460,8 @@ void KsTraceGraph::updateGeom()
 			 _layout.contentsMargins().bottom() +
 			 2);  /* Just a little bit of extra space. This will allow
 			       * the scroll bar to disappear when the widget is
-			       * extended to maximum. */
+			       * extended to maximum.
+			       */
 }
 
 void KsTraceGraph::updateGraphLegends()
@@ -483,14 +496,14 @@ void KsTraceGraph::updateGraphLegends()
 		name->setFixedHeight(CPU_GRAPH_HEIGHT);
 		layout->addWidget(name);
 	};
-	
+
 	for (auto const &cpu: _glWindow._cpuList) {
 		graphName = QString("CPU %1").arg(cpu);
 		make_name();
 	}
 
 	for (auto const &pid: _glWindow._taskList) {
-		graphName = QString(kshark_get_comm_from_pid(_data->_pevt, pid));
+		graphName = QString(pevent_data_comm_from_pid(_data->_pevt, pid));
 		graphName.append(QString("-%1").arg(pid));
 		make_name();
 	}
@@ -502,18 +515,18 @@ void KsTraceGraph::updateGraphLegends()
 void KsTraceGraph::updateTimeLegends()
 {
 	uint64_t sec, usec;
-	kshark_convert_nano(_glWindow.model()->histo()->_min, &sec, &usec);
+	kshark_convert_nano(_glWindow.model()->histo()->min, &sec, &usec);
 	QString tMin;
 	tMin.sprintf("%llu.%llu", (unsigned long long)sec, (unsigned long long)usec);
 	_labelXMin.setText(tMin);
 
-	uint64_t tsMid = (_glWindow.model()->histo()->_min + _glWindow.model()->histo()->_max)/2;
+	uint64_t tsMid = (_glWindow.model()->histo()->min + _glWindow.model()->histo()->max)/2;
 	kshark_convert_nano(tsMid, &sec, &usec);
 	QString tMid;
 	tMid.sprintf("%llu.%llu", (unsigned long long)sec, (unsigned long long)usec);
 	_labelXMid.setText(tMid);
 
-	kshark_convert_nano(_glWindow.model()->histo()->_max, &sec, &usec);
+	kshark_convert_nano(_glWindow.model()->histo()->max, &sec, &usec);
 	QString tMax;
 	tMax.sprintf("%llu.%llu", (unsigned long long)sec, (unsigned long long)usec);
 	_labelXMax.setText(tMax);
@@ -524,14 +537,15 @@ void KsTraceGraph::resizeEvent(QResizeEvent* event)
 	updateGeom();
 }
 
-
 bool KsTraceGraph::eventFilter(QObject* obj, QEvent* evt)
 {
-	/* Overriding a virtual function from QObject.
+	/*
+	 * Overriding a virtual function from QObject.
 	 * This function is used to detect the position of the mouse
 	 * with respect to the Draw window and according to this position
 	 * to grab / release the focus of the keyboard. The function has
-	 * nothing to do with the filtering of the trace events. */
+	 * nothing to do with the filtering of the trace events.
+	 */
 	if (obj == &_drawWindow && evt->type() == QEvent::Enter)
 		_glWindow.setFocus();
 
@@ -543,8 +557,10 @@ bool KsTraceGraph::eventFilter(QObject* obj, QEvent* evt)
 
 void KsTraceGraph::updateGraphs(GraphActions action)
 {
-	/* Set the "Key Pressed" flag. The flag will stay set as long as the user
-	 * keeps the corresponding action button pressed. */
+	/*
+	 * Set the "Key Pressed" flag. The flag will stay set as long as the user
+	 * keeps the corresponding action button pressed.
+	 */
 	_keyPressed = true;
 
 	/* Initialize the zooming factor with a small value. */
@@ -554,12 +570,16 @@ void KsTraceGraph::updateGraphs(GraphActions action)
 		case GraphActions::ZoomIn:
 			if (_mState->activeMarker().isSet() &&
 			    _mState->activeMarker().isVisible()) {
-				/* Use the position of the active marker as a focus point
-				 * of the zoom. */
+				/*
+				 * Use the position of the active marker as a focus point
+				 * of the zoom.
+				 */
 				_glWindow.model()->zoomIn(k, _mState->activeMarker().bin());
 			} else {
-				/* The default focus point is the center of the range
-				 * interval of the model. */
+				/*
+				 * The default focus point is the center of the range
+				 * interval of the model.
+				 */
 				_glWindow.model()->zoomIn(k);
 			}
 
@@ -568,12 +588,16 @@ void KsTraceGraph::updateGraphs(GraphActions action)
 		case GraphActions::ZoomOut:
 			if (_mState->activeMarker().isSet() &&
 			    _mState->activeMarker().isVisible()) {
-				/* Use the position of the active marker as a focus point
-				 * of the zoom. */
+				/*
+				 * Use the position of the active marker as a focus point
+				 * of the zoom.
+				 */
 				_glWindow.model()->zoomOut(k, _mState->activeMarker().bin());
 			} else {
-				/* The default focus point is the center of the range
-				 * interval of the model. */
+				/*
+				 * The default focus point is the center of the range
+				 * interval of the model.
+				 */
 				_glWindow.model()->zoomOut(k);
 			}
 
@@ -588,13 +612,15 @@ void KsTraceGraph::updateGraphs(GraphActions action)
 			break;
 		}
 
-		/* As long as the action button is pressed, the zooming factor will grow
+		/*
+		 * As long as the action button is pressed, the zooming factor will grow
 		 * smoothly until it reaches a maximum value. This will have a visible
-		 * effect of an accelerating zoom. */
+		 * effect of an accelerating zoom.
+		 */
 		if (k < .25)
 			k *= 1.02;
 
-		_mState->updateMarkers(*_data, *_glWindow.model()->histo());
+		_mState->updateMarkers(*_data, _glWindow.model()->histo());
 		QCoreApplication::processEvents();
 	}
 }

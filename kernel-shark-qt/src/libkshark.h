@@ -1,23 +1,23 @@
 /*
- * Copyright (C) 2009, 2010 Red Hat Inc, Steven Rostedt <srostedt@redhat.com>
+ * Copyright (C) 2017 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 2 of the License (not later!)
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation;
+ * version 2.1 of the License (not later!)
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not,  see <http://www.gnu.org/licenses>
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this program; if not,  see <http://www.gnu.org/licenses>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
- 
+
 #ifndef _LIB_KSHARK_H
 #define _LIB_KSHARK_H
 
@@ -33,13 +33,16 @@ extern "C" {
 #include "event-parse.h"
 #include "trace-filter-hash.h"
 
-// Kernel shark 2
+// KernelShark
 #include "libkshark-plugin.h"
 
 #define TASK_HASH_SIZE 1024
 
 #define KS_EMPTY_BIN		-1
 #define KS_FILTERED_BIN		-2
+
+#define KS_VIEW_FILTER_MASK   0x1
+#define KS_GRAPH_FILTER_MASK  0x2
 
 struct kshark_entry {
 	uint8_t		visible;
@@ -107,8 +110,6 @@ typedef bool (matching_condition_func)(struct kshark_context*,
 				       struct kshark_entry*,
 				       int);
 
-const char *kshark_get_comm_from_pid(struct pevent *pevt, int pid);
-
 int kshark_get_pid_lazy(struct kshark_entry *entry);
 
 const char *kshark_get_task(struct pevent *pevt,
@@ -161,6 +162,14 @@ uint32_t kshark_find_record_row(uint64_t time,
 				struct pevent_record **data_rows,
 				uint32_t l, uint32_t h);
 
+void kshark_convert_nano(uint64_t time, uint64_t *sec, uint64_t *usec);
+
+int kshark_get_plugins(char ***plugins);
+
+struct pevent *kshark_local_events();
+
+char **kshark_get_event_format_fields(struct event_format *event);
+
 bool kshark_check_pid(struct kshark_context *kshark_ctx,
 		      struct kshark_entry *e, int pid);
 
@@ -206,13 +215,12 @@ struct kshark_entry *kshark_get_entry_by_pid_front(size_t first,
 						   int vis_mask,
 						   struct kshark_entry **data);
 
-void kshark_convert_nano(uint64_t time, uint64_t *sec, uint64_t *usec);
-
-int kshark_get_plugins(char ***plugins);
-
-struct pevent *kshark_local_events();
-
-char **kshark_get_event_format_fields(struct event_format *event);
+size_t kshark_get_data_collection(struct kshark_context *kshark_ctx,
+				  struct kshark_entry **data,
+				  size_t n_rows,
+				  matching_condition_func cond,
+				  int val,
+				  size_t **col);
 
 #ifdef __cplusplus
 }

@@ -26,7 +26,7 @@
 #include <sys/stat.h>
 #include <dlfcn.h>
 
-// Kernel shark
+// Kernelshark
 #include "libkshark-plugin.h"
 #include "libkshark.h"
 
@@ -207,7 +207,6 @@ void kshark_handle_plugins(struct kshark_context *kshark_ctx, int task_id)
 
 	for (plugin = kshark_ctx->plugins; plugin; plugin = plugin->next) {
 		if (task_id == KSHARK_PLUGIN_LOAD) {
-			printf(">>> dlopen\n");
 			plugin->handle = dlopen(plugin->file, RTLD_NOW | RTLD_GLOBAL);
 
 			if (!plugin->handle) {
@@ -230,7 +229,6 @@ void kshark_handle_plugins(struct kshark_context *kshark_ctx, int task_id)
 		func();
 
 		if (task_id == KSHARK_PLUGIN_UNLOAD && plugin->handle) {
-			printf("<<< dlclose\n");
 			dlclose(plugin->handle);
 			plugin->handle = NULL;
 		}

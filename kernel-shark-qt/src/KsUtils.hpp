@@ -21,14 +21,15 @@
 #ifndef _KS_UTILS_H
 #define _KS_UTILS_H
 
-// C++
+// C++ 11
 #include <chrono>
 
 // Qt
 #include <QtWidgets>
 
-// Kernel Shark 2
+// KernelShark
 #include "libkshark.h"
+#include "libkshark-model.h"
 #include "libkshark-json.h"
 #include "KsPlotTools.hpp"
 
@@ -54,9 +55,6 @@ auto stringWidth = [](QString s)
 #define STRING_WIDTH(s)		stringWidth(s)
 #define CPU_GRAPH_HEIGHT	(FONT_HEIGHT*2)
 
-#define KS_VIEW_FILTER_MASK   0x1
-#define KS_GRAPH_FILTER_MASK  0x2
-
 typedef std::chrono::high_resolution_clock::time_point  hd_time;
 #define GET_TIME std::chrono::high_resolution_clock::now()
 #define GET_DURATION(t0) std::chrono::duration_cast<std::chrono::duration<double>>( \
@@ -71,6 +69,8 @@ int getPluginList(QStringList *pl);
 void listFilterSync(int state);
 
 void graphFilterSync(int state);
+
+QString Ts2String(ssize_t ts, int prec);
 
 }; // KsUtils
 
@@ -132,7 +132,6 @@ public slots:
 	void updatePlugins(QVector<int> pluginId);
 };
 
-class KsTimeMap;
 class KsGLWidget;
 
 enum class DualMarkerState
@@ -157,19 +156,20 @@ public:
 	void setGLWidget(KsGLWidget *gl) {_gl = gl;}
 	void setRow(size_t r) {_pos = r;}
 	bool set(const KsDataStore &data,
-		 const KsTimeMap &histo,
+		 kshark_trace_histo *histo,
 		 size_t pos,
 		 int grCpu,
 		 int grTask);
 
-	bool update(const KsDataStore &data, const KsTimeMap &histo);
+	bool update(const KsDataStore &data, kshark_trace_histo *histo);
 	bool isSet();
 	bool isVisible();
 
-	int bin()		const {return _bin;}
-	size_t row()		const {return _pos;}
-	int cpu()		const {return _cpu;}
-	int task()		const {return _task;}
+	int bin()	const {return _bin;}
+	size_t row()	const {return _pos;}
+	uint64_t ts()	const {return _ts;}
+	int cpu()	const {return _cpu;}
+	int task()	const {return _task;}
 
 	const QColor &color()	const {return _color;}
 
@@ -178,15 +178,16 @@ public:
 	void remove();
 
 signals:
-	void update(KsTimeMap *histo);
+	void update(kshark_trace_histo *histo);
 
 private:
-	bool	_isSet;
-	int	_bin;
-	int	_cpu;
-	int	_task;
-	size_t	_pos;
-	QColor	_color;
+	bool		_isSet;
+	int		_bin;
+	int		_cpu;
+	int		_task;
+	size_t		_pos;
+	uint64_t	_ts;
+	QColor		_color;
 
 	KsPlot::Mark	*_mark;
 	KsGLWidget	*_gl;
@@ -223,14 +224,15 @@ public:
 
 	KsGraphMark &getMarker(DualMarkerState s);
 	KsGraphMark &activeMarker();
+	KsGraphMark &passiveMarker();
 	KsGraphMark &markerA();
 	KsGraphMark &markerB();
 
 	QState *stateAPtr() {return _stateA;}
 	QState *stateBPtr() {return _stateB;}
 
-	void updateMarkers(const KsDataStore &data, const KsTimeMap &histo);
-	void updateLabels(const KsTimeMap &histo);
+	void updateMarkers(const KsDataStore &data, kshark_trace_histo *histo);
+	void updateLabels(kshark_trace_histo *histo);
 
 signals:
 	void markSwitch();
@@ -309,6 +311,20 @@ public:
 		json_object *jrow;
 		json_object_object_get_ex(_jsession, "ViewTop", &jrow);
 		return json_object_get_int64(jrow);
+	}
+
+	void setColorScheme() {
+		json_object_object_add(_jsession,
+				       "ColorScheme",
+				       json_object_new_double(KsPlot::Color::getRainbowFrequency()));
+	}
+
+	float getColorScheme() {
+		json_object *jcol;
+		json_object_object_get_ex(_jsession, "ColorScheme", &jcol);
+		float colSch = json_object_get_double(jcol);
+		KsPlot::Color::setRainbowFrequency(colSch);
+		return colSch;
 	}
 };
 

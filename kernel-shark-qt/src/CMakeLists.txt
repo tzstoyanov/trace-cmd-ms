@@ -2,6 +2,7 @@ message("\n src ...")
 
 message(STATUS "libkshark")
 add_library(kshark SHARED libkshark.c
+                          libkshark-model.c
                           libkshark-plugin.c
                           trace-filter-hash.c
                           libkshark-json.c

@@ -18,13 +18,10 @@
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
-// C++
-#include <iostream>
-
 // Qt
 #include <QLocalSocket>
 
-// Kernel Shark 2
+// KernelShark
 #include "KsCaptureDialog.hpp"
 #include "libkshark.h"
 #include "libkshark-json.h"

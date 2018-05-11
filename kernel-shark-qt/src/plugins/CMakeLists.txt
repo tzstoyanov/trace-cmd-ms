@@ -21,7 +21,8 @@ set(PLUGIN_LIST "")
 ADD_PLUGIN(NAME sched_events
            SOURCE sched_events.c SchedEvents.cpp)
 
-list(APPEND PLUGIN_LIST "sched_events default") # This plugin will be loaded by default
+# list(APPEND PLUGIN_LIST "sched_events default") # This plugin will be loaded by default
+list(APPEND PLUGIN_LIST "sched_events") # This plugin will be loaded by default
 
 ADD_PLUGIN(NAME xenomai_sched_events
            SOURCE xenomai_sched_events.c XenomaiSchedEvents.cpp)

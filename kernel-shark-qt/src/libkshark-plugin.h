@@ -1,19 +1,19 @@
 /*
- * Copyright (C) 2016 Red Hat Inc, Steven Rostedt <srostedt@redhat.com>
+ * Copyright (C) 2017 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 2 of the License (not later!)
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation;
+ * version 2.1 of the License (not later!)
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not,  see <http://www.gnu.org/licenses>
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this program; if not,  see <http://www.gnu.org/licenses>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
@@ -24,12 +24,12 @@
 // C
 #include <limits.h>
 
-// trace-cmd
-#include "event-parse.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
+
+// trace-cmd
+#include "event-parse.h"
 
 #define KSHARK_PLUGIN_LOADER kshark_plugin_loader
 #define KSHARK_PLUGIN_RELOADER kshark_plugin_reloader
@@ -95,7 +95,7 @@ void kshark_free_event_handler_list(struct gui_event_handler *handlers);
 struct plugin_list {
 	struct plugin_list	*next;
 	char			*file;
-	void 			*handle;
+	void			*handle;
 };
 
 void kshark_register_plugin(struct kshark_context *kshark_ctx, const char *file);

@@ -1,3 +1,23 @@
+/*
+ * Copyright (C) 2017 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
+ *
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation;
+ * version 2.1 of the License (not later!)
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this program; if not,  see <http://www.gnu.org/licenses>
+ *
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ */
+
 // C
 #define _GNU_SOURCE 1
 #include <stdlib.h>
@@ -6,14 +26,14 @@
 #include <sys/time.h>
 
 // trace-cmd
-#include "trace-cmd.h"
 #include "trace-hash.h"
 
-// Kernel shark 2
+// KernelShark
 #include "libkshark.h"
 #include "KsDeff.h"
 
 static __thread struct trace_seq seq;
+
 static struct kshark_context *kshark_context_handler = NULL;
 
 struct kshark_entry dummy_entry;
@@ -93,21 +113,13 @@ static void free_task_hash(struct kshark_context *kshark_ctx)
 	}
 }
 
-static void kshark_set_file_context(struct tracecmd_input *handle,
-				    struct kshark_context *kshark_ctx)
-{
-	kshark_ctx->handle = handle;
-	kshark_ctx->pevt = tracecmd_get_pevent(handle);
-	free_task_hash(kshark_ctx);
-}
-
 bool kshark_open(struct kshark_context *kshark_ctx, const char *file)
 {
 	free_task_hash(kshark_ctx);
 	struct tracecmd_input *handle = tracecmd_open(file);
 	if (!handle)
 		return false;
-	
+
 	kshark_ctx->handle = handle;
 	kshark_ctx->pevt = tracecmd_get_pevent(handle);
 
@@ -188,29 +200,8 @@ void kshark_free(struct kshark_context *kshark_ctx)
 
 	if (seq.buffer)
 		trace_seq_destroy(&seq);
-	
+
 	free(kshark_ctx);
-}
-
-const char *kshark_get_comm_from_pid(struct pevent *pevt, int pid)
-{
-	return pevent_data_comm_from_pid(pevt, pid);
-}
-
-int kshark_get_pid_lazy(struct kshark_entry *entry)
-{
-	int pid;
-	struct kshark_context *kshark_ctx = NULL;
-	kshark_instance(&kshark_ctx);
-
-	struct pevent_record *data =
-		tracecmd_read_at(kshark_ctx->handle,
-				 entry->offset,
-				 NULL);
-
-	pid = pevent_data_pid(kshark_ctx->pevt, data);
-	free_record(data);
-	return pid;
 }
 
 const char *kshark_get_task(struct pevent *pe, struct kshark_entry *entry)
@@ -223,7 +214,7 @@ const char *kshark_get_latency(struct pevent *pe,
 {
 	if (!seq.buffer)
 		trace_seq_init(&seq);
-	
+
 	trace_seq_reset(&seq);
 	pevent_data_lat_fmt(pe, &seq, record);
 	return seq.buffer;
@@ -262,6 +253,22 @@ const char *kshark_get_info(struct pevent *pe,
 		*pos = '\0';
 
 	return seq.buffer;
+}
+
+int kshark_get_pid_lazy(struct kshark_entry *entry)
+{
+	int pid;
+	struct kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+
+	struct pevent_record *data =
+		tracecmd_read_at(kshark_ctx->handle,
+				 entry->offset,
+				 NULL);
+
+	pid = pevent_data_pid(kshark_ctx->pevt, data);
+	free_record(data);
+	return pid;
 }
 
 const char *kshark_get_task_lazy(struct kshark_entry *entry)
@@ -335,7 +342,10 @@ void kshark_set_entry_values(struct kshark_context *kshark_ctx,
 	// Event
 	entry->event_id = pevent_data_type(kshark_ctx->pevt, record);
 
-	// Is vizible
+	/*
+	 * Is vizible mask. This default value means that the entry is visible
+	 * everywhere.
+	 */
 	entry->visible = 0xFF;
 
 	// PID
@@ -446,6 +456,23 @@ static bool kshark_show_entry(struct kshark_context *kshark_ctx,
 	return false;
 }
 
+struct entry_list {
+	size_t			index;
+	struct entry_list	*next;
+};
+
+static size_t last_added = 0;
+static void kshark_add_entry(struct entry_list **list,
+				  struct kshark_entry **data,
+				  size_t i)
+{
+	(*list)->next = malloc(sizeof(*list));
+	assert((*list)->next != NULL);
+	*list = (*list)->next;
+	(*list)->index = i;
+	last_added = i;
+}
+
 size_t kshark_load_data_records(struct kshark_context *kshark_ctx,
 				struct pevent_record ***data_rows)
 {
@@ -453,7 +480,6 @@ size_t kshark_load_data_records(struct kshark_context *kshark_ctx,
 	int cpu;
 	size_t count, total = 0;
 	struct pevent_record *data;
-	kshark_set_file_context(kshark_ctx->handle, kshark_ctx);
 
 	struct temp {
 		struct pevent_record	*rec;
@@ -525,7 +551,6 @@ size_t kshark_load_data_records(struct kshark_context *kshark_ctx,
 size_t kshark_load_data_entries(struct kshark_context *kshark_ctx,
 				struct kshark_entry ***data_rows)
 {
-	
 	int n_cpus = tracecmd_cpus(kshark_ctx->handle);
 	int cpu, ret;
 	size_t count, total = 0;
@@ -559,8 +584,8 @@ size_t kshark_load_data_entries(struct kshark_context *kshark_ctx,
 			ret = pevent_filter_match(kshark_ctx->advanced_event_filter, rec);
 			if ((kshark_ctx->adv_filter_is_set && ret != FILTER_MATCH) ||
 			    !kshark_show_entry(kshark_ctx,
-				       entry->pid,
-				       entry->event_id)) {
+					       entry->pid,
+					       entry->event_id)) {
 				entry->visible &= ~kshark_ctx->filter_mask;
 			}
 
@@ -571,6 +596,7 @@ size_t kshark_load_data_entries(struct kshark_context *kshark_ctx,
 			++count;
 			rec = tracecmd_read_data(kshark_ctx->handle, cpu);
 		}
+
 		total += count;
 	}
 
@@ -621,7 +647,6 @@ size_t kshark_load_data_matrix(struct kshark_context *kshark_ctx,
 	int cpu;
 	size_t count, total = 0;
 	struct pevent_record *data;
-	kshark_set_file_context(kshark_ctx->handle, kshark_ctx);
 
 	struct kshark_entry *rec, **next;
 	struct kshark_entry **cpu_list = calloc(n_cpus, sizeof(struct kshark_entry *));
@@ -730,7 +755,6 @@ size_t kshark_load_data_matrix(struct kshark_context *kshark_ctx,
 	free(cpu_list);
 	return total;
 
-
 free_all:
 	fprintf(stderr, "Failed to allocate memory during data loading.\n");
 
@@ -751,7 +775,7 @@ free_all:
 
 	if (vis_array)
 		free(vis_array);
-	
+
 	return 0;
 }
 
@@ -990,8 +1014,10 @@ struct kshark_entry *kshark_get_entry_back(size_t first,
 	if (first - n + 1 > 0)
 		last = first - n + 1;
 
-	/* "first" is unsigned and "last" can be 0. We don't want to do "first >= 0,
-	 * because this is always true. */
+	/*
+	 * "first" is unsigned and "last" can be 0. We don't want to do "first >= 0,
+	 * because this is always true.
+	 */
 	for (size_t i = first + 1; i-- != last;) {
 		if (cond(kshark_ctx, data[i], val)) {
 			/* Data that satisfies the condition has been found. */
@@ -1078,11 +1104,11 @@ int kshark_get_plugins(char ***plugins)
 	if (!all_plugins)
 		return 0;
 
-// 	while (all_plugins[i]) {
-// 	// TODO plugin selection.
+	while (all_plugins[i]) {
+	// TODO plugin selection here.
 // 		printf("plugin %i %s\n", i, all_plugins[i]);
-// 		 ++i;
-// 	}
+		 ++i;
+	}
 
 	*plugins = all_plugins;
 	return i;
@@ -1110,4 +1136,91 @@ char **kshark_get_event_format_fields(struct event_format *event)
 
 	free(fields);
 	return field_names;
+}
+
+size_t kshark_get_data_collection(struct kshark_context *kshark_ctx,
+				  struct kshark_entry **data,
+				  size_t n_rows,
+				  matching_condition_func cond,
+				  int val,
+				  size_t **col)
+{
+	size_t i, j, count = 0;
+	bool good = false;
+	size_t margin = 5;
+	size_t first, last, last_added;
+
+	struct entry_list *col_list = malloc(sizeof(*col_list));
+	struct entry_list *temp = col_list;
+	temp->index = 0;
+	++count;
+
+	for (i = 1; i < margin; ++i) {
+		kshark_add_entry(&temp, data, i);
+		last_added = i;
+		++count;
+		if (cond(kshark_ctx, data[i], val) &&
+		    cond(kshark_ctx, data[i]->next, val))
+			good = true;
+	}
+
+	for (; i < n_rows; ++i) {
+		if (!good && !cond(kshark_ctx, data[i], val)) {
+			/*
+			 * This record is irrelevant for this collection.
+			 * Do nothing.
+			 */
+			continue;
+		}
+
+		if (!good && cond(kshark_ctx, data[i], val)) {
+			/*
+			 * Resume the collection here. Add some margin data
+			 * in front of the data of interest.
+			 */
+			good = true;
+			if (i - margin > last_added)
+				first = i - margin;
+			else
+				first = last_added + 1;
+
+			for (j = first; j <= i; ++j) {
+				kshark_add_entry(&temp, data, j);
+				++count;
+			}
+
+			last_added = last;
+		} else if (good &&
+			   cond(kshark_ctx, data[i], val) &&
+			   !cond(kshark_ctx, data[i]->next, val)) {
+			/*
+			 * Brack the collection here. Add some margin data
+			 * after the data of interest.
+			 */
+			good = false;
+			last = i + margin;
+			for (; i <= last; ++i) {
+				kshark_add_entry(&temp, data, i);
+				++count;
+				last_added = i;
+				if (cond(kshark_ctx, data[i + 1], val))
+					break;
+			}
+		} else {
+			/* Continue adding data to this collection. */
+			kshark_add_entry(&temp, data, i);
+			++count;
+			last_added = i;
+		}
+	}
+
+	*col = calloc(count, sizeof(*col));
+	for (i = 0; i < count; ++i) {
+		(*col)[i] = col_list->index;
+		temp = col_list;
+		col_list = col_list->next;
+		free(temp);
+	}
+
+	return count;
 }

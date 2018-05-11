@@ -1,24 +1,24 @@
 /*
- *  Copyright (C) 2018 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
+ * Copyright (C) 2018 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation;
- * version 2.1 of the License (not later!)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License (not later!)
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not,  see <http://www.gnu.org/licenses>
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not,  see <http://www.gnu.org/licenses>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
-// Kernel Shark 2
+// KernelShark
 #include "libkshark.h"
 #include "plugins/sched_events.h"
 #include "KsPlotTools.hpp"
@@ -63,7 +63,7 @@ static void closeBox(KsPlot::Rectangle **rec, KsPlot::Bin *bin, KsPlot::ShapeLis
 }
 
 static void schedWakeupPluginDraw(struct plugin_sched_context *plugin_ctx,
-				  KsTimeMap *histo,
+				  kshark_trace_histo *histo,
 				  KsPlot::Graph *graph,
 				  int pid,
 				  KsPlot::ShapeList *shapes)
@@ -73,25 +73,31 @@ static void schedWakeupPluginDraw(struct plugin_sched_context *plugin_ctx,
 
 	size_t nBins = graph->size();
 	for (size_t bin = 0; bin < nBins; ++bin) {
-		if (histo->binCount(bin) > 100)
+		if (kshark_histo_bin_count(histo, bin) > 100)
 			continue;
 
-		/* Starting from the first element in this bin, go forward in time
+		/*
+		 * Starting from the first element in this bin, go forward in time
 		 * until you find a trace entry that satisfies the condition defined
-		 * by plugin_check_pid. */
-		entryFront = histo->getEntryFront(bin, pid, false, kshark_check_pid);
+		 * by plugin_check_pid.
+		 */
+		entryFront = kshark_histo_get_entry_front(histo, bin, pid, false, kshark_check_pid);
 
-		/* Starting from the last element in this bin, go backward in time
+		/*
+		 * Starting from the last element in this bin, go backward in time
 		 * until you find a trace entry that satisfies the condition defined
-		 * by plugin_wakeup_check_pid. */
-		entryBack = histo->getEntryBack(bin, pid, false, plugin_wakeup_check_pid);
+		 * by plugin_wakeup_check_pid.
+		 */
+		entryBack = kshark_histo_get_entry_back(histo, bin, pid, false, plugin_wakeup_check_pid);
 
 		if (entryBack &&
 		    plugin_ctx->sched_wakeup_event &&
 		    entryBack->event_id == plugin_ctx->sched_wakeup_event->id) {
 			if (plugin_get_wakeup_pid_lazy(plugin_ctx, entryBack) == pid) {
-				/* entryBack is a sched_wakeup_event.
-				 * Open a green box here.*/
+				/*
+				 * entryBack is a sched_wakeup_event.
+				 * Open a green box here.
+				 */
 				openBox(&rec, &graph->_bins[bin]);
 				rec->_color = KsPlot::Color(0, 255, 0); // Green
 			}
@@ -101,9 +107,11 @@ static void schedWakeupPluginDraw(struct plugin_sched_context *plugin_ctx,
 		    plugin_ctx->sched_switch_event &&
 		    entryFront->event_id == plugin_ctx->sched_switch_event->id &&
 		    entryFront->pid == pid) {
-			/* entryFront is sched_switch_event.
+			/*
+			 * entryFront is sched_switch_event.
 			 * Close the box and add it to the list
-			 * of shapes to be ploted. */
+			 * of shapes to be ploted.
+			 */
 			closeBox(&rec, &graph->_bins[bin], shapes);
 		}
 	}
@@ -115,7 +123,7 @@ static void schedWakeupPluginDraw(struct plugin_sched_context *plugin_ctx,
 }
 
 static void schedSwitchPluginDraw(struct plugin_sched_context *plugin_ctx,
-				  KsTimeMap *histo,
+				  kshark_trace_histo *histo,
 				  KsPlot::Graph *graph,
 				  int pid,
 				  KsPlot::ShapeList *shapes)
@@ -125,32 +133,40 @@ static void schedSwitchPluginDraw(struct plugin_sched_context *plugin_ctx,
 
 	size_t nBins = graph->size();
 	for (size_t bin = 0; bin < nBins; ++bin) {
-		if (histo->binCount(bin) > 100)
+		if (kshark_histo_bin_count(histo, bin) > 100)
 			continue;
 
-		/* Starting from the first element in this bin, go forward in time
+		/*
+		 * Starting from the first element in this bin, go forward in time
 		 * until you find a trace entry that satisfies the condition defined
-		 * by kshark_check_pid. */
-		entryFront = histo->getEntryFront(bin, pid, false, kshark_check_pid);
+		 * by kshark_check_pid.
+		 */
+		entryFront = kshark_histo_get_entry_front(histo, bin, pid, false, kshark_check_pid);
 
-		/* Starting from the last element in this bin, go backward in time
+		/*
+		 * Starting from the last element in this bin, go backward in time
 		 * until you find a trace entry that satisfies the condition defined
-		 * by plugin_switch_check_pid. */
-		entryBack = histo->getEntryBack(bin, pid, false, plugin_switch_check_pid);
+		 * by plugin_switch_check_pid.
+		 */
+		entryBack = kshark_histo_get_entry_back(histo, bin, pid, false, plugin_switch_check_pid);
 
 		if (entryBack && entryBack->pid != pid &&
 		    entryBack->event_id == plugin_ctx->sched_switch_event->id) {
-			/* entryBack is a sched_switch_event.
-			 * Open a red box here. */
+			/*
+			 * entryBack is a sched_switch_event.
+			 * Open a red box here.
+			 */
 			openBox(&rec, &graph->_bins[bin]);
 			rec->_color = KsPlot::Color(255, 0, 0); // Red
 		}
 
 		if (entryFront && entryFront->pid == pid &&
 		    entryFront->event_id == plugin_ctx->sched_switch_event->id) {
-			/* entryFront is sched_switch_event.
+			/*
+			 * entryFront is sched_switch_event.
 			 * Close the box and add it to the list
-			 * of shapes to be ploted. */
+			 * of shapes to be ploted.
+			 */
 			closeBox(&rec, &graph->_bins[bin], shapes);
 		}
 	}

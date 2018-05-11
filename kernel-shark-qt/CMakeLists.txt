@@ -62,7 +62,7 @@ add_subdirectory(${KS_DIR}/src)
 
 if (GTEST_FOUND)
 
-    add_subdirectory(${KS_DIR}/tests)
+#     add_subdirectory(${KS_DIR}/tests)
 
 endif (GTEST_FOUND)
 

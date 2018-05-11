@@ -23,7 +23,7 @@
 //Qt
 #include <QFrame>
 
-// Kernel Shark 2
+// KernelShark
 #include "KsDeff.h"
 #include "KsUtils.hpp"
 #include "KsPlotTools.hpp"
@@ -84,6 +84,11 @@ void graphFilterSync(int st)
 	}
 }
 
+QString Ts2String(ssize_t ts, int prec)
+{
+	return QString::number(ts*1e-9, 'f', prec);
+}
+
 }; // KsUtils
 
 KsDataStore::KsDataStore(QWidget *parent)
@@ -95,9 +100,7 @@ KsDataStore::KsDataStore(QWidget *parent)
 {}
 
 KsDataStore::~KsDataStore()
-{
-// 	clear();
-}
+{}
 
 void KsDataStore::loadData(const QString &file)
 {
@@ -438,19 +441,28 @@ void KsPluginManager::unload()
 
 void KsPluginManager::updatePlugins(QVector<int> pluginId)
 {
+	auto register_plugins = [&] (QVector<int> ids) {
+		for (auto &p: _registeredPlugins)
+			p = false;
+
+		for (auto const &p: ids)
+			registerPlugin(_pluginList[p]);
+	};
+
 	struct kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
+	if (!kshark_ctx->pevt) {
+		register_plugins(pluginId);
+		return;
+	}
+		
 	kshark_handle_plugins(kshark_ctx, KSHARK_PLUGIN_UNLOAD);
 	kshark_free_plugin_list(kshark_ctx->plugins);
 	kshark_ctx->plugins = NULL;
 	kshark_free_event_handler_list(kshark_ctx->event_handlers);
 
-	for (auto &p: _registeredPlugins)
-		p = false;
-
-	for (auto const &p: pluginId)
-		registerPlugin(_pluginList[p]);
+	register_plugins(pluginId);
 
 	kshark_handle_plugins(kshark_ctx, KSHARK_PLUGIN_LOAD);
 
@@ -482,26 +494,26 @@ void KsGraphMark::reset()
 }
 
 bool KsGraphMark::set(const KsDataStore &data,
-		      const  KsTimeMap &histo,
+		      kshark_trace_histo *histo,
 		      size_t pos, int grCpu, int grTask)
 {
 	_isSet = true;
 	_pos = pos;
+	_ts = data._rows[_pos]->ts;
 	_cpu = grCpu;
 	_task = grTask;
-	size_t ts = data._rows[_pos]->ts;
-	if (ts > histo._max || ts < histo._min) {
+	if (_ts > histo->max || _ts < histo->min) {
 		_bin = -1;
 		_mark->_visible = false;
 		return false;
 	}
-	
-	_bin = (ts - histo._min)/histo._binSize;
+
+	_bin = (_ts - histo->min)/histo->bin_size;
 
 	return true;
 }
 
-bool KsGraphMark::update(const KsDataStore &data, const KsTimeMap &histo)
+bool KsGraphMark::update(const KsDataStore &data, kshark_trace_histo *histo)
 {
 	if (!_isSet)
 		return false;
@@ -628,7 +640,7 @@ void KsDualMarkerSM::reset()
 	_markA.reset();
 	_markB.reset();
 	_labelMA.setText("");
-	_labelMB.setText(""); 
+	_labelMB.setText("");
 	_labelDelta.setText("");
 }
 
@@ -675,6 +687,11 @@ KsGraphMark &KsDualMarkerSM::activeMarker()
 	return this->getMarker(_markState);
 }
 
+KsGraphMark &KsDualMarkerSM::passiveMarker()
+{
+	return this->getMarker(!_markState);
+}
+
 KsGraphMark &KsDualMarkerSM::markerA()
 {
 	return _markA;
@@ -699,7 +716,7 @@ void KsDualMarkerSM::placeInToolBar(QToolBar *tb)
 	tb->addWidget(&_labelDelta);
 }
 
-void KsDualMarkerSM::updateMarkers(const KsDataStore &data, const KsTimeMap &histo)
+void KsDualMarkerSM::updateMarkers(const KsDataStore &data, kshark_trace_histo *histo)
 {
 	if(_markA.update(data, histo))
 		_markA.makeVisible();
@@ -708,30 +725,28 @@ void KsDualMarkerSM::updateMarkers(const KsDataStore &data, const KsTimeMap &his
 		_markB.makeVisible();
 }
 
-void KsDualMarkerSM::updateLabels(const KsTimeMap &histo)
+void KsDualMarkerSM::updateLabels(kshark_trace_histo *histo)
 {
 	// Marker A
 	if (_markA.isSet()) {
-		QString markA = QString::number(histo.binTime(_markA.bin()), 'f', 7);
-		_labelMA.setText(QString("%1").arg(markA));
+		QString markA = KsUtils::Ts2String(_markA.ts(), 7);
+		_labelMA.setText(markA);
 	} else {
 		_labelMA.setText("");
 	}
 
 	// Marker B
 	if (_markB.isSet()) {
-		QString markB = QString::number(histo.binTime(_markB.bin()), 'f', 7);
-		_labelMB.setText(QString("%1").arg(markB));
+		QString markB = KsUtils::Ts2String(_markB.ts(), 7);
+		_labelMB.setText(markB);
 	} else {
 		_labelMB.setText("");
 	}
 
 	// Delta
 	if (_markA.isSet() && _markB.isSet()) {
-		QString delta = QString::number(histo.binTime(_markB.bin()) -
-						histo.binTime(_markA.bin()),
-						'f', 7);
-		_labelDelta.setText(QString("%1").arg(delta));
+		QString delta = KsUtils::Ts2String(_markB.ts() - _markA.ts(), 7);
+		_labelDelta.setText(delta);
 	} else {
 		_labelDelta.setText("");
 	}

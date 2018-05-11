@@ -21,19 +21,14 @@
 #ifndef _KS_MODEL_H
 #define _KS_MODEL_H
 
-// C++
-#include <vector>
-
 // Qt
 #include <QAbstractTableModel>
 #include <QSortFilterProxyModel>
 #include <QColor>
 
-// trace-cmd
-#include "trace-cmd.h"
-
-// kernel shark 2
+// KernelShark
 #include "libkshark.h"
+#include "libkshark-model.h"
 
 typedef bool (*condition_func)(QString, QString);
 enum class DualMarkerState;
@@ -111,98 +106,24 @@ public:
 
 #define KS_DEFAULT_NBUNS	1024
 
-class KsTimeMap {
-	/* All functionalities of the histogram class have to be rewritten in C.
-	 * The histogram code will be part of the C library (libkshark). */
-
-	//pevent_record		**_data;
-	kshark_entry		**_data;
-	size_t			  _dataSize;
-	std::vector<int64_t>	  _map;
-	std::vector<size_t>	  _binCount;
-
-	void resetBins(size_t first, size_t last);
-	size_t setLowerEdge();
-	void setNextBinEdge(size_t prevBin);
-	size_t setUpperhEdge();
-	void setBinCounts();
-
-public:
-	KsTimeMap();
-	KsTimeMap(size_t n, uint64_t min, uint64_t max);
-	virtual ~KsTimeMap();
-
-	void setBining(size_t n, uint64_t min, uint64_t max);
-	void setBiningInRange(size_t n, uint64_t min, uint64_t max);
-	//void fill(struct pevent_record **data, size_t n);
-	void fill(struct kshark_entry **data, size_t n);
-
-	void shiftForward(size_t n);
-	void shiftBackward(size_t n);
-	void shiftTo(size_t ts);
-	void zoomOut(double r, int mark);
-	void zoomIn(double r, int mark);
-
-	size_t size() const {return _nBins;}
-	void clear();
-
-	size_t binCount(int bin) const;
-	size_t binCount(int bin, int cpu) const;
-	bool notEmpty(int bin) const;
-	bool notEmpty(int bin, int cpu, int *pid = nullptr) const;
-	int getPidFront(int bin, int cpu, bool visOnly) const;
-	int getPidBack(int bin, int cpu, bool visOnly) const;
-	kshark_entry *getEntryFront(int bin, int pid, bool visOnly) const;
-	kshark_entry *getEntryFront(int bin, int pid, bool visOnly,
-				   matching_condition_func checkPidFunc) const;
-
-	kshark_entry *getEntryBack(int bin, int pid, bool visOnly) const;
-	kshark_entry *getEntryBack(int bin, int pid, bool visOnly,
-				   matching_condition_func checkPidFunc) const;
-
-	int getCpu(int bin, int pid, bool visOnly) const;
-
-	double binTime(int bin)  const {return (_min + bin*_binSize)*1e-9;}
-	uint64_t ts(int bin)     const {return (_min + bin*_binSize);}
-
-	int64_t operator[](int i) const;
-	int64_t at(int i) const;
-	int64_t atCpu(int i, int cpu) const;
-	int64_t atPid(int i, int pid) const;
-	bool isVisible(size_t row) const;
-
-	kshark_entry *dataAt(int i) const {return _data[at(i)];}
-
-	void dump() const;
-
-	uint64_t _min, _max, _binSize;
-	size_t _nBins;
-
-	enum OverflowBin {
-		Upper = -1,
-		Lower = -2
-	};
-};
-
 class KsGraphModel : public QAbstractTableModel
 {
-	struct pevent	*_pevt;
+	pevent		*_pevt;
 	int 		 _cpus;
-	KsTimeMap	 _histo;
+	kshark_trace_histo	_histo;
 
 public:
 	explicit KsGraphModel(QObject *parent = nullptr);
 	KsGraphModel(int cpus, QObject *parent = nullptr);
 	virtual ~KsGraphModel();
-	
-	int rowCount(const QModelIndex &) const override {return _histo.size();}
+
+	int rowCount(const QModelIndex &) const override {return _histo.n_bins;}
 	int columnCount(const QModelIndex &) const override {return _cpus;}
 	QVariant data(const QModelIndex &index, int role) const override;
 
-	KsTimeMap *histo() {return &_histo;}
+	kshark_trace_histo *histo() {return &_histo;}
 	void setNCpus(int n) {_cpus = n;}
 
-	//void fill(pevent *pevt, pevent_record **entries, size_t n);
 	void fill(pevent *pevt, kshark_entry **entries, size_t n);
 
 	void shiftForward(size_t n);

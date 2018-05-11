@@ -24,7 +24,7 @@
 // Qt
 #include <QTableView>
 
-// Kernel Shark 2
+// KernelShark
 #include "KsUtils.hpp"
 #include "KsModel.hpp"
 

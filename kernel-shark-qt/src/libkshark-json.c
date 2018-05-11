@@ -1,19 +1,19 @@
 /*
- * Copyright (C) 2016 Red Hat Inc, Steven Rostedt <srostedt@redhat.com>
+ * Copyright (C) 2018 VMware Inc, Yordan Karadzhov <y.karadz@gmail.com>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 2 of the License (not later!)
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation;
+ * version 2.1 of the License (not later!)
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not,  see <http://www.gnu.org/licenses>
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this program; if not,  see <http://www.gnu.org/licenses>
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
@@ -22,7 +22,7 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 
-// Kernel Shark
+// KernelShark
 #include "libkshark-json.h"
 
 struct json_object *kshark_config_alloc(const char *type)
@@ -110,7 +110,7 @@ void kshark_event_filter_from_json(struct pevent *pevt,
 		event = pevent_find_event_by_name(pevt,
 						  json_object_get_string(jsystem),
 						  json_object_get_string(jname));
-		
+
 		if (event)
 			filter_id_add(filter, event->id);
 	}

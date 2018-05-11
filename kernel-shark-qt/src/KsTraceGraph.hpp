@@ -21,7 +21,7 @@
 #ifndef _KS_TRACEGRAPH_H
 #define _KS_TRACEGRAPH_H
 
-// Kernel Shark 2
+// KernelShark
 #include "KsGLWidget.hpp"
 
 class KsGraphScrollArea : public QScrollArea {
@@ -94,7 +94,7 @@ private:
 	QWidget			_legendAxisX;
 	QLabel			_labelXMin, _labelXMid, _labelXMax;
 	KsGLWidget		_glWindow;
-	
+
 	QVBoxLayout		_layout;
 
 	KsDualMarkerSM	*_mState;

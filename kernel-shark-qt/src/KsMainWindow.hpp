@@ -25,7 +25,7 @@
 #include <QMainWindow>
 #include <QLocalServer>
 
-// Kernel Shark 2
+// KernelShark
 #include "KsTraceViewer.hpp"
 #include "KsTraceGraph.hpp"
 #include "KsUtils.hpp"
@@ -63,6 +63,7 @@ private slots:
 	void pluginSelect();
 	void capture();
 	void setColorPhase(int);
+	void fullScreenMode();
 	void aboutInfo();
 	void contents();
 	void captureStarted();
@@ -123,6 +124,8 @@ private:
 	QAction		_captureAction;
 	QWidgetAction	_colorAction;
 	QSlider		_colorPhaseSlider;
+	QAction		_fullScreenModeAction;
+	bool		_isFullScreen;
 
 	// Help menu.
 	QAction		_aboutAction;

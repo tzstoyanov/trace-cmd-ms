@@ -24,7 +24,7 @@
 // Qt
 #include <QRubberBand>
 
-// Kernel Shark 2
+// KernelShark
 #include "KsUtils.hpp"
 #include "KsPlotTools.hpp"
 #include "KsModel.hpp"

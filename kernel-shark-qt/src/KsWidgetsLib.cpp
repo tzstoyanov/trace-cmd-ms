@@ -18,13 +18,7 @@
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
-// Kernel Shark
-
-// extern C
-// {
-// #include "event-parse.h"
-// }
-
+// KernelShark
 #include "KsWidgetsLib.hpp"
 #include "libkshark.h"
 #include "KsDeff.h"
@@ -458,12 +452,12 @@ KsCpuCheckBoxWidget::KsCpuCheckBoxWidget(struct pevent *pe, bool cond, QWidget *
 : KsCheckBoxTreeWidget("CPUs", cond, parent)
 {
 	int nCpus = 0;
-	if (pe) {
+	if (pe)
 		nCpus = pe->cpus;
-		QString style = QString("QTreeView::item { height: %1 ;}").arg(FONT_HEIGHT*1.5);
-		_tree.setStyleSheet(style);
-		initTree();
-	}
+
+	QString style = QString("QTreeView::item { height: %1 ;}").arg(FONT_HEIGHT*1.5);
+	_tree.setStyleSheet(style);
+	initTree();
 
 	_id.resize(nCpus);
 	_cb.resize(nCpus);
@@ -490,9 +484,8 @@ KsEventsCheckBoxWidget::KsEventsCheckBoxWidget(struct pevent *pe,
 : KsCheckBoxTreeWidget("Events", cond, parent)
 {
 	int nEvts = 0;
-	if (pe) {
+	if (pe)
 		nEvts = pe->nr_events;
-	}
 
 	initTree();
 	_id.resize(nEvts);
@@ -547,8 +540,9 @@ KsTasksCheckBoxWidget::KsTasksCheckBoxWidget(struct pevent *pe,
 			= new QTableWidgetItem(tr("%1").arg(_id[i]));
 		_table.setItem(i, 1, pidItem);
 		QTableWidgetItem *comItem
-			= new QTableWidgetItem(tr(kshark_get_comm_from_pid(kshark_ctx->pevt,
+			= new QTableWidgetItem(tr(pevent_data_comm_from_pid(kshark_ctx->pevt,
 									   _id[i])));
+
 		pidItem->setBackgroundColor(QColor(pidCol._r, pidCol._g, pidCol._b));
 		if (_id[i] == 0)
 			pidItem->setTextColor(Qt::white);

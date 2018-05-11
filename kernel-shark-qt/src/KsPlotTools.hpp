@@ -25,7 +25,7 @@
 #include <QColor>
 #include <QList>
 
-// Kernel Shark 2
+// KernelShark
 #include "KsModel.hpp"
 
 class KsGLWidget;
@@ -43,6 +43,7 @@ struct Color
 	void nice();
 	void setRainbowColor(int n);
 	static void setRainbowFrequency(float f) {_frequency = f;}
+	static float getRainbowFrequency() {return _frequency;}
 	uint8_t _r, _g, _b;
 
 	static float _frequency;
@@ -167,8 +168,6 @@ public:
 
 	size_t size();
 	void draw(const ColorTable &pidColors, float s = 1);
-	QList<KsPlot::Shape*> schedSwitchPluginDraw(KsTimeMap *histo, int pid);
-	QList<KsPlot::Shape*> schedWakeupPluginDraw(KsTimeMap *histo, int pid);
 
 	void setBase(int b);
 	void setBinValue(size_t bin, int val);

@@ -28,11 +28,12 @@
 // trace-cmf
 #include "trace-cmd.h"
 
-// Kernel Shark 2
+// KernelShark
 #include "KsMainWindow.hpp"
 #include "KsDeff.h"
 
 #define default_input_file (char*)"trace.dat"
+
 static char *input_file;
 
 void usage(const char *prog)

@@ -32,7 +32,7 @@
 #include <QLabel>
 #include <QLocalSocket>
 
-// Kernel Shark 2
+// KernelShark
 #include "KsMainWindow.hpp"
 #include "libkshark.h"
 #include "libkshark-json.h"
@@ -70,6 +70,8 @@ KsMainWindow::KsMainWindow(QWidget *parent)
   _captureAction("Record", parent),
   _colorAction(parent),
   _colorPhaseSlider(Qt::Horizontal, this),
+  _fullScreenModeAction("Full Screen Mode", parent),
+  _isFullScreen(false),
   _aboutAction("About", parent),
   _contentsAction("Contents", parent)
 {
@@ -115,11 +117,11 @@ KsMainWindow::KsMainWindow(QWidget *parent)
 
 	connect(&_data,		&KsDataStore::updateGraph,
 		&_graph,	&KsTraceGraph::update);
-	
+
 	connect(&_plugins,	&KsPluginManager::dataReload,
 		&_data,		&KsDataStore::reload);
 
-	this->resize(SCREEN_WIDTH*.4, FONT_HEIGHT*3);
+	resize(SCREEN_WIDTH*.4, FONT_HEIGHT*3);
 }
 
 KsMainWindow::~KsMainWindow()
@@ -155,7 +157,7 @@ void KsMainWindow::createActions()
 	connect(&_openAction,	&QAction::triggered,
 		this,		&KsMainWindow::open);
 
-	_restorSessionAction.setIcon(QIcon::fromTheme("edit-redo"));
+	_restorSessionAction.setIcon(QIcon::fromTheme("document-open-recent"));
 	connect(&_restorSessionAction,	&QAction::triggered,
 		this,			&KsMainWindow::restorSession);
 
@@ -214,7 +216,7 @@ void KsMainWindow::createActions()
 		this,			&KsMainWindow::taskSelect);
 
 	/* Tools menu */
-	_pluginsAction.setIcon(QIcon::fromTheme("insert-image"));
+// 	_pluginsAction.setIcon(QIcon::fromTheme("insert-object"));
 	_pluginsAction.setShortcut(tr("Ctrl+P"));
 	_pluginsAction.setStatusTip("Manage plugins");
 
@@ -222,7 +224,7 @@ void KsMainWindow::createActions()
 		this,			&KsMainWindow::pluginSelect);
 
 	_captureAction.setIcon(QIcon::fromTheme("media-record"));
-	_captureAction.setShortcut(tr("Ctrl+C"));
+	_captureAction.setShortcut(tr("Ctrl+R"));
 	_captureAction.setStatusTip("Capture trace data");
 
 	connect(&_captureAction,	&QAction::triggered,
@@ -243,6 +245,13 @@ void KsMainWindow::createActions()
 	colSlider->layout()->addWidget(&_colorPhaseSlider);
 	_colorAction.setDefaultWidget(colSlider);
 
+	_fullScreenModeAction.setIcon(QIcon::fromTheme("view-fullscreen"));
+	_fullScreenModeAction.setShortcut(tr("Ctrl+Shift+F"));
+	_fullScreenModeAction.setStatusTip("Full Screen Mode");
+
+	connect(&_fullScreenModeAction,	&QAction::triggered,
+		this,			&KsMainWindow::fullScreenMode);
+
 	/* Help menu */
 	_aboutAction.setIcon(QIcon::fromTheme("help-about"));
 
@@ -261,6 +270,7 @@ void KsMainWindow::createMenus()
 	file->addAction(&_openAction);
 
 	QMenu *sessions = file->addMenu("Sessions");
+	sessions->setIcon(QIcon::fromTheme("document-properties"));
 	sessions->addAction(&_restorSessionAction);
 	sessions->addAction(&_importSessionAction);
 	sessions->addAction(&_exportSessionAction);
@@ -289,14 +299,14 @@ void KsMainWindow::createMenus()
 	kshark_instance(&kshark_ctx);
 	kshark_ctx->filter_mask = KS_VIEW_FILTER_MASK | KS_GRAPH_FILTER_MASK;
 
-	QCheckBox *cb;
-
-	cb = make_cb_action(&_graphFilterSyncAction, "Apply filters to Graph");
-	connect(cb,	&QCheckBox::stateChanged,
+	QCheckBox *cbf2g = make_cb_action(&_graphFilterSyncAction,
+					  "Apply filters to Graph");
+	connect(cbf2g,	&QCheckBox::stateChanged,
 		this,	&KsMainWindow::graphFilterSync);
 
-	cb = make_cb_action(&_listFilterSyncAction, "Apply filters to List");
-	connect(cb,	&QCheckBox::stateChanged,
+	QCheckBox *cbf2l = make_cb_action(&_listFilterSyncAction,
+					  "Apply filters to List");
+	connect(cbf2l,	&QCheckBox::stateChanged,
 		this,	&KsMainWindow::listFilterSync);
 
 	filter->addAction(&_graphFilterSyncAction);
@@ -312,11 +322,13 @@ void KsMainWindow::createMenus()
 	plots->addAction(&_cpuSelectAction);
 	plots->addAction(&_taskSelectAction);
 
-	/* Capture menu */
+	/* Tools menu */
 	QMenu *tools = menuBar()->addMenu("Tools");
 	tools->addAction(&_pluginsAction);
 	tools->addAction(&_captureAction);
+	tools->addSeparator();
 	tools->addAction(&_colorAction);
+	tools->addAction(&_fullScreenModeAction);
 
 	/* Help menu */
 	QMenu *help = menuBar()->addMenu("Help");
@@ -362,9 +374,9 @@ void KsMainWindow::importSession()
 
 void KsMainWindow::updateSession()
 {
-	size_t nBins = _graph.glPtr()->model()->histo()->size();
-	uint64_t min = _graph.glPtr()->model()->histo()->_min;
-	uint64_t max = _graph.glPtr()->model()->histo()->_max;
+	size_t nBins = _graph.glPtr()->model()->histo()->n_bins;
+	uint64_t min = _graph.glPtr()->model()->histo()->min;
+	uint64_t max = _graph.glPtr()->model()->histo()->max;
 
 	_session.setVisModel(nBins, min, max);
 	_session.setCpuPlots(_graph.glPtr()->_cpuList);
@@ -376,6 +388,7 @@ void KsMainWindow::updateSession()
 
 	_session.setDualMarker(&_mState);
 	_session.setViewTop(_view.getTopRow());
+	_session.setColorScheme();
 	_session.setPlugins(_plugins._pluginList, _plugins._registeredPlugins);
 }
 
@@ -495,7 +508,9 @@ void KsMainWindow::showTasks()
 	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
-	KsCheckBoxWidget *tasks_cbd = new KsTasksCheckBoxWidget(_data._pevt, true, this);
+	KsCheckBoxWidget *tasks_cbd =
+		new KsTasksCheckBoxWidget(_data._pevt, true, this);
+
 	if (!kshark_ctx->show_task_filter ||
 	    !filter_id_count(kshark_ctx->show_task_filter)) {
 		tasks_cbd->setDefault(true);
@@ -524,7 +539,9 @@ void KsMainWindow::hideTasks()
 	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
-	KsCheckBoxWidget *tasks_cbd = new KsTasksCheckBoxWidget(_data._pevt, false, this);
+	KsCheckBoxWidget *tasks_cbd =
+		new KsTasksCheckBoxWidget(_data._pevt, false, this);
+
 	if (!kshark_ctx->hide_task_filter ||
 	    !filter_id_count(kshark_ctx->hide_task_filter)) {
 		tasks_cbd->setDefault(false);
@@ -559,8 +576,8 @@ void KsMainWindow::advancedFiltering()
 		return;
 	}
 
-	KsAdvFilteringDialog *dialog = new KsAdvFilteringDialog(_data._pevt,
-								this);
+	KsAdvFilteringDialog *dialog =
+		new KsAdvFilteringDialog(_data._pevt, this);
 
 	connect(dialog, &KsAdvFilteringDialog::dataReload,
 		&_data,	&KsDataStore::reload);
@@ -575,19 +592,19 @@ void KsMainWindow::clearFilters()
 
 void KsMainWindow::cpuSelect()
 {
-	KsCheckBoxWidget *cpus_cbd = new KsCpuCheckBoxWidget(_data._pevt, true, this);
-	if(!_data._pevt)
-		return;
+	KsCheckBoxWidget *cpus_cbd =
+		new KsCpuCheckBoxWidget(_data._pevt, true, this);
+	if(_data._pevt) {
+		int nCpus = _data._pevt->cpus;
+		if (nCpus == _graph.glPtr()->cpuGraphCount()) {
+			cpus_cbd->setDefault(true);
+		} else {
+			QVector<bool> v(nCpus, false);
+			for (auto const &cpu: _graph.glPtr()->_cpuList)
+				v[cpu] = true;
 
-	int nCpus = _data._pevt->cpus;
-	if (nCpus == _graph.glPtr()->cpuGraphCount()) {
-		cpus_cbd->setDefault(true);
-	} else {
-		QVector<bool> v(nCpus, false);
-		for (auto const &cpu: _graph.glPtr()->_cpuList)
-			v[cpu] = true;
-
-		cpus_cbd->set(v);
+			cpus_cbd->set(v);
+		}
 	}
 
 	KsCheckBoxDialog *dialog = new KsCheckBoxDialog(cpus_cbd, this);
@@ -599,7 +616,8 @@ void KsMainWindow::cpuSelect()
 
 void KsMainWindow::taskSelect()
 {
-	KsCheckBoxWidget *tasks_cbd = new KsTasksCheckBoxWidget(_data._pevt, true, this);
+	KsCheckBoxWidget *tasks_cbd =
+		new KsTasksCheckBoxWidget(_data._pevt, true, this);
 
 	QVector<int> pids;
 	int nPids = KsUtils::getPidList(&pids);
@@ -651,7 +669,7 @@ void KsMainWindow::capture()
 	auto capture_error = [&] {
 		QStringList message;
 		message << "Record is currently not supported fot your distribution"
-			<< ", identified as " << LSB_DISTRIB 
+			<< ", identified as " << LSB_DISTRIB
 			<< "(" << DESKTOP_SESSION << ")";
 		QErrorMessage *em = new QErrorMessage(this);
 		em->showMessage(message.join(" "), "captureErr");
@@ -675,6 +693,21 @@ void KsMainWindow::setColorPhase(int f)
 {
 	KsPlot::Color::setRainbowFrequency(f/100.);
 	_graph.glPtr()->model()->update();
+}
+
+void KsMainWindow::fullScreenMode()
+{
+	if (_isFullScreen) {
+		_fullScreenModeAction.setText("Full Screen Mode");
+		_fullScreenModeAction.setIcon(QIcon::fromTheme("view-fullscreen"));
+		showNormal();
+		_isFullScreen = false;
+	} else {
+		_fullScreenModeAction.setText("Exit Full Screen Mode");
+		_fullScreenModeAction.setIcon(QIcon::fromTheme("view-restore"));
+		showFullScreen();
+		_isFullScreen = true;
+	}
 }
 
 void KsMainWindow::aboutInfo() {
@@ -853,15 +886,18 @@ void KsMainWindow::loadSession(const QString &fileName)
 	size_t nBins;
 	uint64_t min, max;
 	_session.getVisModel(&nBins, &min, &max);
-	_graph.glPtr()->model()->histo()->setBining(nBins, min, max);
+	kshark_trace_histo *histo = _graph.glPtr()->model()->histo();
+	kshark_histo_set_bining(histo, nBins, min, max);
 	_graph.glPtr()->model()->fill(_data._pevt, _data._rows, _data.size());
 
 	_mState.setState(_session.getMarkerState());
-	_mState.updateMarkers(_data,*_graph.glPtr()->model()->histo());
-	_mState.updateLabels(*_graph.glPtr()->model()->histo());
+	_mState.updateMarkers(_data, _graph.glPtr()->model()->histo());
+	_mState.updateLabels(_graph.glPtr()->model()->histo());
 
 	size_t topRow = _session.getViewTop();
 	_view.setTopRow(topRow);
+	float colSch = _session.getColorScheme();
+	_colorPhaseSlider.setValue(colSch*100);
 }
 
 void KsMainWindow::initCapture()
@@ -897,8 +933,7 @@ void KsMainWindow::initCapture()
 
 void KsMainWindow::captureStarted()
 {
-	if (_captureLocalServer.listen("KSCapture"))
-		qInfo() << "listening on " << _captureLocalServer.serverName();
+	_captureLocalServer.listen("KSCapture");
 }
 
 void KsMainWindow::captureFinished(int exit, QProcess::ExitStatus st)
@@ -932,7 +967,7 @@ void KsMainWindow::readSocket()
         in >> blockSize;
 
 	if (socket->bytesAvailable() < blockSize || in.atEnd()) {
-		QString message = "ERROR from Local Server: message is corrupted!"; 
+		QString message = "ERROR from Local Server: message is corrupted!";
 		QErrorMessage *em = new QErrorMessage(this);
 		em->showMessage(message, "readSocketErr");
 		qCritical() << message;
