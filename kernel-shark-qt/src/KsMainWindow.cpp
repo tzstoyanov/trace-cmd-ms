@@ -805,6 +805,20 @@ void KsMainWindow::loadData(const QString& fileName)
 
 void KsMainWindow::loadSession(const QString &fileName)
 {
+	struct stat st;
+	int ret = stat(fileName.toStdString().c_str(), &st);
+	if (ret != 0) {
+		this->resize(SCREEN_WIDTH*.4, FONT_HEIGHT*3);
+		QString text("Unable to find session file ");
+		text.append(fileName);
+		text.append("\n");
+		QErrorMessage *em = new QErrorMessage(this);
+		em->showMessage(text, "loadSessErr0");
+		qCritical() << "ERROR: " << text;
+		_plugins.unload();
+		return;
+	}
+
 	_session.importFromFile(fileName);
 
 	_session.getPlugins(&_plugins._pluginList,
@@ -824,8 +838,7 @@ void KsMainWindow::loadSession(const QString &fileName)
 	QString dataFile = _session.getDataFile();
 	time_t ts = _session.getDataFileTS();
 
-	struct stat st;
-	int ret = stat(dataFile.toStdString().c_str(), &st);
+	ret = stat(dataFile.toStdString().c_str(), &st);
 	if (ret != 0) {
 		this->resize(SCREEN_WIDTH*.4, FONT_HEIGHT*3);
 		QString text("Unable to find file ");
