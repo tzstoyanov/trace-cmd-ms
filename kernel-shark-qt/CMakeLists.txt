@@ -28,6 +28,7 @@ include(${KS_DIR}/build/FindJSONC.cmake)
 
 find_package(Qt5Widgets 5.7.1)
 find_package(Qt5Network)
+find_package(Qt5Concurrent)
 if (Qt5Widgets_FOUND)
 	message(STATUS "Found Qt5Widgets:  (version ${Qt5Widgets_VERSION})")
 endif (Qt5Widgets_FOUND)

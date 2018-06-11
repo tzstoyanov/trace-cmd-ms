@@ -121,7 +121,7 @@ KsMainWindow::KsMainWindow(QWidget *parent)
 	connect(&_plugins,	&KsPluginManager::dataReload,
 		&_data,		&KsDataStore::reload);
 
-	resize(SCREEN_WIDTH*.4, FONT_HEIGHT*3);
+	resizeEmpty();
 }
 
 KsMainWindow::~KsMainWindow()
@@ -685,13 +685,14 @@ void KsMainWindow::capture()
 		return;
 	}
 
+	qInfo() << "start ->";
 	_capture.start();
 // 	_capture.waitForFinished();
 }
 
 void KsMainWindow::setColorPhase(int f)
 {
-	KsPlot::Color::setRainbowFrequency(f/100.);
+	KsPlot::Color::setRainbowFrequency(f / 100.);
 	_graph.glPtr()->model()->update();
 }
 
@@ -735,13 +736,13 @@ void KsMainWindow::loadData(const QString& fileName)
 	_graph.reset();
 
 	setWindowTitle("Kernel Shark");
-	KsDataProgressBar pb;
+	KsProgressBar pb("Loading trace data ...");
 	QApplication::processEvents();
 
 	struct stat st;
 	int ret = stat(fileName.toStdString().c_str(), &st);
 	if (ret != 0) {
-		this->resize(SCREEN_WIDTH*.4, FONT_HEIGHT*3);
+		this->resizeEmpty();
 		QString text("Unable to find file ");
 		text.append(fileName);
 		text.append(".");
@@ -765,13 +766,12 @@ void KsMainWindow::loadData(const QString& fileName)
 
 		pb.setValue(i);
 		usleep(150000);
-		QApplication::processEvents();
 	}
 
 	tload.join();
 
 	if (!_data.size()) {
-		this->resize(SCREEN_WIDTH*.4, FONT_HEIGHT*3);
+		this->resizeEmpty();
 		QString text("File ");
 		text.append(fileName);
 		text.append(" contains no data.");
@@ -808,7 +808,7 @@ void KsMainWindow::loadSession(const QString &fileName)
 	struct stat st;
 	int ret = stat(fileName.toStdString().c_str(), &st);
 	if (ret != 0) {
-		this->resize(SCREEN_WIDTH*.4, FONT_HEIGHT*3);
+		this->resizeEmpty();
 		QString text("Unable to find session file ");
 		text.append(fileName);
 		text.append("\n");
@@ -827,12 +827,12 @@ void KsMainWindow::loadSession(const QString &fileName)
 
 	int width, height;
 	_session.getMainWindowSize(&width, &height);
-	int graphSize, viewSize;
-	_session.getSplitterSize(&graphSize, &viewSize);
-	QList<int> sizes;
-	sizes << graphSize << viewSize;
-
-	_splitter.setSizes(sizes);
+// 	int graphSize, viewSize;
+// 	_session.getSplitterSize(&graphSize, &viewSize);
+// 	QList<int> sizes;
+// 	sizes << graphSize << viewSize;
+// 
+// 	_splitter.setSizes(sizes);
 	resize(width, height);
 
 	QString dataFile = _session.getDataFile();
@@ -840,7 +840,7 @@ void KsMainWindow::loadSession(const QString &fileName)
 
 	ret = stat(dataFile.toStdString().c_str(), &st);
 	if (ret != 0) {
-		this->resize(SCREEN_WIDTH*.4, FONT_HEIGHT*3);
+		this->resizeEmpty();
 		QString text("Unable to find file ");
 		text.append(fileName);
 		text.append("\n");
@@ -868,17 +868,26 @@ void KsMainWindow::loadSession(const QString &fileName)
 		return;
 	}
 
+	KsProgressBar pb("Loading session settings ...");
+	pb.setValue(10);
 	_graph.glPtr()->_cpuList = _session.getCpuPlots();
 	_graph.glPtr()->_taskList = _session.getTaskPlots();
 	_graph.updateGraphLegends();
 
 	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
+
 	_session.getFilters(kshark_ctx);
+	pb.setValue(20);
+
 	if (kshark_ctx->adv_filter_is_set)
 		_data.reload();
 	else
 		kshark_filter_entries(kshark_ctx, _data._rows, _data.size());
+
+	pb.setValue(66);
+	_data.registerCpuCollections();
+	pb.setValue(130);
 
 	uint64_t pos;
 	_mState.reset();
@@ -900,7 +909,7 @@ void KsMainWindow::loadSession(const QString &fileName)
 	uint64_t min, max;
 	_session.getVisModel(&nBins, &min, &max);
 	kshark_trace_histo *histo = _graph.glPtr()->model()->histo();
-	kshark_histo_set_bining(histo, nBins, min, max);
+	ksmodel_set_bining(histo, nBins, min, max);
 	_graph.glPtr()->model()->fill(_data._pevt, _data._rows, _data.size());
 
 	_mState.setState(_session.getMarkerState());
@@ -910,14 +919,12 @@ void KsMainWindow::loadSession(const QString &fileName)
 	size_t topRow = _session.getViewTop();
 	_view.setTopRow(topRow);
 	float colSch = _session.getColorScheme();
-	_colorPhaseSlider.setValue(colSch*100);
+	_colorPhaseSlider.setValue(colSch * 100);
 }
 
 void KsMainWindow::initCapture()
 {
-#ifndef DO_AS_ROOT
-	return;
-#endif
+#ifdef DO_AS_ROOT
 
 	QStringList capturArgs;
 	QString doAsRoot(DO_AS_ROOT);
@@ -942,6 +949,8 @@ void KsMainWindow::initCapture()
 
 	connect(&_captureLocalServer,	&QLocalServer::newConnection,
 		this,			&KsMainWindow::readSocket);
+
+#endif
 }
 
 void KsMainWindow::captureStarted()

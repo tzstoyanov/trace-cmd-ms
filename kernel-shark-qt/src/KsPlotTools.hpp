@@ -154,30 +154,38 @@ struct Bin
 	Color	_color;
 	int 	_pidFront, _pidBack;
 	Point	_base, _val;
+	uint8_t	_visMask;
 };
 
 class Graph
 {
 	Graph() = delete;
-	size_t	 _size;
-	int	 _hMargin;
+
+	size_t	_size;
+	int	_hMargin;
 
 public:
 	Graph(size_t s);
 	~Graph();
 
 	size_t size();
+	void fillCpuGraph(int cpu, const KsPlot::ColorTable &pidColors);
+	void fillTaskGraph(int pid);
 	void draw(const ColorTable &pidColors, float s = 1);
 
 	void setBase(int b);
 	void setBinValue(size_t bin, int val);
 	void setBinPid(size_t bin, int pidF, int pidB);
 	void setBinColor(size_t bin, const Color &c);
+	void setBinVisMask(size_t bin, uint8_t m);
 	void setBinIdle(size_t bin, bool idle);
-	void setBin(size_t bin, int pidF, int pidB, const Color &c);
+	void setBin(size_t bin, int pidF, int pidB, const Color &c, uint8_t m);
 	void deriveBin(int bin);
 
 	void setHMargin(int hMargin);
+
+	kshark_trace_histo	*_histo;
+	kshark_entry_collection *_graphCollection;
 
 	Bin	*_bins;
 };

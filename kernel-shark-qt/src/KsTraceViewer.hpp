@@ -54,6 +54,7 @@ public slots:
 	void search();
 	void next();
 	void prev();
+	void searchStop();
 	void clicked(const QModelIndex& i);
 	void showRow(size_t r, bool mark);
 	void deselect();
@@ -62,11 +63,16 @@ public slots:
 	void onCustomContextMenu(const QPoint &);
 
 private:
+	void searchReset();
 	void resizeEvent(QResizeEvent* event) override;
 	void resizeToContents();
 	bool event(QEvent *event);
 
-	size_t searchItems(int column, const QString &text, condition_func cond);
+	size_t searchItems(int column, const QString &searchText,
+			   condition_func cond);
+
+	void searchItemsMapRed(int column, const QString &searchText,
+			       condition_func cond);
 
 	QVBoxLayout	_layout;
 	QTableView	_view;
@@ -79,14 +85,17 @@ private:
 	QComboBox	_columnComboBox;
 	QComboBox	_selectComboBox;
 	QLineEdit	_searchLineEdit;
-	QPushButton	_prevButton, _nextButton;
+	QPushButton	_prevButton, _nextButton, _searchStopButton;
+	QAction		*_pbAction, *_searchStopAction;
 	QCheckBox	_graphFollowsCheckBox;
+	QProgressBar	_searchProgBar;
+	QLabel		_searchCountLabel;
 
 	bool		_searchDone;
 	bool		_graphFollows;
 
-	QList<size_t>		_matchList;
-	QList<size_t>::iterator	_it;
+	QList<int>		_matchList;
+	QList<int>::iterator	_it;
 
 	KsDualMarkerSM		*_mState;
 	KsDataStore		*_data;

@@ -44,7 +44,7 @@ void usage(const char *prog)
 	printf("  -i	input_file, default is %s\n", default_input_file);
 	printf("  -p	register plugin, use plugin name, absolute or relative path\n");
 	printf("  -u	unregister plugin, use plugin name or absolute path\n");
-	printf("  -s	import a session.\n");
+	printf("  -s	import a session\n");
 }
 
 int main(int argc, char **argv)

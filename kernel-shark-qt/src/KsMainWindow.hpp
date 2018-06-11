@@ -136,6 +136,8 @@ private:
 	void createMenus();
 	void initCapture();
 	void updateSession();
+
+	inline void resizeEmpty() { resize(SCREEN_WIDTH * .4, FONT_HEIGHT * 3);}
 };
 
 #endif // _KS_MAINWINDOW_H

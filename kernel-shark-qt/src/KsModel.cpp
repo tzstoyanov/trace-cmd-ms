@@ -26,7 +26,9 @@
 struct trace_seq KsViewModel::_seq;
 
 KsFilterProxyModel::KsFilterProxyModel(QObject *parent)
-: QSortFilterProxyModel(parent), _source(nullptr)
+: QSortFilterProxyModel(parent),
+  _source(nullptr),
+  _searchStop(false)
 {}
 
 bool KsFilterProxyModel::filterAcceptsRow(int sourceRow,
@@ -56,10 +58,15 @@ void KsFilterProxyModel::setSource(KsViewModel *s)
 
 size_t KsFilterProxyModel::search(int column,
 				 const QString  &searchText,
-				 condition_func  cond,
-				 QList<size_t>  *matchList)
+				 condition_func	cond,
+				 QList<int>  *matchList,
+				 QProgressBar	*pb,
+				 QLabel		*l)
 {
-	int nRows = rowCount({});
+	int nRows = rowCount({}), pbCount(0);
+	if (pb && l)
+		pbCount = nRows / pb->maximum();
+
 	for (int r = 0; r < nRows; ++r) {
 		/*
 		 * Use the index of the proxy model to retrieve the value
@@ -71,14 +78,93 @@ size_t KsFilterProxyModel::search(int column,
 		if (cond(searchText, item.toString())) {
 			matchList->append(row);
 		}
+
+		if (_searchStop) {
+			_searchStop = false;
+			break;
+		}
+
+		/* Deal with the Progress bar of the seatch. */
+		if (pb && l && r%pbCount == 0) {
+			pb->setValue(pb->value() + 1);
+			l->setText(QString(" %1").arg(matchList->count()));
+			QApplication::processEvents();
+		}
 	}
 
 	return matchList->count();
 }
 
+#include <unistd.h>
+
+QList<int> KsFilterProxyModel::searchMap(int column,
+					     const QString &searchText,
+					     condition_func cond,
+					     int first,
+					     int last,
+					     QProgressBar *pb)
+{
+	QList<int> matchList;
+	int row;
+	QString text;
+	bool match;
+	QVariant item;
+
+	int nRows = last - first + 1, pbCount(0);
+	if (pb)
+		pbCount = nRows / pb->maximum();
+
+	for (int r = first; r <= last; ++r) {
+		/*
+		 * Use the index of the proxy model to retrieve the value
+		 * of the row number in the base model. This works because
+		 *  the source row number is shown in column "0".
+		 */
+		row = data(index(r, 0)).toInt();
+		item = _source->getValue(column, row);
+		text = item.toString();
+
+		match = cond(searchText, text);
+		if (match) {
+			matchList.append(row);
+		}
+
+		/* Deal with the Progress bar of the seatch. */
+		if (pb && r % pbCount == 0) {
+			std::lock_guard<std::mutex> lk(_mutex);
+			_searchProgress = r / pbCount;
+			_pbCond.notify_one();
+		}
+	}
+
+	return matchList;
+}
+
+void KsFilterProxyModel::searchReduce(QList<int> &resultList,
+				      const QList<int> &mapList)
+{
+	QList<int>::iterator itResult;
+	QList<int>::const_iterator itMap;
+	if (resultList.isEmpty()) {
+		resultList = mapList;
+		return;
+	}
+
+	itResult = resultList.begin();
+	while (*itResult < *mapList.begin() && itResult != resultList.end()) {
+		++itResult;
+	}
+
+	itMap = mapList.begin();
+	while (itMap != mapList.end()) {
+		itResult = resultList.insert(itResult, *itMap);
+		++itResult;
+		++itMap;
+	}
+}
+
 KsViewModel::KsViewModel(QObject *parent)
 : QAbstractTableModel(parent),
-//: QStandardItemModel(parent),
   _header({"#", "CPU", "Time Stamp", "Task", "PID", "Latency", "Event", "Info"}),
   _pevt(nullptr),
   _markA(-1),
@@ -125,6 +211,8 @@ QVariant KsViewModel::getValue(const QModelIndex &index) const
 	size_t column = index.column();
 	return getValue(column, row);
 }
+
+std::mutex mtx;
 
 QVariant KsViewModel::getValue(int column, int row) const
 {
@@ -183,6 +271,7 @@ void KsViewModel::fill(pevent *pevt, kshark_entry **entries, size_t n)
 void KsViewModel::selectRow(DualMarkerState state, int row)
 {
 	beginResetModel();
+
 	if (state == DualMarkerState::A) {
 		_markA = row;
 		_markB = -1;
@@ -190,6 +279,7 @@ void KsViewModel::selectRow(DualMarkerState state, int row)
 		_markB = row;
 		_markA = -1;
 	}
+
 	endResetModel();
 }
 
@@ -236,18 +326,18 @@ size_t KsViewModel::search(int column,
 KsGraphModel::KsGraphModel(QObject *parent)
 : QAbstractTableModel(parent), _pevt(nullptr), _cpus(1)
 {
-	kshark_histo_init(&_histo);
+	ksmodel_init(&_histo);
 }
 
 KsGraphModel::KsGraphModel(int cpus, QObject *parent)
 : QAbstractTableModel(parent), _pevt(nullptr), _cpus(cpus)
 {
-	kshark_histo_init(&_histo);
+	ksmodel_init(&_histo);
 }
 
 KsGraphModel::~KsGraphModel()
 {
-	kshark_histo_clear(&_histo);
+	ksmodel_clear(&_histo);
 }
 
 QVariant KsGraphModel::getValue(const QModelIndex &index) const
@@ -274,12 +364,12 @@ void KsGraphModel::fill(pevent *pevt, kshark_entry **entries, size_t n)
 	beginResetModel();
 
 	if (_histo.n_bins == 0)
-		kshark_histo_set_bining(&_histo,
-					KS_DEFAULT_NBUNS,
-					entries[0]->ts,
-					entries[n-1]->ts);
+		ksmodel_set_bining(&_histo,
+				   KS_DEFAULT_NBUNS,
+				   entries[0]->ts,
+				   entries[n-1]->ts);
 
-	kshark_histo_fill(&_histo, entries, n);
+	ksmodel_fill(&_histo, entries, n);
 
 	endResetModel();
 }
@@ -287,42 +377,42 @@ void KsGraphModel::fill(pevent *pevt, kshark_entry **entries, size_t n)
 void KsGraphModel::shiftForward(size_t n)
 {
 	beginResetModel();
-	kshark_histo_shift_forward(&_histo, n);
+	ksmodel_shift_forward(&_histo, n);
 	endResetModel();
 }
 
 void KsGraphModel::shiftBackward(size_t n)
 {
 	beginResetModel();
-	kshark_histo_shift_backward(&_histo, n);
+	ksmodel_shift_backward(&_histo, n);
 	endResetModel();
 }
 
-void KsGraphModel::shiftTo(size_t ts)
+void KsGraphModel::jumpTo(size_t ts)
 {
 	beginResetModel();
-	kshark_histo_shift_to(&_histo, ts);
+	ksmodel_jump_to(&_histo, ts);
 	endResetModel();
 }
 
 void KsGraphModel::zoomOut(double r, int mark)
 {
 	beginResetModel();
-	kshark_histo_zoom_out(&_histo, r, mark);
+	ksmodel_zoom_out(&_histo, r, mark);
 	endResetModel();
 }
 
 void KsGraphModel::zoomIn(double r, int mark)
 {
 	beginResetModel();
-	kshark_histo_zoom_in(&_histo, r, mark);
+	ksmodel_zoom_in(&_histo, r, mark);
 	endResetModel();
 }
 
 void KsGraphModel::reset()
 {
 	beginResetModel();
-	kshark_histo_set_bining(&_histo, 1, 0, 1);
+	ksmodel_set_bining(&_histo, 1, 0, 1);
 	endResetModel();
 }
 
@@ -330,7 +420,7 @@ void KsGraphModel::update(KsDataStore *data)
 {
 	beginResetModel();
 	if (data) {
-		kshark_histo_fill(&_histo, data->_rows, data->size());
+		ksmodel_fill(&_histo, data->_rows, data->size());
 	}
 	endResetModel();
 }

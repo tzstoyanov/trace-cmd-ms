@@ -4,6 +4,7 @@ message(STATUS "libkshark")
 add_library(kshark SHARED libkshark.c
                           libkshark-model.c
                           libkshark-plugin.c
+                          libkshark-collection.c
                           trace-filter-hash.c
                           libkshark-json.c
                           )
@@ -42,6 +43,7 @@ if (Qt5Widgets_FOUND AND Qt5Network_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
                         KsWidgetsLib.hpp
                         KsTraceViewer.hpp
                         KsTraceGraph.hpp
+                        KsModel.hpp
                         KsGLWidget.hpp
                         KsUtils.hpp
                         KsCaptureDialog.hpp
@@ -64,7 +66,8 @@ if (Qt5Widgets_FOUND AND Qt5Network_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
                                      ${OPENGL_LIBRARIES}
                                      ${GLUT_LIBRARY}
                                      Qt5::Widgets
-                                     Qt5::Network)
+                                     Qt5::Network
+                                     Qt5::Concurrent)
 
     set_target_properties(kshark-gui PROPERTIES  SUFFIX ".so.${KS_VERSION_STRING}")
 

@@ -50,25 +50,25 @@ KsTraceGraph::KsTraceGraph(QWidget *parent)
   _keyPressed(false)
 {
 	auto makeNavButton = [&](QPushButton *b) {
-		b->setMaximumWidth(FONT_WIDTH*5);
+		b->setMaximumWidth(FONT_WIDTH * 5);
 
 		connect(b,	&QPushButton::released,
 			this,	&KsTraceGraph::stopUpdating);
 		_navigationBar.addWidget(b);
 	};
 
-	_pointerBar.setMaximumHeight(FONT_HEIGHT*1.75);
+	_pointerBar.setMaximumHeight(FONT_HEIGHT * 1.75);
 	_pointerBar.setOrientation(Qt::Horizontal);
 
-	_navigationBar.setMaximumHeight(FONT_HEIGHT*1.75);
-	_navigationBar.setMinimumWidth(FONT_WIDTH*110);
+	_navigationBar.setMaximumHeight(FONT_HEIGHT * 1.75);
+	_navigationBar.setMinimumWidth(FONT_WIDTH * 110);
 	_navigationBar.setOrientation(Qt::Horizontal);
 
 	_pointerBar.addWidget(&_labelP1);
 	_labelP2.setFrameStyle(QFrame::Panel | QFrame::Sunken);
 	_labelP2.setStyleSheet("QLabel { background-color : white;}");
 	_labelP2.setTextInteractionFlags(Qt::TextSelectableByMouse);
-	_labelP2.setFixedWidth(FONT_WIDTH*16);
+	_labelP2.setFixedWidth(FONT_WIDTH * 16);
 	_pointerBar.addWidget(&_labelP2);
 	_pointerBar.addSeparator();
 
@@ -292,7 +292,7 @@ void KsTraceGraph::setPointerInfo(size_t i)
 	int labelWidth = _pointerBar.geometry().right() -
 			 _labelI4.geometry().right();
 
-	if (labelWidth > STRING_WIDTH(info) + FONT_WIDTH*5)
+	if (labelWidth > STRING_WIDTH(info) + FONT_WIDTH * 5)
 		return;
 
 	/*
@@ -300,11 +300,11 @@ void KsTraceGraph::setPointerInfo(size_t i)
 	 * Try to fit the text in the available space.
 	 */
 	QFontMetrics metrix(_labelI5.font());
-	int width = labelWidth - FONT_WIDTH*3;
+	int width = labelWidth - FONT_WIDTH * 3;
 	QString elidedText = metrix.elidedText(info, Qt::ElideRight, width);
 
-	while(labelWidth < STRING_WIDTH(elidedText) + FONT_WIDTH*5) {
-		width -= FONT_WIDTH*3;
+	while(labelWidth < STRING_WIDTH(elidedText) + FONT_WIDTH * 5) {
+		width -= FONT_WIDTH * 3;
 		elidedText = metrix.elidedText(info, Qt::ElideRight, width);
 	}
 
@@ -331,12 +331,12 @@ void KsTraceGraph::markEntry(size_t row)
 	_scrollArea.ensureVisible(0,
 				  _legendAxisX.height() +
 				  _glWindow._vMargin +
-				  CPU_GRAPH_HEIGHT/2 +
+				  CPU_GRAPH_HEIGHT / 2 +
 				  graph*(CPU_GRAPH_HEIGHT + _glWindow._vSpacing),
 				  50,
-				  CPU_GRAPH_HEIGHT/2 + _glWindow._vSpacing/2);
+				  CPU_GRAPH_HEIGHT / 2 + _glWindow._vSpacing / 2);
 
-	_glWindow.model()->shiftTo(_data->_rows[row]->ts);
+	_glWindow.model()->jumpTo(_data->_rows[row]->ts);
 	_mState->activeMarker().set(*_data,
 				    _glWindow.model()->histo(),
 				    row, cpuGrId, taskGrId);
@@ -416,7 +416,7 @@ void KsTraceGraph::updateGeom()
 
 	int saHeight = height() - _pointerBar.height() -
 				  _navigationBar.height() -
-				  _layout.spacing()*2 -
+				  _layout.spacing() * 2 -
 				  _layout.contentsMargins().top() -
 				  _layout.contentsMargins().bottom();
 
@@ -443,8 +443,8 @@ void KsTraceGraph::updateGeom()
 		   _layout.contentsMargins().top() +
 		   _layout.contentsMargins().bottom();
 
-	if (hMin > CPU_GRAPH_HEIGHT*8)
-		hMin = CPU_GRAPH_HEIGHT*8;
+	if (hMin > CPU_GRAPH_HEIGHT * 8)
+		hMin = CPU_GRAPH_HEIGHT * 8;
 
 	setMinimumHeight(hMin);
 
@@ -455,7 +455,7 @@ void KsTraceGraph::updateGeom()
 	setMaximumHeight(_drawWindow.height() +
 			 _pointerBar.height() +
 			 _navigationBar.height() +
-			 _layout.spacing()*2 +
+			 _layout.spacing() * 2 +
 			 _layout.contentsMargins().top() +
 			 _layout.contentsMargins().bottom() +
 			 2);  /* Just a little bit of extra space. This will allow

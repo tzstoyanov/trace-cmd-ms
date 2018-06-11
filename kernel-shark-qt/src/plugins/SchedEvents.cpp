@@ -73,7 +73,7 @@ static void schedWakeupPluginDraw(struct plugin_sched_context *plugin_ctx,
 
 	size_t nBins = graph->size();
 	for (size_t bin = 0; bin < nBins; ++bin) {
-		if (kshark_histo_bin_count(histo, bin) > 100)
+		if (ksmodel_bin_count(histo, bin) > 100)
 			continue;
 
 		/*
@@ -81,14 +81,14 @@ static void schedWakeupPluginDraw(struct plugin_sched_context *plugin_ctx,
 		 * until you find a trace entry that satisfies the condition defined
 		 * by plugin_check_pid.
 		 */
-		entryFront = kshark_histo_get_entry_front(histo, bin, pid, false, kshark_check_pid);
+		entryFront = ksmodel_get_entry_front(histo, bin, false, kshark_check_pid, pid);
 
 		/*
 		 * Starting from the last element in this bin, go backward in time
 		 * until you find a trace entry that satisfies the condition defined
 		 * by plugin_wakeup_check_pid.
 		 */
-		entryBack = kshark_histo_get_entry_back(histo, bin, pid, false, plugin_wakeup_check_pid);
+		entryBack = ksmodel_get_entry_back(histo, bin, false, plugin_wakeup_check_pid, pid);
 
 		if (entryBack &&
 		    plugin_ctx->sched_wakeup_event &&
@@ -133,7 +133,7 @@ static void schedSwitchPluginDraw(struct plugin_sched_context *plugin_ctx,
 
 	size_t nBins = graph->size();
 	for (size_t bin = 0; bin < nBins; ++bin) {
-		if (kshark_histo_bin_count(histo, bin) > 100)
+		if (ksmodel_bin_count(histo, bin) > 100)
 			continue;
 
 		/*
@@ -141,14 +141,14 @@ static void schedSwitchPluginDraw(struct plugin_sched_context *plugin_ctx,
 		 * until you find a trace entry that satisfies the condition defined
 		 * by kshark_check_pid.
 		 */
-		entryFront = kshark_histo_get_entry_front(histo, bin, pid, false, kshark_check_pid);
+		entryFront = ksmodel_get_entry_front(histo, bin, false, kshark_check_pid, pid);
 
 		/*
 		 * Starting from the last element in this bin, go backward in time
 		 * until you find a trace entry that satisfies the condition defined
 		 * by plugin_switch_check_pid.
 		 */
-		entryBack = kshark_histo_get_entry_back(histo, bin, pid, false, plugin_switch_check_pid);
+		entryBack = ksmodel_get_entry_back(histo, bin, false, plugin_switch_check_pid, pid);
 
 		if (entryBack && entryBack->pid != pid &&
 		    entryBack->event_id == plugin_ctx->sched_switch_event->id) {

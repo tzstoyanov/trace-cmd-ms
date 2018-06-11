@@ -18,9 +18,18 @@
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
+// C++11
+#include <thread>
+#include <future>
+
+// Qt
+#include <QtConcurrent>
+
 // KernelShark
 #include "KsTraceViewer.hpp"
 #include "KsWidgetsLib.hpp"
+
+#define PROG_BAR_MAX 200
 
 KsTraceViewer::KsTraceViewer(QWidget *parent)
 : QWidget(parent),
@@ -30,13 +39,17 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
   _tableHeader(_model.header()),
   _toolbar(this),
   _labelSearch("Search: Column", this),
-  _labelGrFollows("Graph follows", this),
+  _labelGrFollows("Graph follows  ", this),
   _columnComboBox(this),
   _selectComboBox(this),
   _searchLineEdit(this),
   _prevButton("Prev", this),
   _nextButton("Next", this),
+  _searchStopButton(QIcon::fromTheme("process-stop"), "", this),
+  _pbAction(nullptr),
   _graphFollowsCheckBox(this),
+  _searchProgBar(this),
+  _searchCountLabel("", this),
   _searchDone(false),
   _graphFollows(true),
   _mState(nullptr),
@@ -46,7 +59,7 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 
 	/* Make a search toolbar. */
 	_toolbar.setOrientation(Qt::Horizontal);
-	_toolbar.setMaximumHeight(FONT_HEIGHT*1.75);
+	_toolbar.setMaximumHeight(FONT_HEIGHT * 1.75);
 
 	/* On the toolbar make two Combo boxes for the search settings. */
 	_toolbar.addWidget(&_labelSearch);
@@ -75,7 +88,7 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	_toolbar.addWidget(&_selectComboBox);
 
 	/* On the toolbar, make a Line edit field for search. */
-	_searchLineEdit.setMaximumWidth(FONT_WIDTH*30);
+	_searchLineEdit.setMaximumWidth(FONT_WIDTH * 20);
 
 	connect(&_searchLineEdit,	&QLineEdit::returnPressed,
 		this,			&KsTraceViewer::search);
@@ -87,7 +100,7 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	_toolbar.addSeparator();
 
 	/* On the toolbar, add Prev & Next buttons. */
-	int bWidth = FONT_WIDTH*6;
+	int bWidth = FONT_WIDTH * 6;
 
 	_nextButton.setFixedWidth(bWidth);
 	_toolbar.addWidget(&_nextButton);
@@ -100,17 +113,26 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 		this,		&KsTraceViewer::prev);
 
 	_toolbar.addSeparator();
+	_searchProgBar.setMaximumWidth(FONT_WIDTH * 10);
+	_searchProgBar.setRange(0, 200);
+	_pbAction = _toolbar.addWidget(&_searchProgBar);
+	_pbAction->setVisible(false);
+	_toolbar.addWidget(&_searchCountLabel);
+	_searchStopAction = _toolbar.addWidget(&_searchStopButton);
+	_searchStopAction->setVisible(false);
+	connect(&_searchStopButton,	&QPushButton::pressed,
+		this,			&KsTraceViewer::searchStop);
 
 	/*
 	 * On the toolbar, make a Check box for connecting the search pannel
 	 * to the Graph widget.
 	 */
+	_toolbar.addSeparator();
+	_toolbar.addWidget(&_graphFollowsCheckBox);
+	_toolbar.addWidget(&_labelGrFollows);
 	_graphFollowsCheckBox.setCheckState(Qt::Checked);
 	connect(&_graphFollowsCheckBox,	&QCheckBox::stateChanged,
 		this,			&KsTraceViewer::graphFollowsChanged);
-
-	_toolbar.addWidget(&_graphFollowsCheckBox);
-	_toolbar.addWidget(&_labelGrFollows);
 
 	/* Initialize the trace viewer. */
 // 	_view.horizontalHeader()->setStretchLastSection(true);
@@ -119,10 +141,12 @@ KsTraceViewer::KsTraceViewer(QWidget *parent)
 	_view.setEditTriggers(QAbstractItemView::NoEditTriggers);
 	_view.setSelectionBehavior(QAbstractItemView::SelectRows);
 	_view.setSelectionMode(QAbstractItemView::SingleSelection);
-	_view.verticalHeader()->setDefaultSectionSize(FONT_HEIGHT*1.25);
+	_view.verticalHeader()->setDefaultSectionSize(FONT_HEIGHT * 1.25);
 
 	 _proxyModel.setSource(&_model);
 	_view.setModel(&_proxyModel);
+	connect(&_proxyModel, &QAbstractItemModel::modelReset,
+		this, &KsTraceViewer::searchReset);
 
 	_view.setContextMenuPolicy(Qt::CustomContextMenu);
 	connect(&_view,	&QTableView::customContextMenuRequested,
@@ -147,10 +171,10 @@ void KsTraceViewer::loadData(KsDataStore *data)
 	_model.fill(data->_pevt, data->_rows, data->size());
 	this->resizeToContents();
 
-	this->setMinimumHeight(SCREEN_HEIGHT/5);
+	this->setMinimumHeight(SCREEN_HEIGHT / 5);
 
 	double time = GET_DURATION(t0);
-	qInfo() <<"View loading time: " << 1e3*time << " ms.";
+	qInfo() <<"View loading time: " << 1e3 * time << " ms.";
 }
 
 void KsTraceViewer::setMarkerSM(KsDualMarkerSM *m)
@@ -181,9 +205,17 @@ void KsTraceViewer::setMarkerSM(KsDualMarkerSM *m)
 
 void KsTraceViewer::reset()
 {
-	this->setMinimumHeight(FONT_HEIGHT*10);
+	this->setMinimumHeight(FONT_HEIGHT * 10);
 	_model.reset();
 	resizeToContents();
+}
+
+void KsTraceViewer::searchReset()
+{
+	_searchProgBar.setValue(0);
+	_searchCountLabel.setText("");
+	_proxyModel._searchProgress = 0;
+	_searchDone = false;
 }
 
 size_t  KsTraceViewer::getTopRow() const
@@ -211,7 +243,6 @@ void KsTraceViewer::onCustomContextMenu(const QPoint &point)
 {
 	QModelIndex i = _view.indexAt(point);
 	if (i.isValid()) {
-		qInfo() << "onCustomContextMenu " << i.row();
 		/*
 		 * Use the index of the proxy model to retrieve the value
 		 * of the row number in the base model. This works because
@@ -226,17 +257,17 @@ void KsTraceViewer::onCustomContextMenu(const QPoint &point)
 
 void KsTraceViewer::searchEditColumn(int index)
 {
-	_searchDone = false; // The search has been modified.
+	searchReset(); // The search has been modified.
 }
 
 void KsTraceViewer::searchEditSelect(int index)
 {
-	_searchDone = false; // The search has been modified.
+	searchReset(); // The search has been modified.
 }
 
 void KsTraceViewer::searchEditText(const QString &text)
 {
-	_searchDone = false; // The search has been modified.
+	searchReset(); // The search has been modified.
 }
 
 void KsTraceViewer::graphFollowsChanged(int state)
@@ -357,6 +388,12 @@ void KsTraceViewer::prev()
 		if (_graphFollows)
 			emit select(*_it); // Send a signal to the Graph widget.
 	}
+}
+
+void KsTraceViewer::searchStop()
+{
+	_searchStopAction->setVisible(false);
+	_proxyModel.searchStop();
 }
 
 void KsTraceViewer::clicked(const QModelIndex& i)
@@ -505,16 +542,39 @@ size_t KsTraceViewer::searchItems(int column,
 				  const QString &searchText,
 				  condition_func cond)
 {
-	int count = _proxyModel.search(column, searchText, cond, &_matchList);
+	hd_time t0 = GET_TIME;
+
+	int count;
+	_searchProgBar.show();
+	_pbAction->setVisible(true);
+
+	if (column == KsViewModel::TRACE_VIEW_COL_INFO ||
+	    column == KsViewModel::TRACE_VIEW_COL_LAT) {
+		_searchStopAction->setVisible(true);
+		_proxyModel.search(column, searchText, cond, &_matchList,
+				   &_searchProgBar, &_searchCountLabel);
+
+		_searchStopAction->setVisible(false);
+	} else {
+		searchItemsMapRed(column, searchText, cond);
+	}
+
+	count = _matchList.count();
+
+	_pbAction->setVisible(false);
+	_searchCountLabel.setText(QString(" %1").arg(count));
 	_searchDone = true;
 
 	if (count == 0) // No items have been found. Do nothing.
 		return 0;
 
+	double time = GET_DURATION(t0);
+	qInfo() << "Search time:" << time << "s.";
+
 	QItemSelectionModel *sm = _view.selectionModel();
 	if (sm->hasSelection()) {
 		/* Only one row at the time can be selected. */
-		size_t row = sm->selectedRows()[0].row();
+		int row = sm->selectedRows()[0].row();
 		_view.clearSelection();
 		_it = _matchList.begin();
 		/*
@@ -536,4 +596,46 @@ size_t KsTraceViewer::searchItems(int column,
 	}
 
 	return count;
+}
+
+void KsTraceViewer::searchItemsMapRed(int column,
+				  const QString &searchText,
+				  condition_func cond)
+{
+	auto search_map = [&] (const QPair<int, int> &range, QProgressBar *pb) {
+		return _proxyModel.searchMap(column, searchText, cond,
+					     range.first, range.second, pb);
+	};
+
+	auto search_reduce = [&] (QList<int> &resultList,
+				  const QList<int> &mapList) {
+		_proxyModel.searchReduce(resultList, mapList);
+		_searchProgBar.setValue(_searchProgBar.value() + 1);
+	};
+
+	int nThreads = std::thread::hardware_concurrency();
+	int delta = _data->size()/ nThreads;
+	std::vector<QPair<int, int>> ranges(nThreads);
+	int i(0);
+
+	for (auto &r: ranges) {
+		r.first = (i++) * delta;
+		r.second = r.first + delta - 1;
+	}
+	ranges.back().second = _data->size() - 1;
+
+	std::vector<std::future<QList<int>>> maps;
+	maps.push_back(std::async(search_map, ranges[0], &_searchProgBar));
+	for (int i = 1; i < nThreads; ++i)
+		maps.push_back(std::async(search_map, ranges[i], nullptr));
+
+	while (_proxyModel._searchProgress < PROG_BAR_MAX - nThreads) {
+		std::unique_lock<std::mutex> lk(_proxyModel._mutex);
+		_proxyModel._pbCond.wait(lk);
+		_searchProgBar.setValue(_proxyModel._searchProgress);
+		QApplication::processEvents();
+	}
+
+	for (auto &m: maps)
+		search_reduce(_matchList, m.get());
 }

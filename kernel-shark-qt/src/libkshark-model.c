@@ -24,7 +24,7 @@
 // KernelShark
 #include "libkshark-model.h"
 
-void kshark_histo_init(struct kshark_trace_histo *histo)
+void ksmodel_init(struct kshark_trace_histo *histo)
 {
 	/*
 	 * Initialize an empty histo. The histo will have
@@ -36,7 +36,7 @@ void kshark_histo_init(struct kshark_trace_histo *histo)
 	histo->n_bins = 0;
 }
 
-void kshark_histo_clear(struct kshark_trace_histo *histo)
+void ksmodel_clear(struct kshark_trace_histo *histo)
 {
 	/*
 	 * Reset the histo. It will have no bins and will contain
@@ -58,8 +58,8 @@ void kshark_histo_clear(struct kshark_trace_histo *histo)
 		free(histo->bin_count);
 }
 
-static void kshark_histo_reset_bins(struct kshark_trace_histo *histo,
-				    size_t first, size_t last)
+static void ksmodel_reset_bins(struct kshark_trace_histo *histo,
+			       size_t first, size_t last)
 {
 	/* Reset the content of the bins. */
 	size_t r;
@@ -69,14 +69,15 @@ static void kshark_histo_reset_bins(struct kshark_trace_histo *histo,
 	}
 }
 
-void kshark_histo_set_bining(struct kshark_trace_histo *histo,
-			     size_t n, uint64_t min, uint64_t max)
+void ksmodel_set_bining(struct kshark_trace_histo *histo,
+			size_t n, uint64_t min, uint64_t max)
 {
 	/* Clear the existing content of the histo. */
-	kshark_histo_clear(histo);
+	ksmodel_clear(histo);
 
 	uint64_t range = max - min;
-	if (n == 0 || n > range)
+	/* The size of the bin must be >= 1, hence the range must be >= n. */
+	if (n == 0 || range < n)
 		return;
 
 	histo->n_bins = n;
@@ -101,22 +102,23 @@ void kshark_histo_set_bining(struct kshark_trace_histo *histo,
 		histo->max = histo->min + corrected_range;
 	}
 
-	/* Create bins. */
+	/* Create bins. Two overflow bins are added. */
 	histo->map = calloc(n, sizeof(ssize_t) + 2);
 	histo->bin_count = calloc(n, sizeof(size_t) + 2);
 
 	/* Reset the content of all bins to zero. */
-	kshark_histo_reset_bins(histo, 0, histo->n_bins + 1);
+	ksmodel_reset_bins(histo, 0, histo->n_bins + 1);
 }
 
-void kshark_histo_set_in_range_bining(struct kshark_trace_histo *histo,
-				      size_t n, uint64_t min, uint64_t max)
+void ksmodel_set_in_range_bining(struct kshark_trace_histo *histo,
+				 size_t n, uint64_t min, uint64_t max)
 {
 	/* Clear the existing content of the histo. */
-	kshark_histo_clear(histo);
+	ksmodel_clear(histo);
 
 	uint64_t range = max - min;
-	if (n == 0 || n > range)
+	/* The size of the bin must be >= 1, hence the range must be >= n. */
+	if (n == 0 || range < n)
 		return;
 
 	histo->n_bins = n;
@@ -153,15 +155,15 @@ void kshark_histo_set_in_range_bining(struct kshark_trace_histo *histo,
 		}
 	}
 
-	/* Create bins. */
+	/* Create bins. Two overflow bins are added. */
 	histo->map = calloc(n, sizeof(ssize_t) + 2);
 	histo->bin_count = calloc(n, sizeof(size_t) + 2);
 
 	/* Reset the content of all bins to zero. */
-	kshark_histo_reset_bins(histo, 0, histo->n_bins + 1);
+	ksmodel_reset_bins(histo, 0, histo->n_bins + 1);
 }
 
-static size_t kshark_histo_set_lower_edge(struct kshark_trace_histo *histo)
+static size_t ksmodel_set_lower_edge(struct kshark_trace_histo *histo)
 {
 	/*
 	 * Find the index of the first entry inside
@@ -213,7 +215,7 @@ static size_t kshark_histo_set_lower_edge(struct kshark_trace_histo *histo)
 	return row;
 }
 
-static size_t kshark_histo_set_upper_edge(struct kshark_trace_histo *histo)
+static size_t ksmodel_set_upper_edge(struct kshark_trace_histo *histo)
 {
 	/*
 	 * Find the index of the first entry outside
@@ -244,8 +246,8 @@ static size_t kshark_histo_set_upper_edge(struct kshark_trace_histo *histo)
 	return row;
 }
 
-static void kshark_histo_set_next_bin_edge(struct kshark_trace_histo *histo,
-					   size_t bin)
+static void ksmodel_set_next_bin_edge(struct kshark_trace_histo *histo,
+				      size_t bin)
 {
 	size_t next_bin = bin + 1;
 
@@ -264,7 +266,7 @@ static void kshark_histo_set_next_bin_edge(struct kshark_trace_histo *histo,
 	/*
 	 * The timestamp of the very last entry of the dataset can be exactly
 	 * equal to the value of the upper edge of the range. This is very
-	 * likely to happen when we use kshark_histo_set_in_range_bining().
+	 * likely to happen when we use ksmodel_set_in_range_bining().
 	 * In this case we have to increase the size of the very last bin
 	 * in order to make sure that the last entry of the dataset will
 	 * fall into it.
@@ -282,7 +284,7 @@ static void kshark_histo_set_next_bin_edge(struct kshark_trace_histo *histo,
 	histo->map[next_bin] = row;
 }
 
-static void kshark_histo_set_bin_counts(struct kshark_trace_histo *histo)
+static void ksmodel_set_bin_counts(struct kshark_trace_histo *histo)
 {
 	size_t i = 0, prev_not_empty;
 
@@ -331,7 +333,7 @@ static void kshark_histo_set_bin_counts(struct kshark_trace_histo *histo)
 	}
 }
 
-size_t kshark_histo_bin_count(struct kshark_trace_histo *histo, int bin)
+size_t ksmodel_bin_count(struct kshark_trace_histo *histo, int bin)
 {
 	if (bin >= 0 && bin < (int) histo->n_bins)
 		return histo->bin_count[bin];
@@ -345,47 +347,47 @@ size_t kshark_histo_bin_count(struct kshark_trace_histo *histo, int bin)
 	return 0;
 }
 
-void kshark_histo_fill(struct kshark_trace_histo *histo,
-		       struct kshark_entry **data, size_t n)
+void ksmodel_fill(struct kshark_trace_histo *histo,
+		  struct kshark_entry **data, size_t n)
 {
 	histo->data = data;
 	histo->data_size = n;
 
 	if (histo->n_bins == 0 || histo->bin_size == 0 || histo->data_size == 0) {
 		/*
-		 * Something is wrong withe this histo.
+		 * Something is wrong with this histo.
 		 * Most likely the binning is not set.
 		 */
-		kshark_histo_clear(histo);
+		ksmodel_clear(histo);
 		return;
 	}
 
 	/* Set the beginning of the Lower Overflow bin */
-	kshark_histo_set_lower_edge(histo);
+	ksmodel_set_lower_edge(histo);
 	size_t bin = 0;
 
 	/* Loop over the dataset and set the beginning of all individual bins. */
 	while (bin < histo->n_bins) {
-		kshark_histo_set_next_bin_edge(histo, bin);
+		ksmodel_set_next_bin_edge(histo, bin);
 		++bin;
 	}
 
 	/* Set the beginning of the Upper Overflow bin. */
-	kshark_histo_set_upper_edge(histo);
+	ksmodel_set_upper_edge(histo);
 
 	/* Calculate the number of entries in each bin. */
-	kshark_histo_set_bin_counts(histo);
+	ksmodel_set_bin_counts(histo);
 }
 
-void kshark_histo_shift_forward(struct kshark_trace_histo *histo, size_t n)
+void ksmodel_shift_forward(struct kshark_trace_histo *histo, size_t n)
 {
 	if (!histo->data_size)
 		return;
 
-	if (kshark_histo_bin_count(histo, UPPER_OVERFLOW_BIN) == 0) {
+	if (ksmodel_bin_count(histo, UPPER_OVERFLOW_BIN) == 0) {
 		/*
 		 * The Upper Overflow bin is empty. This means that we are at
-		 * the upper edge of the range already. Do nothing in this case.
+		 * the upper edge of the dataset already. Do nothing in this case.
 		 */
 		return;
 	}
@@ -396,16 +398,16 @@ void kshark_histo_shift_forward(struct kshark_trace_histo *histo, size_t n)
 
 	if (n >= histo->n_bins) {
 		/*
-		 * No overlap between the new and the old range. Recalculate all bins
-		 * from scratch.
+		 * No overlap between the new and the old ranges. Recalculate all
+		 * bins from scratch.
 		 */
-		kshark_histo_set_bining(histo, histo->n_bins, histo->min, histo->max);
-		kshark_histo_fill(histo, histo->data, histo->data_size);
+		ksmodel_set_bining(histo, histo->n_bins, histo->min, histo->max);
+		ksmodel_fill(histo, histo->data, histo->data_size);
 		return;
 	}
 
 	/* Set the beginning of the new Lower Overflow bin */
-	kshark_histo_set_lower_edge(histo);
+	ksmodel_set_lower_edge(histo);
 
 	/*
 	 * Copy the content of all overlaping bins starting from bin "0"
@@ -421,10 +423,10 @@ void kshark_histo_shift_forward(struct kshark_trace_histo *histo, size_t n)
 	histo->map[bin] = histo->map[bin + n];
 	histo->bin_count[bin] = 0;
 
-	/* Calculate only the content of the new bins. */
-	kshark_histo_reset_bins(histo, bin + 1, histo->n_bins);
+	/* Calculate only the content of the new (non-overlapping) bins. */
+	ksmodel_reset_bins(histo, bin + 1, histo->n_bins);
 	while (bin < histo->n_bins) {
-		kshark_histo_set_next_bin_edge(histo, bin);
+		ksmodel_set_next_bin_edge(histo, bin);
 		++bin;
 	}
 
@@ -432,19 +434,19 @@ void kshark_histo_shift_forward(struct kshark_trace_histo *histo, size_t n)
 	 * Set the beginning of the Upper Overflow bin and calculate
 	 * the number of entries in each bin.
 	 */
-	kshark_histo_set_upper_edge(histo);
-	kshark_histo_set_bin_counts(histo);
+	ksmodel_set_upper_edge(histo);
+	ksmodel_set_bin_counts(histo);
 }
 
-void kshark_histo_shift_backward(struct kshark_trace_histo *histo, size_t n)
+void ksmodel_shift_backward(struct kshark_trace_histo *histo, size_t n)
 {
 	if (!histo->data_size)
 		return;
 
-	if (kshark_histo_bin_count(histo, LOWER_OVERFLOW_BIN) == 0) {
+	if (ksmodel_bin_count(histo, LOWER_OVERFLOW_BIN) == 0) {
 		/*
 		 * The Lower Overflow bin is empty. This means that we are at
-		 * the Lower edge of the range already. Do nothing in this case.
+		 * the Lower edge of the dataset already. Do nothing in this case.
 		 */
 		return;
 	}
@@ -458,8 +460,8 @@ void kshark_histo_shift_backward(struct kshark_trace_histo *histo, size_t n)
 		 * No overlap between the new and the old range. Recalculate all bins
 		 * from scratch.
 		 */
-		kshark_histo_set_bining(histo, histo->n_bins, histo->min, histo->max);
-		kshark_histo_fill(histo, histo->data, histo->data_size);
+		ksmodel_set_bining(histo, histo->n_bins, histo->min, histo->max);
+		ksmodel_fill(histo, histo->data, histo->data_size);
 		return;
 	}
 
@@ -483,16 +485,16 @@ void kshark_histo_shift_backward(struct kshark_trace_histo *histo, size_t n)
 	}
 
 	/* Reset all new bins. */
-	kshark_histo_reset_bins(histo, 0, bin);
-	kshark_histo_reset_bins(histo, histo->n_bins, histo->n_bins + 1);
+	ksmodel_reset_bins(histo, 0, bin);
+	ksmodel_reset_bins(histo, histo->n_bins, histo->n_bins + 1);
 
 	/* Set the beginning of the new Lower Overflow bin */
-	kshark_histo_set_lower_edge(histo);
+	ksmodel_set_lower_edge(histo);
 
-	/* Calculate only the content of the new bins. */
+	/* Calculate only the content of the new (non-overlapping) bins. */
 	bin = 0;
 	while (bin < n) {
-		kshark_histo_set_next_bin_edge(histo, bin);
+		ksmodel_set_next_bin_edge(histo, bin);
 		++bin;
 	}
 
@@ -500,11 +502,11 @@ void kshark_histo_shift_backward(struct kshark_trace_histo *histo, size_t n)
 	 * Set the beginning of the Upper Overflow bin and calculate
 	 * the number of entries in each bin.
 	 */
-	kshark_histo_set_upper_edge(histo);
-	kshark_histo_set_bin_counts(histo);
+	ksmodel_set_upper_edge(histo);
+	ksmodel_set_bin_counts(histo);
 }
 
-void kshark_histo_shift_to(struct kshark_trace_histo *histo, size_t ts)
+void ksmodel_jump_to(struct kshark_trace_histo *histo, size_t ts)
 {
 	if (ts > histo->min && ts < histo->max) {
 		/*
@@ -515,26 +517,27 @@ void kshark_histo_shift_to(struct kshark_trace_histo *histo, size_t ts)
 	}
 
 	/*
-	 * Calculate the new range without changing the size and number
-	 * of the bins.
+	 * Calculate the new range without changing the size and the number
+	 * of bins.
 	 */
 	size_t min = ts - histo->n_bins * histo->bin_size / 2;
 	if (min < histo->data[0]->ts)
 		min = histo->data[0]->ts;
 
-	if (min > histo->data[histo->data_size - 1]->ts - histo->n_bins * histo->bin_size)
+	if (min > histo->data[histo->data_size - 1]->ts - histo->n_bins * histo->bin_size) {
 		min = histo->data[histo->data_size - 1]->ts -
 		      histo->n_bins * histo->bin_size;
+	}
 
 	size_t max = min + histo->n_bins * histo->bin_size;
 
 	/* Use the new range to recalculate all bins from scratch. */
-	kshark_histo_set_bining(histo, histo->n_bins, min, max);
-	kshark_histo_fill(histo, histo->data, histo->data_size);
+	ksmodel_set_bining(histo, histo->n_bins, min, max);
+	ksmodel_fill(histo, histo->data, histo->data_size);
 }
 
-void kshark_histo_zoom_out(struct kshark_trace_histo *histo,
-			   double r, int mark)
+void ksmodel_zoom_out(struct kshark_trace_histo *histo,
+		      double r, int mark)
 {
 	if (!histo->data_size) 
 		return;
@@ -566,12 +569,12 @@ void kshark_histo_zoom_out(struct kshark_trace_histo *histo,
 		max = histo->data[histo->data_size - 1]->ts;
 
 	/* Use the new range to recalculate all bins from scratch. */
-	kshark_histo_set_in_range_bining(histo, histo->n_bins, min, max);
-	kshark_histo_fill(histo, histo->data, histo->data_size);
+	ksmodel_set_in_range_bining(histo, histo->n_bins, min, max);
+	ksmodel_fill(histo, histo->data, histo->data_size);
 }
 
-void kshark_histo_zoom_in(struct kshark_trace_histo *histo,
-			  double r, int mark)
+void ksmodel_zoom_in(struct kshark_trace_histo *histo,
+		     double r, int mark)
 {
 	if (!histo->data_size)
 		return;
@@ -608,11 +611,11 @@ void kshark_histo_zoom_in(struct kshark_trace_histo *histo,
 	size_t max = histo->max - (size_t) delta_tot + delta_min;
 
 	/* Use the new range to recalculate all bins from scratch. */
-	kshark_histo_set_in_range_bining(histo, histo->n_bins, min, max);
-	kshark_histo_fill(histo, histo->data, histo->data_size);
+	ksmodel_set_in_range_bining(histo, histo->n_bins, min, max);
+	ksmodel_fill(histo, histo->data, histo->data_size);
 }
 
-size_t kshark_histo_first_index_at(struct kshark_trace_histo *histo, int bin)
+size_t ksmodel_first_index_at(struct kshark_trace_histo *histo, int bin)
 {
 	if (bin >= 0 && bin < (int) histo->n_bins)
 		return histo->map[bin];
@@ -626,16 +629,17 @@ size_t kshark_histo_first_index_at(struct kshark_trace_histo *histo, int bin)
 	return KS_EMPTY_BIN;
 }
 
-int64_t kshark_histo_first_index_at_cpu(struct kshark_trace_histo *histo,
-					int bin, int cpu)
+ssize_t ksmodel_first_index_at_cpu(struct kshark_trace_histo *histo,
+				   int bin, int cpu)
 {
 	size_t found = KS_EMPTY_BIN;
-	size_t n_entries = kshark_histo_bin_count(histo, bin);
-	if (!n_entries)
+	size_t n = ksmodel_bin_count(histo, bin);
+	if (!n)
 		return found;
 
-	int64_t pos = histo->map[bin];
-	for (size_t i = pos; i < pos + n_entries; ++i) {
+	ssize_t pos = histo->map[bin];
+	size_t i;
+	for (i = pos; i < pos + n; ++i) {
 		if (histo->data[i]->cpu == cpu) {
 			if (histo->data[i]->visible & KS_GRAPH_FILTER_MASK)
 				return i;
@@ -647,16 +651,17 @@ int64_t kshark_histo_first_index_at_cpu(struct kshark_trace_histo *histo,
 	return found;
 }
 
-int64_t kshark_histo_first_index_at_pid(struct kshark_trace_histo *histo,
-					int bin, int pid)
+ssize_t ksmodel_first_index_at_pid(struct kshark_trace_histo *histo,
+				   int bin, int pid)
 {
 	size_t found = KS_EMPTY_BIN;
-	size_t n_entries = kshark_histo_bin_count(histo, bin);
-	if (!n_entries)
+	size_t n = ksmodel_bin_count(histo, bin);
+	if (!n)
 		return found;
 
-	int64_t pos = histo->map[bin];
-	for (size_t i = pos; i < pos + n_entries; ++i) {
+	ssize_t pos = histo->map[bin];
+	size_t i;
+	for (i = pos; i < pos + n; ++i) {
 		if (histo->data[i]->pid == pid) {
 			if (histo->data[i]->visible & KS_GRAPH_FILTER_MASK)
 				return i;
@@ -668,101 +673,310 @@ int64_t kshark_histo_first_index_at_pid(struct kshark_trace_histo *histo,
 	return found;
 }
 
-struct kshark_entry *kshark_histo_get_entry_front(struct kshark_trace_histo *histo,
-						  int bin, int pid, bool vis_only,
-						  matching_condition_func func)
+static struct kshark_entry_request *
+ksmodel_entry_front_request_alloc(struct kshark_trace_histo *histo,
+				  int bin, bool vis_only,
+				  matching_condition_func func, int val)
 {
-	size_t n_entries = kshark_histo_bin_count(histo, bin);
-	if (!n_entries)
+	/* Get the number of entries in this bin. */
+	size_t n = ksmodel_bin_count(histo, bin);
+	if (!n)
 		return NULL;
 
-	/* Set the position at the beginning of the bin and go forward. */
-	size_t first = kshark_histo_first_index_at(histo, bin);
-	return kshark_get_entry_front(first,
-				      n_entries,
-				      func,
-				      pid, vis_only,
-				      KS_GRAPH_FILTER_MASK,
-				      histo->data);
+	size_t first = ksmodel_first_index_at(histo, bin);
+	struct kshark_entry_request *req;
+	req = kshark_entry_request_alloc(first, n,
+					 func, val,
+					 vis_only, KS_GRAPH_FILTER_MASK);
+
+	return req;
 }
 
-struct kshark_entry *kshark_histo_get_entry_back(struct kshark_trace_histo *histo,
-						 int bin, int pid, bool vis_only,
-						 matching_condition_func func)
+static struct kshark_entry_request *
+ksmodel_entry_back_request_alloc(struct kshark_trace_histo *histo,
+				 int bin, bool vis_only,
+				 matching_condition_func func, int val)
 {
-	size_t n_entries = kshark_histo_bin_count(histo, bin);
-	if (!n_entries)
+	/* Get the number of entries in this bin. */
+	size_t n = ksmodel_bin_count(histo, bin);
+	if (!n)
 		return NULL;
 
-	/* Set the position at the end of the bin and go backwards. */
-	size_t first = kshark_histo_first_index_at(histo, bin) + n_entries - 1;
-	return kshark_get_entry_back(first,
-				     n_entries,
-				     func,
-				     pid, vis_only,
-				     KS_GRAPH_FILTER_MASK,
-				     histo->data);
+	size_t first = ksmodel_first_index_at(histo, bin) + n - 1;
+	struct kshark_entry_request *req;
+	req = kshark_entry_request_alloc(first, n,
+					 func, val,
+					 vis_only, KS_GRAPH_FILTER_MASK);
+
+	return req;
 }
 
-int kshark_histo_get_pid_front(struct kshark_trace_histo *histo,
-			       int bin, int cpu, bool vis_only)
+struct kshark_entry *ksmodel_get_entry_front(struct kshark_trace_histo *histo,
+					     int bin, bool vis_only,
+					     matching_condition_func func, int val)
 {
-	size_t n_entries = kshark_histo_bin_count(histo, bin);
-	if (!n_entries)
-		return KS_EMPTY_BIN;
+	struct kshark_entry_request *req;
+	struct kshark_entry *entry;
 
 	/* Set the position at the beginning of the bin and go forward. */
-	size_t first = kshark_histo_first_index_at(histo, bin);
-	return kshark_get_pid_front(first,
-				    n_entries,
-				    cpu, vis_only,
-				    KS_GRAPH_FILTER_MASK,
-				    histo->data);
+	req = ksmodel_entry_front_request_alloc(histo, bin, vis_only, func, val);
+	if (!req)
+		return NULL;
+
+	entry = kshark_get_entry_front(req, histo->data);
+	kshark_free_entry_request(req);
+
+	return entry;
 }
 
-int kshark_histo_get_pid_back(struct kshark_trace_histo *histo,
-			      int bin, int cpu, bool vis_only)
+struct kshark_entry *ksmodel_get_entry_back(struct kshark_trace_histo *histo,
+					    int bin, bool vis_only,
+					    matching_condition_func func, int val)
 {
-	size_t n_entries = kshark_histo_bin_count(histo, bin);
-	if (!n_entries)
-		return KS_EMPTY_BIN;
+	struct kshark_entry_request *req;
+	struct kshark_entry *entry;
 
 	/* Set the position at the end of the bin and go backwards. */
-	size_t first = kshark_histo_first_index_at(histo, bin) + n_entries - 1;
-	return kshark_get_pid_back(first,
-				   n_entries,
-				   cpu, vis_only,
-				   KS_GRAPH_FILTER_MASK,
-				   histo->data);
+	req = ksmodel_entry_back_request_alloc(histo, bin, vis_only, func, val);
+	if (!req)
+		return NULL;
+
+	entry = kshark_get_entry_back(req, histo->data);
+	kshark_free_entry_request(req);
+
+	return entry;
 }
 
-int kshark_histo_get_cpu(struct kshark_trace_histo *histo,
-			 int bin, int pid, bool vis_only)
+struct kshark_entry *
+ksmodel_get_collection_entry_front(struct kshark_trace_histo *histo,
+				   int bin, bool vis_only,
+				   matching_condition_func func, int val,
+				   struct kshark_entry_collection *col)
 {
-	size_t n_entries = kshark_histo_bin_count(histo, bin);
-	if (!n_entries)
+	struct kshark_entry_request *req;
+	struct kshark_entry *entry;
+
+	/* Set the position at the beginning of the bin and go forward. */
+	req = ksmodel_entry_front_request_alloc(histo, bin, vis_only, func, val);
+	if (!req)
+		return NULL;
+
+	entry = kshark_get_collection_entry_front(&req, histo->data, col);
+	kshark_free_entry_request(req);
+
+	return entry;
+}
+
+struct kshark_entry *
+ksmodel_get_collection_entry_back(struct kshark_trace_histo *histo,
+				  int bin, bool vis_only,
+				  matching_condition_func func, int val,
+				  struct kshark_entry_collection *col)
+{
+	struct kshark_entry_request *req;
+	struct kshark_entry *entry;
+
+	/* Set the position at the end of the bin and go backwards. */
+	req = ksmodel_entry_back_request_alloc(histo, bin, vis_only, func, val);
+	if (!req)
+		return NULL;
+
+	entry = kshark_get_collection_entry_back(&req, histo->data, col);
+	kshark_free_entry_request(req);
+
+	return entry;
+}
+
+static int ksmodel_get_entry_pid(struct kshark_entry *entry)
+{
+	if (!entry) // No data has been found.
 		return KS_EMPTY_BIN;
+
+	if (!entry->visible) // Some data has been found, but it is filtered.
+		return KS_FILTERED_BIN;
+
+	return entry->pid;
+}
+
+static int ksmodel_get_entry_cpu(struct kshark_entry *entry)
+{
+	if (!entry) // No data has been found.
+		return KS_EMPTY_BIN;
+
+	if (!entry->visible)  // Some data has been found, but it is filtered.
+		return KS_FILTERED_BIN;
+
+	return entry->cpu;
+}
+
+int ksmodel_get_pid_front(struct kshark_trace_histo *histo,
+			  int bin, int cpu, bool vis_only,
+			  struct kshark_entry **e)
+{
+	struct kshark_entry_request *req;
+	struct kshark_entry *entry;
+
+	/* Set the position at the beginning of the bin and go forward. */
+	req = ksmodel_entry_front_request_alloc(histo,
+						bin, vis_only,
+						kshark_check_cpu, cpu);
+	if (!req)
+		return KS_EMPTY_BIN;
+
+	entry = kshark_get_entry_front(req, histo->data);
+	kshark_free_entry_request(req);
+
+	if (e)
+		*e = entry;
+
+	return ksmodel_get_entry_pid(entry);
+}
+
+int ksmodel_get_pid_back(struct kshark_trace_histo *histo,
+			 int bin, int cpu, bool vis_only,
+			 struct kshark_entry **e)
+{
+	struct kshark_entry_request *req;
+	struct kshark_entry *entry;
+
+	/* Set the position at the end of the bin and go backwards. */
+	req = ksmodel_entry_back_request_alloc(histo,
+					       bin, vis_only,
+					       kshark_check_cpu, cpu);
+	if (!req)
+		return KS_EMPTY_BIN;
+
+	entry = kshark_get_entry_back(req, histo->data);
+	kshark_free_entry_request(req);
+
+	if (e)
+		*e = entry;
+
+	return ksmodel_get_entry_pid(entry);
+}
+
+
+int ksmodel_get_cpu(struct kshark_trace_histo *histo,
+		    int bin, int pid, bool vis_only,
+		    struct kshark_entry **e)
+{
+	/* Get the number of entries in this bin. */
+	size_t n = ksmodel_bin_count(histo, bin);
+	if (!n)
+		return KS_EMPTY_BIN;
+
+	struct kshark_entry_request *req;
+	struct kshark_entry *entry;
+
+	/* Create an entry request but keep the starting position unset. */
+	req = kshark_entry_request_alloc(0, n,
+					 kshark_check_pid, pid,
+					 vis_only, KS_GRAPH_FILTER_MASK);
 
 	if (bin == UPPER_OVERFLOW_BIN) {
 		/*
 		 * Set the position at the end of the Lower Overflow bin and go
 		 * backwards.
 		 */
-		size_t first = kshark_histo_bin_count(histo, bin) - 1;
-		return kshark_get_cpu_back(first,
-					   n_entries,
-					   pid,
-					   vis_only,
-					   KS_GRAPH_FILTER_MASK,
-					   histo->data);
+		req->first = ksmodel_bin_count(histo, bin) - 1;
+		entry =  kshark_get_entry_back(req, histo->data);
 	} else {
 		/* Set the position at the beginning of the bin and go forward. */
-		size_t first = kshark_histo_first_index_at(histo, bin);
-		return kshark_get_cpu_front(first,
-					    n_entries,
-					    pid,
-					    vis_only,
-					    KS_GRAPH_FILTER_MASK,
-					    histo->data);
+		req->first = ksmodel_first_index_at(histo, bin);
+		entry = kshark_get_entry_front(req, histo->data);
 	}
+
+	kshark_free_entry_request(req);
+
+	if (e)
+		*e = entry;
+
+	return ksmodel_get_entry_cpu(entry);
+}
+
+int ksmodel_get_collection_pid_front(struct kshark_trace_histo *histo,
+				     int bin, int cpu, bool vis_only,
+				     struct kshark_entry_collection *col,
+				     struct kshark_entry **e)
+{
+	struct kshark_entry_request *req;
+	struct kshark_entry *entry;
+
+	/* Set the position at the beginning of the bin and go forward. */
+	req = ksmodel_entry_front_request_alloc(histo,
+						bin, vis_only,
+						kshark_check_cpu, cpu);
+	if (!req)
+		return KS_EMPTY_BIN;
+
+	entry = kshark_get_collection_entry_front(&req, histo->data, col);
+	kshark_free_entry_request(req);
+
+	if (e)
+		*e = entry;
+
+	return ksmodel_get_entry_pid(entry);
+}
+
+int ksmodel_get_collection_pid_back(struct kshark_trace_histo *histo,
+				    int bin, int cpu, bool vis_only,
+				    struct kshark_entry_collection *col,
+				    struct kshark_entry **e)
+{
+	struct kshark_entry_request *req;
+	struct kshark_entry *entry;
+
+	/* Set the position at the end of the bin and go backwards. */
+	req = ksmodel_entry_back_request_alloc(histo,
+					       bin, vis_only,
+					       kshark_check_cpu, cpu);
+	if (!req)
+		return KS_EMPTY_BIN;
+
+	entry = kshark_get_collection_entry_back(&req, histo->data, col);
+	kshark_free_entry_request(req);
+
+	if (e)
+		*e = entry;
+
+	return ksmodel_get_entry_pid(entry);
+}
+
+int ksmodel_get_collection_cpu(struct kshark_trace_histo *histo,
+			       int bin, int pid, bool vis_only,
+			       struct kshark_entry_collection *col,
+			       struct kshark_entry **e)
+{
+	/* Get the number of entries in this bin. */
+	size_t n = ksmodel_bin_count(histo, bin);
+	if (!n)
+		return KS_EMPTY_BIN;
+
+	struct kshark_entry_request *req;
+	struct kshark_entry *entry;
+
+	/* Create an entry request but keep the starting position unset. */
+	req = kshark_entry_request_alloc(0, n,
+					 kshark_check_pid, pid,
+					 vis_only, KS_GRAPH_FILTER_MASK);
+
+	if (bin == UPPER_OVERFLOW_BIN) {
+		/*
+		 * Set the position at the end of the Lower Overflow bin and go
+		 * backwards.
+		 */
+		req->first = ksmodel_bin_count(histo, bin) - 1;
+		entry =  kshark_get_collection_entry_back(&req, histo->data, col);
+	} else {
+		/* Set the position at the beginning of the bin and go forward. */
+		req->first = ksmodel_first_index_at(histo, bin);
+		entry = kshark_get_collection_entry_front(&req, histo->data, col);
+	}
+
+	kshark_free_entry_request(req);
+
+	if (e)
+		*e = entry;
+
+	return ksmodel_get_entry_cpu(entry);
 }

@@ -26,9 +26,9 @@
 #include "KsPlotTools.hpp"
 #include "KsGLWidget.hpp"
 
-KsDataProgressBar::KsDataProgressBar(QWidget *parent)
+KsProgressBar::KsProgressBar(QString message, QWidget *parent)
 : QWidget(parent), _sb(this), _pb(&_sb) {
-	this->resize(FONT_WIDTH*45, FONT_HEIGHT*5);
+	this->resize(FONT_WIDTH * 45, FONT_HEIGHT * 5);
 	this->setWindowTitle("Loading data");
 	this->setLayout(new QVBoxLayout);
 	_pb.setOrientation(Qt::Horizontal);
@@ -36,13 +36,13 @@ KsDataProgressBar::KsDataProgressBar(QWidget *parent)
 	_pb.setRange(0, 200);
 	_pb.setValue(1);
 	_sb.addPermanentWidget(&_pb, 1);
-	this->layout()->addWidget(new QLabel("Loading trace data ..."));
+	this->layout()->addWidget(new QLabel(message));
 	this->layout()->addWidget(&_sb);
 	setWindowFlags(Qt::WindowStaysOnTopHint);
 	this->show();
 }
 
-void KsDataProgressBar::setValue(int i) {
+void KsProgressBar::setValue(int i) {
 	_pb.setValue(i);
 	QApplication::processEvents();
 }
@@ -52,7 +52,7 @@ KsMessageDialog::KsMessageDialog(QString message, QWidget *parent)
   _text(message, this),
   _closeButton("Close", this)
 {
-	this->resize(SCREEN_WIDTH/10, FONT_HEIGHT*8);
+	this->resize(SCREEN_WIDTH / 10, FONT_HEIGHT * 8);
 	_layout.addWidget(&_text);
 	_layout.addWidget(&_closeButton);
 	connect(&_closeButton,	&QPushButton::pressed,
@@ -71,7 +71,7 @@ KsCheckBoxWidget::KsCheckBoxWidget(const QString &n, bool cond, QWidget *parent)
   _nameLabel(n + ":  ")
 {
 	this->setWindowTitle(_name);
-	this->setMinimumHeight(SCREEN_HEIGHT/2);
+	this->setMinimumHeight(SCREEN_HEIGHT / 2);
 
 	connect(&_allCb,	&QCheckBox::clicked,
 		this,		&KsCheckBoxWidget::chechAll);
@@ -189,7 +189,7 @@ void KsCheckBoxTableWidget::adjustSize()
 	_table.setVisible(true);
 
 	int width = _table.horizontalHeader()->length() +
-		    FONT_WIDTH*3 +
+		    FONT_WIDTH * 3 +
 		    style()->pixelMetric(QStyle::PM_ScrollBarExtent);
 
 	_cbWidget->resize(width, _cbWidget->height());
@@ -455,7 +455,7 @@ KsCpuCheckBoxWidget::KsCpuCheckBoxWidget(struct pevent *pe, bool cond, QWidget *
 	if (pe)
 		nCpus = pe->cpus;
 
-	QString style = QString("QTreeView::item { height: %1 ;}").arg(FONT_HEIGHT*1.5);
+	QString style = QString("QTreeView::item { height: %1 ;}").arg(FONT_HEIGHT * 1.5);
 	_tree.setStyleSheet(style);
 	initTree();
 

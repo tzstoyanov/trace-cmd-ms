@@ -21,17 +21,25 @@
 #ifndef _KS_MODEL_H
 #define _KS_MODEL_H
 
+// C++11
+#include <mutex>
+#include <condition_variable>
+
 // Qt
 #include <QAbstractTableModel>
 #include <QSortFilterProxyModel>
 #include <QColor>
+#include <QProgressBar>
+#include <QLabel>
 
 // KernelShark
 #include "libkshark.h"
 #include "libkshark-model.h"
 
 typedef bool (*condition_func)(QString, QString);
+
 enum class DualMarkerState;
+
 class KsDataStore;
 
 class KsViewModel : public QAbstractTableModel
@@ -43,29 +51,24 @@ class KsViewModel : public QAbstractTableModel
 	static struct trace_seq	 _seq;
 	struct pevent		*_pevt;
 
-	enum {
-		TRACE_VIEW_COL_INDEX,
-		TRACE_VIEW_COL_CPU,
-		TRACE_VIEW_COL_TS,
-		TRACE_VIEW_COL_COMM,
-		TRACE_VIEW_COL_PID,
-		TRACE_VIEW_COL_LAT,
-		TRACE_VIEW_COL_EVENT,
-		TRACE_VIEW_COL_INFO,
-		TRACE_VIEW_N_COLUMNS,
-	};
-
 	int _markA, _markB;
 	QColor _colorMarkA, _colorMarkB;
+
+// 	std::mutex _mutex;
 
 public:
 	explicit KsViewModel(QObject *parent = nullptr);
 	virtual ~KsViewModel();
 
-	void setColors(const QColor &colA, const QColor &colB) {_colorMarkA = colA; _colorMarkB = colB;};
+	void setColors(const QColor &colA, const QColor &colB) {
+		_colorMarkA = colA;
+		_colorMarkB = colB;
+	};
 	int rowCount(const QModelIndex &) const override;
-	int columnCount(const QModelIndex &) const override { return _header.count(); }
-	QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
+	int columnCount(const QModelIndex &) const override {return _header.count();}
+	QVariant headerData(int section,
+			    Qt::Orientation orientation,
+			    int role) const override;
 	QVariant data(const QModelIndex &index, int role) const override;
 
 	//void fill(pevent *pevt, pevent_record **entries, size_t n);
@@ -82,10 +85,24 @@ public:
 		      const QString	&searchText,
 		      condition_func	 cond,
 		      QList<size_t>	*matchList);
+
+	enum {
+		TRACE_VIEW_COL_INDEX,
+		TRACE_VIEW_COL_CPU,
+		TRACE_VIEW_COL_TS,
+		TRACE_VIEW_COL_COMM,
+		TRACE_VIEW_COL_PID,
+		TRACE_VIEW_COL_LAT,
+		TRACE_VIEW_COL_EVENT,
+		TRACE_VIEW_COL_INFO,
+		TRACE_VIEW_N_COLUMNS,
+	};
 };
 
 class KsFilterProxyModel : public QSortFilterProxyModel
 {
+	Q_OBJECT
+
 	kshark_entry	**_data;
 	KsViewModel	 *_source;
 
@@ -98,10 +115,31 @@ public:
 	void update(KsDataStore *data);
 	void setSource(KsViewModel *s);
 
-	size_t search(int		 column,
+	size_t search(int		column,
 		      const QString	&searchText,
-		      condition_func	 cond,
-		      QList<size_t>	*matchList);
+		      condition_func	cond,
+		      QList<int>	*matchList,
+		      QProgressBar	*pb = nullptr,
+		      QLabel		*l = nullptr);
+
+
+	QList<int> searchMap(int column,
+			     const QString  &searchText,
+			     condition_func  cond,
+			     int first,
+			     int last,
+				 QProgressBar	*pb);
+
+	void searchReduce(QList<int> &resultList, const QList<int> &mapList);
+
+	void searchStop() {_searchStop = true;}
+// 	void firstMatchReady(const QList<size_t> &matchList);
+
+public:
+	std::mutex _mutex;
+	std::condition_variable _pbCond;
+	int _searchProgress;
+	bool _searchStop;
 };
 
 #define KS_DEFAULT_NBUNS	1024
@@ -128,7 +166,7 @@ public:
 
 	void shiftForward(size_t n);
 	void shiftBackward(size_t n);
-	void shiftTo(size_t ts);
+	void jumpTo(size_t ts);
 	void zoomOut(double r, int mark = -1);
 	void zoomIn(double r, int mark = -1);
 

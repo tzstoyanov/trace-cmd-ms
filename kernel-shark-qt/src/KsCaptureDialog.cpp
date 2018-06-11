@@ -88,7 +88,7 @@ KsCaptureControl::KsCaptureControl(QWidget *parent)
 	add_line();
 
 	_eventsWidget.setDefault(false);
-	_eventsWidget.setMinimumHeight(25*FONT_HEIGHT);
+	_eventsWidget.setMinimumHeight(25 * FONT_HEIGHT);
 	_topLayout.addWidget(&_eventsWidget);
 
 	int row(0);
@@ -100,7 +100,7 @@ KsCaptureControl::KsCaptureControl(QWidget *parent)
 
 	_outputLabel.adjustSize();
 	_execLayout.addWidget(&_outputLabel, row, 0);
-	_outputLineEdit.setFixedWidth(FONT_WIDTH*30);
+	_outputLineEdit.setFixedWidth(FONT_WIDTH * 30);
 	_execLayout.addWidget(&_outputLineEdit, row, 1);
 	_outputBrowseButton.adjustSize();
 	_execLayout.addWidget(&_outputBrowseButton, row++, 2);
@@ -108,7 +108,7 @@ KsCaptureControl::KsCaptureControl(QWidget *parent)
 	_commandLabel.adjustSize();
 	_commandLabel.setFixedWidth(_outputLabel.width());
 	_execLayout.addWidget(&_commandLabel, row, 0);
-	_commandLineEdit.setFixedWidth(FONT_WIDTH*30);
+	_commandLineEdit.setFixedWidth(FONT_WIDTH * 30);
 	_execLayout.addWidget(&_commandLineEdit, row, 1);
 	_commandCheckBox.setCheckState(Qt::Unchecked);
 	_commandCheckBox.adjustSize();
@@ -118,7 +118,7 @@ KsCaptureControl::KsCaptureControl(QWidget *parent)
 
 	add_line();
 
-	_captureButton.setFixedWidth(STRING_WIDTH("_Capture_") + FONT_WIDTH*2);
+	_captureButton.setFixedWidth(STRING_WIDTH("_Capture_") + FONT_WIDTH * 2);
 	_applyButton.setFixedWidth(_captureButton.width());
 	_closeButton.setFixedWidth(_captureButton.width());
 
@@ -281,13 +281,13 @@ KsCaptureMonitor::KsCaptureMonitor(QWidget *parent)
   _mergedChannels(false),
   _argsModified(false)
 {
-	_panel.setMaximumHeight(FONT_HEIGHT*1.75);
+	_panel.setMaximumHeight(FONT_HEIGHT * 1.75);
 	_panel.addWidget(&_name);
 
 	_space.setAlignment(Qt::AlignRight);
 	_panel.addWidget(&_space);
 
-	_maxLinNumEdit.setFixedWidth(FONT_WIDTH*7);
+	_maxLinNumEdit.setFixedWidth(FONT_WIDTH * 7);
 	_panel.addWidget(&_maxLinNumEdit);
 	_panel.addSeparator();
 	_readOnly.setCheckState(Qt::Checked);
@@ -295,11 +295,11 @@ KsCaptureMonitor::KsCaptureMonitor(QWidget *parent)
 	_layout.addWidget(&_panel);
 
 	_consolOutput.setStyleSheet("QLabel {background-color : white;}");
-	_consolOutput.setMinimumWidth(FONT_WIDTH*60);
-	_consolOutput.setMinimumHeight(FONT_HEIGHT*10);
+	_consolOutput.setMinimumWidth(FONT_WIDTH * 60);
+	_consolOutput.setMinimumHeight(FONT_HEIGHT * 10);
 	_consolOutput.setMaximumBlockCount(MAX_LINE_NUM);
 
-	_space.setMinimumWidth(FONT_WIDTH*50 - _name.width() - _readOnly.width());
+	_space.setMinimumWidth(FONT_WIDTH * 50 - _name.width() - _readOnly.width());
 	_consolOutput.setReadOnly(true);
 	_layout.addWidget(&_consolOutput);
 

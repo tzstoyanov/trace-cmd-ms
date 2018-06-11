@@ -23,6 +23,7 @@
 
 // C
 #include <stdint.h>
+#include <pthread.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,14 +36,21 @@ extern "C" {
 
 // KernelShark
 #include "libkshark-plugin.h"
+#include "libkshark-collection.h"
 
 #define TASK_HASH_SIZE 1024
 
 #define KS_EMPTY_BIN		-1
 #define KS_FILTERED_BIN		-2
 
-#define KS_VIEW_FILTER_MASK   0x1
-#define KS_GRAPH_FILTER_MASK  0x2
+#define KS_LAST_BIN		-4
+
+enum kshark_filter_masks {
+	KS_VIEW_FILTER_MASK		= (1 << 0),
+	KS_GRAPH_FILTER_MASK		= (1 << 1),
+	KS_EVENT_FILTER_MASK		= (1 << 2),
+	KS_PLUGIN_UNTOUCHED_MASK	= (1 << 7)
+};
 
 struct kshark_entry {
 	uint8_t		visible;
@@ -63,6 +71,8 @@ struct task_list {
 	int			 pid;
 };
 
+struct kshark_entry_collection;
+
 struct kshark_context {
 	struct tracecmd_input	*handle;
 	struct pevent		*pevt;
@@ -82,6 +92,10 @@ struct kshark_context {
 	struct plugin_list	*plugins;
 
 	struct gui_event_handler *event_handlers;
+
+	struct kshark_entry_collection *collections;
+
+	pthread_mutex_t input_mutex;
 };
 
 int kshark_instance(struct kshark_context **kshark_ctx);
@@ -106,14 +120,10 @@ void kshark_close(struct kshark_context *kshark_ctx);
 
 void kshark_free(struct kshark_context *kshark_ctx);
 
-typedef bool (matching_condition_func)(struct kshark_context*,
-				       struct kshark_entry*,
-				       int);
-
 int kshark_get_pid_lazy(struct kshark_entry *entry);
 
 const char *kshark_get_task(struct pevent *pevt,
-			    struct kshark_entry *entry);
+			    struct pevent_record *record);
 
 const char *kshark_get_task_lazy(struct kshark_entry *entry);
 
@@ -123,7 +133,7 @@ const char *kshark_get_latency(struct pevent *pevt,
 const char *kshark_get_latency_lazy(struct kshark_entry *entry);
 
 const char *kshark_get_event_name(struct pevent *pevt,
-				  struct kshark_entry *entry);
+				  struct pevent_record *record);
 
 const char *kshark_get_event_name_lazy(struct kshark_entry *entry);
 
@@ -137,7 +147,7 @@ void kshark_set_entry_values(struct kshark_context *kshark_ctx,
 			     struct pevent_record *record,
 			     struct kshark_entry *entry);
 
-char* kshark_dump_entry(struct kshark_entry *entry, int *size);
+char* kshark_dump_entry(struct kshark_entry *entry);
 
 enum kshark_filter_type {
 	SHOW_EVENT_FILTER,
@@ -150,17 +160,19 @@ void kshark_filter_add_id(struct kshark_context *kshark_ctx, int filter_id, int 
 
 void kshark_filter_clear(struct kshark_context *kshark_ctx, int filter_id);
 
+bool kshark_filter_is_set(struct kshark_context *kshark_ctx);
+
 size_t kshark_filter_entries(struct kshark_context *kshark_ctx,
 			     struct kshark_entry **data_rows,
 			     size_t n_entries);
 
-uint32_t kshark_find_entry_row(uint64_t time,
-			       struct kshark_entry **data_rows,
-			       uint32_t l, uint32_t h);
+size_t kshark_find_entry_row(uint64_t time,
+			     struct kshark_entry **data_rows,
+			     size_t l, size_t h);
 
-uint32_t kshark_find_record_row(uint64_t time,
-				struct pevent_record **data_rows,
-				uint32_t l, uint32_t h);
+size_t kshark_find_record_row(uint64_t time,
+			      struct pevent_record **data_rows,
+			      size_t l, size_t h);
 
 void kshark_convert_nano(uint64_t time, uint64_t *sec, uint64_t *usec);
 
@@ -173,54 +185,17 @@ char **kshark_get_event_format_fields(struct event_format *event);
 bool kshark_check_pid(struct kshark_context *kshark_ctx,
 		      struct kshark_entry *e, int pid);
 
-struct kshark_entry *kshark_get_entry_front(size_t first,
-					    size_t n,
-					    matching_condition_func cond,
-					    int val,
-					    bool vis_only,
-					    int vis_mask,
+bool kshark_check_cpu(struct kshark_context *kshark_ctx,
+		      struct kshark_entry *e, int cpu);
+
+bool kshark_check_cpu_visible(struct kshark_context *kshark_ctx,
+			      struct kshark_entry *e, int cpu);
+
+struct kshark_entry *kshark_get_entry_front(const struct kshark_entry_request *req,
 					    struct kshark_entry **data);
 
-int kshark_get_pid_front(size_t first, size_t n, int cpu, bool vis_only, int mask,
-			 struct kshark_entry **data);
-
-int kshark_get_cpu_front(size_t first, size_t n, int pid, bool vis_only, int mask,
-			 struct kshark_entry **data);
-
-struct kshark_entry *kshark_get_entry_back(size_t first,
-					   size_t n,
-					   matching_condition_func cond,
-					   int val,
-					   bool vis_only,
-					   int vis_mask,
+struct kshark_entry *kshark_get_entry_back(const struct kshark_entry_request *req,
 					   struct kshark_entry **data);
-
-int kshark_get_pid_back(size_t first, size_t n, int cpu, bool vis_only, int mask,
-			struct kshark_entry **data);
-
-int kshark_get_cpu_back(size_t first, size_t n, int pid, bool vis_only, int mask,
-			struct kshark_entry **data);
-
-struct kshark_entry *kshark_get_entry_by_pid_back(size_t first,
-						  size_t n,
-						  int pid,
-						  bool vis_only,
-						  int vis_mask,
-						  struct kshark_entry **data);
-
-struct kshark_entry *kshark_get_entry_by_pid_front(size_t first,
-						   size_t n,
-						   int pid,
-						   bool vis_only,
-						   int vis_mask,
-						   struct kshark_entry **data);
-
-size_t kshark_get_data_collection(struct kshark_context *kshark_ctx,
-				  struct kshark_entry **data,
-				  size_t n_rows,
-				  matching_condition_func cond,
-				  int val,
-				  size_t **col);
 
 #ifdef __cplusplus
 }

@@ -87,8 +87,8 @@ private:
 	void updateGraphs();
 	void drawAxisX();
 	void makeGraphs(QVector<int> cpuMask, QVector<int> taskMask);
-	void addCpu(int cpu);
-	void addTask(int pid);
+	KsPlot::Graph *newCpuGraph(int cpu);
+	KsPlot::Graph *newTaskGraph(int pid);
 	void makePluginShapes(QVector<int> cpuMask, QVector<int> taskMask);
 
 	int posInRange(int x);

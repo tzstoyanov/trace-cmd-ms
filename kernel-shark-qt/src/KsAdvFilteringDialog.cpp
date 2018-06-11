@@ -50,7 +50,7 @@ KsAdvFilteringDialog::KsAdvFilteringDialog(pevent *pe,
 		_topLayout.addWidget(line);
 	};
 
-	setMinimumWidth(FONT_WIDTH*80);
+	setMinimumWidth(FONT_WIDTH * 80);
 
 	int buttonWidth = STRING_WIDTH("--Show Help--");
 	_helpButton.setFixedWidth(buttonWidth);
@@ -187,7 +187,7 @@ KsAdvFilteringDialog::KsAdvFilteringDialog(pevent *pe,
 
 	add_line();
 
-	_filterEdit.setMinimumWidth(50*FONT_WIDTH);
+	_filterEdit.setMinimumWidth(50 * FONT_WIDTH);
 	_topLayout.addWidget(&_filterEdit);
 	this->setLayout(&_topLayout);
 

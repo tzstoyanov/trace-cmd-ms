@@ -33,7 +33,7 @@ namespace KsUtils {
 
 int getPidList(QVector<int> *pids)
 {
-	struct kshark_context *kshark_ctx = NULL;
+	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
 	struct task_list *list;
@@ -60,7 +60,7 @@ void listFilterSync(int st)
 {
 	bool state = (bool) st;
 
-	struct kshark_context *kshark_ctx = NULL;
+	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
 	if (state) {
@@ -74,7 +74,7 @@ void graphFilterSync(int st)
 {
 	bool state = (bool) st;
 
-	struct kshark_context *kshark_ctx = NULL;
+	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
 	if (state) {
@@ -86,7 +86,7 @@ void graphFilterSync(int st)
 
 QString Ts2String(ssize_t ts, int prec)
 {
-	return QString::number(ts*1e-9, 'f', prec);
+	return QString::number(ts * 1e-9, 'f', prec);
 }
 
 }; // KsUtils
@@ -108,7 +108,7 @@ void KsDataStore::loadData(const QString &file)
 
 	clear();
 
-	struct kshark_context *kshark_ctx = NULL;
+	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
 	bool status = kshark_open(kshark_ctx, file.toStdString().c_str());
@@ -132,14 +132,14 @@ void KsDataStore::loadData(const QString &file)
 	_dataSize = kshark_load_data_entries(kshark_ctx, &_rows);
 
 	double time = GET_DURATION(t0);
-	qInfo() << "Data loading time: " << 1e3*time << " ms.   entries: " << _dataSize;
+	qInfo() << "Data loading time: " << 1e3 * time << " ms.   entries: " << _dataSize;
 }
 
 void KsDataStore::reload()
 {
 	hd_time t0 = GET_TIME;
 
-	struct kshark_context *kshark_ctx = NULL;
+	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
 	for (size_t r = 0; r < _dataSize; ++r)
@@ -154,7 +154,7 @@ void KsDataStore::reload()
 	emit updateGraph(this);
 
 	double time = GET_DURATION(t0);
-	qInfo() << "Data reloading time: " << 1e3*time << " ms.   entries: " << _dataSize;
+	qInfo() << "Data reloading time: " << 1e3 * time << " ms.   entries: " << _dataSize;
 }
 
 void KsDataStore::clear()
@@ -172,7 +172,7 @@ void KsDataStore::clear()
 	_pevt = nullptr;
 
 	if (_handle) {
-		struct kshark_context *kshark_ctx = NULL;
+		kshark_context *kshark_ctx = NULL;
 		kshark_instance(&kshark_ctx);
 		kshark_close(kshark_ctx);
 		_handle = nullptr;
@@ -183,29 +183,68 @@ void KsDataStore::update()
 {
 	hd_time t0 = GET_TIME;
 
-	struct kshark_context *kshark_ctx = NULL;
+	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
-	if ((kshark_ctx->show_task_filter && filter_id_count(kshark_ctx->show_task_filter)) ||
-	    (kshark_ctx->hide_task_filter && filter_id_count(kshark_ctx->hide_task_filter)) ||
-	    (kshark_ctx->show_event_filter && filter_id_count(kshark_ctx->show_event_filter)) ||
-	    (kshark_ctx->hide_event_filter && filter_id_count(kshark_ctx->hide_event_filter))) {
+	if (kshark_filter_is_set(kshark_ctx)) {
 		kshark_filter_entries(kshark_ctx, _rows, _dataSize);
-
 		emit updateView(this);
 		emit updateGraph(this);
 	}
 
 	double time = GET_DURATION(t0);
-	qInfo() << "Update time (PTF): " << 1e3*time << " ms.";
+	qInfo() << "Update time (PTF): " << 1e3 * time << " ms.";
+}
+
+void KsDataStore::registerCpuCollections()
+{
+	hd_time t0 = GET_TIME;
+
+	kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+	if (!kshark_filter_is_set(kshark_ctx)) {
+		return;
+	}
+
+	int nCpus = _pevt->cpus;
+
+	for (int i = 0; i < nCpus; ++i) {
+		kshark_register_data_collection(kshark_ctx,
+						_rows, _dataSize,
+						kshark_check_cpu_visible, i,
+						0);
+	}
+
+	double time = GET_DURATION(t0);
+	qInfo() << "cpu collection time: " << 1e3 * time << " ms.";
+}
+
+void KsDataStore::unregisterCpuCollections()
+{
+	hd_time t0 = GET_TIME;
+
+	kshark_context *kshark_ctx = NULL;
+	kshark_instance(&kshark_ctx);
+	int nCpus = _pevt->cpus;
+
+	for (int cpu = 0; cpu < nCpus; ++cpu) {
+		kshark_unregister_data_collection(&kshark_ctx->collections,
+						  kshark_check_cpu_visible,
+						  cpu);
+	}
+
+	double time = GET_DURATION(t0);
+	qInfo() << "cpu u. collection time: " << 1e3 * time << " ms.";
 }
 
 void KsDataStore::applyPosTaskFilter(QVector<int> vec)
 {
 	hd_time t0 = GET_TIME;
 
-	struct kshark_context *kshark_ctx = NULL;
+	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
+
+	unregisterCpuCollections();
 
 	kshark_filter_clear(kshark_ctx, SHOW_TASK_FILTER);
 	kshark_filter_clear(kshark_ctx, HIDE_TASK_FILTER);
@@ -221,19 +260,23 @@ void KsDataStore::applyPosTaskFilter(QVector<int> vec)
 	else
 		kshark_filter_entries(kshark_ctx, _rows, _dataSize);
 
+	registerCpuCollections();
+
 	emit updateView(this);
 	emit updateGraph(this);
 
 	double time = GET_DURATION(t0);
-	qInfo() << "Filtering time (PTF): " << 1e3*time << " ms.";
+	qInfo() << "Filtering time (PTF): " << 1e3 * time << " ms.";
 }
 
 void KsDataStore::applyNegTaskFilter(QVector<int> vec)
 {
 	hd_time t0 = GET_TIME;
 
-	struct kshark_context *kshark_ctx = NULL;
+	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
+
+	unregisterCpuCollections();
 
 	kshark_filter_clear(kshark_ctx, SHOW_TASK_FILTER);
 	kshark_filter_clear(kshark_ctx, HIDE_TASK_FILTER);
@@ -241,7 +284,7 @@ void KsDataStore::applyNegTaskFilter(QVector<int> vec)
 		kshark_filter_add_id(kshark_ctx, HIDE_TASK_FILTER, pid);
 
 	/*
-	 * If the advanced event filter is set the data has to be reloaded,
+	 * If the advanced event filter is set, the data has to be reloaded,
 	 * because the advanced filter uses pevent_records.
 	 */
 	if (kshark_ctx->adv_filter_is_set)
@@ -249,19 +292,23 @@ void KsDataStore::applyNegTaskFilter(QVector<int> vec)
 	else
 		kshark_filter_entries(kshark_ctx, _rows, _dataSize);
 
+	registerCpuCollections();
+
 	emit updateView(this);
 	emit updateGraph(this);
 
 	double time = GET_DURATION(t0);
-	qInfo() << "Filtering time (NTF): " << 1e3*time << " ms.";
+	qInfo() << "Filtering time (NTF): " << 1e3 * time << " ms.";
 }
 
 void KsDataStore::applyPosEventFilter(QVector<int> vec)
 {
 	hd_time t0 = GET_TIME;
 
-	struct kshark_context *kshark_ctx = NULL;
+	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
+
+	unregisterCpuCollections();
 
 	kshark_filter_clear(kshark_ctx, SHOW_EVENT_FILTER);
 	kshark_filter_clear(kshark_ctx, HIDE_EVENT_FILTER);
@@ -278,19 +325,23 @@ void KsDataStore::applyPosEventFilter(QVector<int> vec)
 	else
 		kshark_filter_entries(kshark_ctx, _rows, _dataSize);
 
+	registerCpuCollections();
+
 	emit updateView(this);
 	emit updateGraph(this);
 
 	double time = GET_DURATION(t0);
-	qInfo() << "Filtering time (PEF): " << 1e3*time << " ms.";
+	qInfo() << "Filtering time (PEF): " << 1e3 * time << " ms.";
 }
 
 void KsDataStore::applyNegEventFilter(QVector<int> vec)
 {
 	hd_time t0 = GET_TIME;
 
-	struct kshark_context *kshark_ctx = NULL;
+	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
+
+	unregisterCpuCollections();
 
 	kshark_filter_clear(kshark_ctx, SHOW_EVENT_FILTER);
 	kshark_filter_clear(kshark_ctx, HIDE_EVENT_FILTER);
@@ -306,11 +357,13 @@ void KsDataStore::applyNegEventFilter(QVector<int> vec)
 	else
 		kshark_filter_entries(kshark_ctx, _rows, _dataSize);
 
+	registerCpuCollections();
+
 	emit updateView(this);
 	emit updateGraph(this);
 
 	double time = GET_DURATION(t0);
-	qInfo() << "Filtering time (NEF): " << 1e3*time << " ms.";
+	qInfo() << "Filtering time (NEF): " << 1e3 * time << " ms.";
 }
 
 void KsDataStore::clearAllFilters()
@@ -320,8 +373,10 @@ void KsDataStore::clearAllFilters()
 
 	hd_time t0 = GET_TIME;
 
-	struct kshark_context *kshark_ctx = NULL;
+	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
+
+	unregisterCpuCollections();
 
 	kshark_filter_clear(kshark_ctx, SHOW_TASK_FILTER);
 	kshark_filter_clear(kshark_ctx, HIDE_TASK_FILTER);
@@ -335,7 +390,7 @@ void KsDataStore::clearAllFilters()
 	emit updateGraph(this);
 
 	double time = GET_DURATION(t0);
-	qInfo() << "Filtering time (clearAll): " << 1e3*time << " ms.";
+	qInfo() << "Filtering time (clearAll): " << 1e3 * time << " ms.";
 }
 
 KsPluginManager::KsPluginManager(QWidget *parent)
@@ -356,7 +411,7 @@ KsPluginManager::KsPluginManager(QWidget *parent)
 
 void KsPluginManager::registerPlugin(const QString &plugin)
 {
-	struct kshark_context *kshark_ctx = NULL;
+	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 	char *lib;
 
@@ -390,7 +445,7 @@ void KsPluginManager::registerPlugin(const QString &plugin)
 
 void KsPluginManager::unregisterPlugin(const QString &plugin)
 {
-	struct kshark_context *kshark_ctx = NULL;
+	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
 	for (int i = 0; i < _pluginList.count(); ++i) {
@@ -430,7 +485,7 @@ void KsPluginManager::unload()
 			_registeredPlugins[i] = false;
 		}
 
-	struct kshark_context *kshark_ctx = NULL;
+	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
 	kshark_handle_plugins(kshark_ctx, KSHARK_PLUGIN_UNLOAD);
@@ -449,7 +504,7 @@ void KsPluginManager::updatePlugins(QVector<int> pluginId)
 			registerPlugin(_pluginList[p]);
 	};
 
-	struct kshark_context *kshark_ctx = NULL;
+	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 
 	if (!kshark_ctx->pevt) {
@@ -574,7 +629,7 @@ KsDualMarkerSM::KsDualMarkerSM(QWidget *parent)
 		l->setFrameStyle(QFrame::Panel | QFrame::Sunken);
 		l->setStyleSheet("QLabel {background-color : white;}");
 		l->setTextInteractionFlags(Qt::TextSelectableByMouse);
-		l->setFixedWidth(FONT_WIDTH*16);
+		l->setFixedWidth(FONT_WIDTH * 16);
 	}
 
 	QString styleSheetA = "background : " +
@@ -871,9 +926,6 @@ void KsSession::setCpuPlots(const QVector<int> &cpus)
 	json_object *jcpus;
 	if (json_object_object_get_ex(_jsession, "CpuPlots", &jcpus)) {
 		json_object_object_del(_jsession, "CpuPlots");
-// 		size_t length = json_object_array_length(jcpus);
-// 		if (length)
-// 			json_object_array_del_idx(jcpus, 0, length - 1)
 	}
 
 	jcpus = json_object_new_array();
@@ -906,9 +958,6 @@ void KsSession::setTaskPlots(const QVector<int> &tasks)
 	json_object *jtasks;
 	if (json_object_object_get_ex(_jsession, "TaskPlots", &jtasks)) {
 		json_object_object_del(_jsession, "TaskPlots");
-// 		int length = json_object_array_length(jtasks);
-// 		if (length)
-// 			json_object_array_del_idx(jtasks, 0, length - 1)
 	}
 
 	jtasks = json_object_new_array();

@@ -97,6 +97,8 @@ signals:
 public slots:
 	void reload();
 	void update();
+	void registerCpuCollections();
+	void unregisterCpuCollections();
 	void applyPosTaskFilter(QVector<int>);
 	void applyNegTaskFilter(QVector<int>);
 	void applyPosEventFilter(QVector<int>);

@@ -24,7 +24,7 @@
 // Qt
 #include <QtWidgets>
 
-class KsDataProgressBar : public QWidget
+class KsProgressBar : public QWidget
 {
 	Q_OBJECT
 
@@ -32,7 +32,7 @@ class KsDataProgressBar : public QWidget
 	QProgressBar	_pb;
 
 public:
-	KsDataProgressBar(QWidget *parent = nullptr);
+	KsProgressBar(QString message, QWidget *parent = nullptr);
 
 public slots:
 	void setValue(int i);

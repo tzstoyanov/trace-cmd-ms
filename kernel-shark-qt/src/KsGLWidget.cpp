@@ -18,6 +18,9 @@
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
+// C++11
+#include <future>
+
 // OpenGL
 #include <GL/glut.h>
 #include <GL/gl.h>
@@ -46,7 +49,8 @@ void KsGLWidget::resizeGL(int w, int h)
 	glViewport(0, 0, w, h);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	gluOrtho2D(0, w, h, 0); // Set origin to top left corner. "Y" coordinate is inverted.
+	gluOrtho2D(0, w, h, 0);		// Set origin to top left corner.
+					// "Y" coordinate is inverted.
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 
@@ -70,7 +74,7 @@ void KsGLWidget::paintGL()
 	/* Process and draw all graphs by using the built-in logic. */
 	makeGraphs(_cpuList, _taskList);
 	for (auto const &g: _graphs)
-		g->draw(_pidColors, 1.5*_dpr);
+		g->draw(_pidColors, 1.5 * _dpr);
 
 	/* Process and draw all plugin-specific shapes. */
 	makePluginShapes(_cpuList, _taskList);
@@ -80,7 +84,10 @@ void KsGLWidget::paintGL()
 	}
 	_shapes.clear();
 
-	/* Update and draw the markers. */
+	/*
+	 * Update and draw the markers. Make sure that the active marker
+	 * is drawn on top.
+	 */
 	_mState->updateMarkers(*_data, _model.histo());
 	_mState->passiveMarker().markPtr()->draw();
 	_mState->activeMarker().markPtr()->draw();
@@ -119,12 +126,12 @@ void KsGLWidget::loadData(KsDataStore *data)
 	 * From the size of the widget, calculate the number of bins.
 	 * One bin will correspond to one pixel.
 	 */
-	int nBins = width() - _hMargin*2;
+	int nBins = width() - _hMargin * 2;
 
 	/* Now load the entire set of trace data. */
 	uint64_t tMin = _data->_rows[0]->ts;
 	uint64_t tMax = _data->_rows[_data->size() - 1]->ts;
-	kshark_histo_set_bining(_model.histo(), nBins, tMin, tMax);
+	ksmodel_set_bining(_model.histo(), nBins, tMin, tMax);
 	_model.fill(_data->_pevt, _data->_rows, _data->size());
 
 	/* Make a default Cpu list. All Cpus will be plotted. */
@@ -176,7 +183,7 @@ int KsGLWidget::graphCount() const
 
 int KsGLWidget::height() const
 {
-	return graphCount()*(CPU_GRAPH_HEIGHT + _vSpacing) + _vMargin*2;
+	return graphCount()*(CPU_GRAPH_HEIGHT + _vSpacing) + _vMargin * 2;
 }
 
 int KsGLWidget::dpr() const
@@ -231,29 +238,30 @@ void KsGLWidget::updateGraphs()
 	 * From the size of the widget, calculate the number of bins.
 	 * One bin will correspond to one pixel.
 	 */
-	int nBins = width() - _hMargin*2;
+	int nBins = width() - _hMargin * 2;
 
 	/*
 	 * Reload the data. The range of the histogram is the same
 	 * but the number of bins changes.
 	 */
-	kshark_histo_set_bining(_model.histo(),
-				nBins,
-				_model.histo()->min,
-				_model.histo()->max);
+	ksmodel_set_bining(_model.histo(),
+			   nBins,
+			   _model.histo()->min,
+			   _model.histo()->max);
 
 	_model.fill(_data->_pevt, _data->_rows, _data->size());
 }
 
 void KsGLWidget::drawAxisX()
 {
-	KsPlot::Point a0(_hMargin, _vMargin/4), a1(_hMargin, _vMargin/2);
-	KsPlot::Point b0(width()/2, _vMargin/4), b1(width()/2, _vMargin/2);
-	KsPlot::Point c0(width() - _hMargin, _vMargin/4), c1(width() - _hMargin, _vMargin/2);
+	KsPlot::Point a0(_hMargin, _vMargin / 4), a1(_hMargin, _vMargin / 2);
+	KsPlot::Point b0(width()/2, _vMargin / 4), b1(width() / 2, _vMargin / 2);
+	KsPlot::Point c0(width() - _hMargin, _vMargin / 4),
+			 c1(width() - _hMargin, _vMargin / 2);
 	KsPlot::Line a(&a0, &a1), b(&b0, &b1), c(&c0, &c1), ac(&a0, &c0);
 
 	a0._size = c0._size = _dpr;
-	a._size = b._size = c._size = ac._size = 1.5*_dpr;
+	a._size = b._size = c._size = ac._size = 1.5 * _dpr;
 
 	a0.draw();
 	c0.draw();
@@ -273,18 +281,39 @@ void KsGLWidget::makeGraphs(QVector<int> cpuList, QVector<int> taskList)
 	if (!_data || !_data->size())
 		return;
 
+	auto add_gpaph = [&] (KsPlot::Graph *graph) {
+		/*
+		* Calculate the base level of the Cpu graph inside the widget.
+		* Remember that the "Y" coordinate is inverted.
+		*/
+		int base = _vMargin +
+			   _vSpacing * _graphs.count() +
+			   CPU_GRAPH_HEIGHT*(_graphs.count() + 1);
+
+		graph->setBase(base);
+		_graphs.append(graph);
+	};
+
 	/* Create Cpu graphs according to the cpuList. */
 	for (auto const &cpu: cpuList)
-		addCpu(cpu);
+		add_gpaph(newCpuGraph(cpu));
+
+
+// 	std::vector< std::future<KsPlot::Graph *> > futureGraphs;
+// 	for (auto const &cpu: cpuList)
+// 		futureGraphs.push_back(std::async(&KsGLWidget::newCpuGraph, this, cpu));
+// 
+// 	for (auto &f: futureGraphs)
+// 		add_gpaph(f.get());
 
 	/* Create Task graphs taskList to the taskList. */
 	for (auto const &pid: taskList)
-		addTask(pid);
+		add_gpaph(newTaskGraph(pid));
 }
 
 void KsGLWidget::makePluginShapes(QVector<int> cpuList, QVector<int> taskList)
 {
-	struct kshark_context *kshark_ctx = NULL;
+	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 	gui_event_handler *evt_handlers;
 
@@ -317,223 +346,82 @@ void KsGLWidget::makePluginShapes(QVector<int> cpuList, QVector<int> taskList)
 	}
 }
 
-void KsGLWidget::addCpu(int cpu)
+KsPlot::Graph *KsGLWidget::newCpuGraph(int cpu)
 {
-	int pidF(0), pidB(0);
 	int nBins = _model.histo()->n_bins;
 	KsPlot::Graph *graph = new KsPlot::Graph(nBins);
 	graph->setHMargin(_hMargin);
+	graph->_histo = _model.histo();
 
-	/*
-	 * Calculate the base level of the Cpu graph inside the widget.
-	 * Remember that the "Y" coordinate is inverted.
-	 */
-	int base = _vMargin +
-		   _vSpacing*_graphs.count() +
-		   CPU_GRAPH_HEIGHT*(_graphs.count() + 1);
+	kshark_context *kshark_ctx = NULL;
+	kshark_entry_collection *col;
 
-	graph->setBase(base);
+	kshark_instance(&kshark_ctx);
+	col = kshark_find_data_collection(kshark_ctx->collections,
+					  kshark_check_cpu_visible,
+					  cpu);
 
-	auto set_bin = [&] (int bin) {
-		if (pidF != KS_EMPTY_BIN) {
-			/* This is a regular process. */
-			graph->setBin(bin, pidF, pidB, _pidColors[pidF]);
-		} else {
-			/*
-			 * The bin contens no data from this Cpu or the data has
-			 * been filtered. Whene the graph is ploter the Process Id
-			 * of the bin will be derived from the previous bin.
-			 */
-			graph->setBinPid(bin, KS_EMPTY_BIN, KS_EMPTY_BIN);
-		}
-	};
+	graph->_graphCollection = col;
+	graph->fillCpuGraph(cpu, _pidColors);
 
-	auto get_pid = [&] (int bin) {
-		pidF = kshark_histo_get_pid_front(_model.histo(), bin, cpu, true);
-		pidB = kshark_histo_get_pid_back(_model.histo(), bin, cpu, true);
-	};
-
-	/* Check the content of the very firs bin and see if the Cpu is active. */
-	int bin(0);
-	get_pid(bin);
-	if (pidF >= 0) {
-		/* The Cpu is active and this is a regular process. Set this bin. */
-		set_bin(bin);
-	} else {
-		/*
-		 * No data from this Cpu in the very firs bin. Use the Lower
-		 * Overflow Bin to retrieve the Process Id (if any). First
-		 * get the Pid back, ignoring the filters.
-		 */
-		int pidBNoFilter = kshark_histo_get_pid_back(_model.histo(),
-							     LOWER_OVERFLOW_BIN,
-							     cpu,
-							     false);
-
-		/* Now get the Pid back, applying filters. */
-		pidB = kshark_histo_get_pid_back(_model.histo(),
-						 LOWER_OVERFLOW_BIN,
-						 cpu,
-						 true);
-
-		if (pidB != pidBNoFilter) {
-			/* The Lower Overflow Bin ends with filtered data. */
-			graph->setBinPid(bin, KS_FILTERED_BIN, KS_FILTERED_BIN);
-		} else {
-			/*
-			 * The Lower Overflow Bin ends with data which has
-			 * to be plotted.
-			 */
-			graph->setBinPid(bin, pidB, pidB);
-		}
-	}
-
-	/* The first bin is already processed. The loop starts from the second bin. */
-	for (bin = 1; bin < nBins; ++bin) {
-		/*
-		 * Check the content of this bin and see if the Cpu is active.
-		 * If yes, retrieve the Process Id. If not, derive from the
-		 * previous bin.
-		 */
-		get_pid(bin);
-		set_bin(bin);
-	}
-
-	_graphs.append(graph);
+	return graph;
 }
 
-void KsGLWidget::addTask(int pid)
+KsPlot::Graph *KsGLWidget::newTaskGraph(int pid)
 {
-	int cpu, pidF(0), pidB(0), lastCpu(-1);
 	int nBins = _model.histo()->n_bins;
 	KsPlot::Graph *graph = new KsPlot::Graph(nBins);
 	graph->setHMargin(_hMargin);
+	graph->_histo = _model.histo();
+
+	kshark_context *kshark_ctx = NULL;
+	kshark_entry_collection *col;
+
+	kshark_instance(&kshark_ctx);
+	col = kshark_find_data_collection(kshark_ctx->collections,
+					  kshark_check_pid, pid);
+	if (!col) {
+		/*
+		 * If a data collection for this task does not exist,
+		 * register a new one.
+		 */
+		col = kshark_register_data_collection(kshark_ctx,
+						      _data->_rows, _data->size(),
+						      kshark_check_pid, pid,
+						      25);
+	}
 
 	/*
-	 * Calculate the base level of the Cpu graph inside the widget.
-	 * Remember that the "Y" coordinate is inverted.
+	 * Data collections are efficient only when used on graphs, having a lot
+	 * of empty bins.
+	 * TODO: Determine the optimal criteria to decide whether to use or not
+	 * use data collection for this graph.
 	 */
-	int base = _vMargin +
-		   _vSpacing*_graphs.count() +
-		   CPU_GRAPH_HEIGHT*(_graphs.count() + 1);
-
-	graph->setBase(base);
-
-	auto set_bin = [&] (int b) {
-		if (cpu >= 0) {
-			KsPlot::Color col;
-			col.setRainbowColor(cpu);
-
-			/* Data from thе Task has been found in this bin. */
-			if (pid == pidF && pid == pidB) {
-				/* No data from other tasks in this bin. */
-				graph->setBin(b, pid, pid, col);
-			} else if (pid != pidF && pid != pidB) {
-				/*
-				 * There is some data from another tasks at both
-				 * front and back sides of this bin. But we still
-				 * want to see this bin drawn.
-				 */
-				graph->setBin(b, pid, KS_FILTERED_BIN, col);
-			} else {
-				if (pidF != pid) {
-					/*
-					 * There is some data from another task
-					 * at the front side of this bin.
-					 */
-					pidF = KS_FILTERED_BIN;
-				}
-
-				if (pidB != pid) {
-					/*
-					 * There is some data from another task
-					 * at the back side of this bin.
-					 */
-					pidB = KS_FILTERED_BIN;
-				}
-
-				graph->setBin(b, pidF, pidB, col);
-			}
-
-			lastCpu = cpu;
-		} else {
-			/*
-			 * No data from thе Task in this bin. Check the Cpu, previously used
-			 * by the task.
-			 */
-			int cpuPid = kshark_histo_get_pid_back(_model.histo(), b, lastCpu, false);
-			if (cpuPid != KS_EMPTY_BIN) {
-				/*
-				 * If the Cpu is active and works on another task break the
-				 * graph here.
-				 */
-				graph->setBinPid(b, KS_FILTERED_BIN, KS_EMPTY_BIN);
-			} else {
-				/* No data from this Cpu in the bin. Continue the graph. */
-				graph->setBinPid(b, KS_EMPTY_BIN, KS_EMPTY_BIN);
-			}
-		}
-	};
-
-	/* Check the content of the very firs bin and see if the Task is active. */
-	int b = 0;
-	cpu = kshark_histo_get_cpu(_model.histo(), b, pid, false);
-	pidF = kshark_histo_get_pid_front(_model.histo(), b, cpu, false);
-	pidB = kshark_histo_get_pid_back(_model.histo(), b, cpu, false);
-
-	if (cpu >= 0) {
-		/* The Task is active. Set this bin. */
-		set_bin(b);
-	} else {
+	if (_data->size() < 1e6 &&
+	    col && col->size &&
+	    _data->size() / col->size < 100) {
 		/*
-		 * No data from this Task in the very firs bin. Use the Lower
-		 * Overflow Bin to retrieve the Cpu used by the task (if any).
+		 * No need to use collection in this case. Free the collection data,
+		 * but keep the collection registered. This will prevent from recalculating
+		 * the same collection next time when this task is ploted.
 		 */
-		cpu = kshark_histo_get_cpu(_model.histo(), LOWER_OVERFLOW_BIN, pid, false);
-		if (cpu >= 0) {
-			/*
-			 * The Lower Overflow Bin contains data from this Task. Now
-			 * look again in the Lower Overflow Bin and find the Pid of the
-			 * last active task on the same Cpu.
-			 */
-			int pidCpu = kshark_histo_get_pid_back(_model.histo(),
-							       LOWER_OVERFLOW_BIN,
-							       cpu, false);
-			if (pidCpu == pid) {
-				/*
-				 * The Task is the last one running on this Cpu. Set the Pid
-				 * of the bin. In this case the very firs bin is empty but
-				 * we derive the Process Id from the Lower Overflow Bin.
-				 */
-				graph->setBinPid(b, pid, pid);
-				lastCpu = cpu;
-			}
-		}
+		kshark_reset_data_collection(col);
 	}
 
-	/* The first bin is already processed. The loop starts from the second bin. */
-	for (int b = 1; b < nBins; ++b) {
-		/* Get the CPU used by this task. */
-		cpu = kshark_histo_get_cpu(_model.histo(), b, pid, false);
+	graph->_graphCollection = col;
+	graph->fillTaskGraph(pid);
 
-		/* Get the process Id at the begining and at the end bin. */
-		pidF = kshark_histo_get_pid_front(_model.histo(), b, cpu, false);
-		pidB = kshark_histo_get_pid_back(_model.histo(), b, cpu, false);
-
-		/* Set the bin accordingly. */
-		set_bin(b);
-	}
-
-	_graphs.append(graph);
+	return graph;
 }
 
 bool KsGLWidget::find(QMouseEvent *event, int variance, size_t *row)
 {
 	/*
-	 * Get the bin, pid and cpu numbers. Remember that one bin corresponds
-	 * to one pixel.
+	 * Get the bin, pid and cpu numbers.
+	 * Remember that one bin corresponds to one pixel.
 	 */
 	int bin = event->pos().x() - _hMargin;
+
 	int cpu = getCpu(event->pos().y());
 	int pid = getPid(event->pos().y());
 
@@ -554,7 +442,7 @@ bool KsGLWidget::find(int bin, int cpu, int pid, int variance, size_t *row)
 
 	auto get_entry_by_cpu = [&] (int b) {
 		/* Get the first data entry in this bin. */
-		int64_t found = kshark_histo_first_index_at_cpu(_model.histo(), b, cpu);
+		ssize_t found = ksmodel_first_index_at_cpu(_model.histo(), b, cpu);
 		if (found < 0) {
 			/*
 			 * The bin is empty or the entire connect of the bin
@@ -569,7 +457,7 @@ bool KsGLWidget::find(int bin, int cpu, int pid, int variance, size_t *row)
 
 	auto get_entry_by_pid = [&] (int b) {
 		/* Get the first data entry in this bin. */
-		int64_t found = kshark_histo_first_index_at_pid(_model.histo(), b, pid);
+		ssize_t found = ksmodel_first_index_at_pid(_model.histo(), b, pid);
 		if (found < 0) {
 			/*
 			 * The bin is empty or the entire connect of the bin
@@ -589,12 +477,10 @@ bool KsGLWidget::find(int bin, int cpu, int pid, int variance, size_t *row)
 
 		/* Now look for a match, nearby the position of the click. */
 		for (int i = 1; i < variance; ++i) {
-			if (bin + i <= hSize &&
-			    get_entry_by_cpu(bin + i))
+			if (bin + i <= hSize && get_entry_by_cpu(bin + i))
 				return true;
 
-			if (bin - i >= 0 &&
-			    get_entry_by_cpu(bin - i))
+			if (bin - i >= 0 && get_entry_by_cpu(bin - i))
 				return true;
 		}
 	}
@@ -691,8 +577,8 @@ void KsGLWidget::rangeChanged(int binMin, int binMax)
 	size_t nBins = _model.histo()->n_bins;
 	int binMark = _mState->activeMarker().bin();
 
-	min = kshark_histo_ts(_model.histo(), binMin);
-	max = kshark_histo_ts(_model.histo(), binMax);
+	min = ksmodel_ts(_model.histo(), binMin);
+	max = ksmodel_ts(_model.histo(), binMax);
 	if (max - min < nBins) {
 		/* The range cannot be smaller than the number of bins.
 		 * Do nothing. */
@@ -700,7 +586,7 @@ void KsGLWidget::rangeChanged(int binMin, int binMax)
 	}
 
 	/* Recalculate the model and update the markers. */
-	kshark_histo_set_bining(_model.histo(), nBins, min, max);
+	ksmodel_set_bining(_model.histo(), nBins, min, max);
 	_model.fill(_data->_pevt, _data->_rows, _data->size());
 	_mState->updateMarkers(*_data, _model.histo());
 
@@ -720,10 +606,10 @@ void KsGLWidget::rangeChanged(int binMin, int binMax)
 	 * to the View widget to make this data visible.
 	 */
 	for (size_t i = 0; i < _model.histo()->n_bins; ++i) {
-		int64_t row = kshark_histo_first_index_at(_model.histo(), i);
+		int64_t row = ksmodel_first_index_at(_model.histo(), i);
 		if (row != KS_EMPTY_BIN &&
 		    (_data->_rows[row]->visible & KS_VIEW_FILTER_MASK)) {
-			emit updateView(kshark_histo_first_index_at(_model.histo(), i), false);
+			emit updateView(ksmodel_first_index_at(_model.histo(), i), false);
 			return;
 		}
 	}
@@ -747,7 +633,7 @@ int KsGLWidget::getCpu(int y)
 	if (_cpuList.count() == 0)
 		return -1;
 
-	int cpuId = (y - _vMargin + _vSpacing/2)/(_vSpacing + CPU_GRAPH_HEIGHT);
+	int cpuId = (y - _vMargin + _vSpacing / 2) / (_vSpacing + CPU_GRAPH_HEIGHT);
 	if (cpuId < 0 || cpuId >= _cpuList.count())
 		return -1;
 
@@ -761,7 +647,7 @@ int KsGLWidget::getPid(int y)
 
 	int pidId = (y - _vMargin -
 			 _cpuList.count()*(CPU_GRAPH_HEIGHT + _vSpacing) +
-			 _vSpacing/2)/(_vSpacing + CPU_GRAPH_HEIGHT);
+			 _vSpacing / 2) / (_vSpacing + CPU_GRAPH_HEIGHT);
 
 	if (pidId < 0 || pidId >= _taskList.count())
 		return -1;
@@ -796,7 +682,7 @@ void KsGLWidget::mouseMoveEvent(QMouseEvent *event)
 	if (status) {
 		emit found(row);
 	} else {
-		emit notFound(kshark_histo_ts(_model.histo(), bin), cpu, pid);
+		emit notFound(ksmodel_ts(_model.histo(), bin), cpu, pid);
 	}
 }
 
@@ -825,7 +711,7 @@ void KsGLWidget::mouseDoubleClickEvent(QMouseEvent *event)
 
 void KsGLWidget::wheelEvent(QWheelEvent * event)
 {
-	int zoomFocus = _model.histo()->n_bins/2;
+	int zoomFocus = _model.histo()->n_bins / 2;
 	if (_mState->activeMarker().isSet() &&
 	    _mState->activeMarker().isVisible())
 		zoomFocus = _mState->activeMarker().bin();
