@@ -26,15 +26,11 @@ include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(JSONC  DEFAULT_MSG
                                   JSONC_LIBRARY JSONC_INCLUDE_DIR)
 
-if (JSONC_FOUND)
-
-  message(STATUS "Found JSONC: ${JSONC_LIBRARY}")
-
-else (JSONC_FOUND)
+if (NOT JSONC_FOUND)
 
   message(FATAL_ERROR "JSONC is Required!\n")
 
-endif (JSONC_FOUND)
+endif (NOT JSONC_FOUND)
 
 mark_as_advanced(JSONC_INCLUDE_DIR JSONC_LIBRARY)
 

@@ -23,7 +23,6 @@ include(ProcessorCount)
 ProcessorCount(N_CPUS)
 
 include(${KS_DIR}/build/FindTraceCmd.cmake)
-
 include(${KS_DIR}/build/FindJSONC.cmake)
 
 find_package(Qt5Widgets 5.7.1)
@@ -37,8 +36,7 @@ find_package(OpenGL)
 find_package(GLUT)
 
 find_package(PythonLibs)
-# find_package(Cython REQUIRED)
-# find_package(NumPy REQUIRED)
+include(${KS_DIR}/build/FindNumPy.cmake)
 
 find_package(GTest)
 

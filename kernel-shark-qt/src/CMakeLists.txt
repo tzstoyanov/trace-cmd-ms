@@ -16,7 +16,7 @@ target_link_libraries(kshark ${CMAKE_DL_LIBS}
 
 set_target_properties(kshark  PROPERTIES SUFFIX	".so.${KS_VERSION_STRING}")
 
-if (PYTHONLIBS_FOUND)
+if (PYTHONLIBS_FOUND AND CYTHON_FOUND AND NUMPY_FOUND)
 
     message(STATUS "kshark_wrapper")
     add_custom_target(kshark_wrapper ALL DEPENDS kshark
@@ -34,7 +34,7 @@ if (PYTHONLIBS_FOUND)
                                           "${KS_DIR}/build/py/libkshark_wrapper.so"
                                           "${KS_DIR}/build/py/libkshark_wrapper.c")
 
-endif (PYTHONLIBS_FOUND)
+endif (PYTHONLIBS_FOUND AND CYTHON_FOUND AND NUMPY_FOUND)
 
 if (Qt5Widgets_FOUND AND Qt5Network_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
 
