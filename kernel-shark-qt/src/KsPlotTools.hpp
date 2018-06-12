@@ -23,7 +23,6 @@
 
 // Qt
 #include <QColor>
-#include <QList>
 
 // KernelShark
 #include "KsModel.hpp"
@@ -32,20 +31,21 @@ class KsGLWidget;
 
 namespace KsPlot {
 
+void initOpenGl(int dpr);
+
+void resizeOpenGL(int width, int height);
+
 struct Color
 {
 	Color();
 	Color(uint8_t r, uint8_t g, uint8_t b);
 	Color(int rgb);
 
-	Color& operator =(const QColor &c);
-
-	void nice();
 	void setRainbowColor(int n);
 	static void setRainbowFrequency(float f) {_frequency = f;}
 	static float getRainbowFrequency() {return _frequency;}
-	uint8_t _r, _g, _b;
 
+	uint8_t _r, _g, _b;
 	static float _frequency;
 };
 
@@ -68,8 +68,6 @@ struct Shape
 private:
 	virtual void _draw(const Color &c, float s) const = 0;
 };
-
-typedef QList<KsPlot::Shape*> ShapeList;
 
 class Point : public Shape
 {

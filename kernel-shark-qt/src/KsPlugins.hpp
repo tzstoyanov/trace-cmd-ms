@@ -24,12 +24,13 @@
 // KernelShark
 #include "KsUtils.hpp"
 #include "KsPlotTools.hpp"
+#include "KsGLWidget.hpp"
 #include "KsModel.hpp"
 
 struct KsCppArgV {
-	kshark_trace_histo *_histo;
-	KsPlot::Graph *_graph;
-	KsPlot::ShapeList *_shapes;
+	kshark_trace_histo	*_histo;
+	KsPlot::Graph		*_graph;
+	ShapeList		*_shapes;
 
 	kshark_cpp_argv *toC()
 	{

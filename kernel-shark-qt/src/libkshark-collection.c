@@ -98,11 +98,9 @@ kshark_data_collection_alloc(struct kshark_context *kshark_ctx,
 	if (margin != 0) {
 		temp->index = first;
 		temp->type = COLLECTION_RESUME;
-// 		printf("@ v:%i  Resume at: %lu\n", val, first);
 		++resume_count;
 
 		kshark_add_entry(&temp, first + margin - 1, COLLECTION_BREAK);
-// 		printf("@ v:%i  Break at: %lu\n\n", val, first + margin - 1);
 		++break_count;
 	} else {
 		temp->index = first;
@@ -124,7 +122,6 @@ kshark_data_collection_alloc(struct kshark_context *kshark_ctx,
 			 * Resume the collection here. Add some margin data
 			 * in front of the data of interest.
 			 */
-// 			printf("val:%i  Good at: %lu %li\n", val, i, last_added);
 			good = true;
 			if (last_added == 0 || last_added < i - margin) {
 				kshark_add_entry(&temp, i - margin, COLLECTION_RESUME);

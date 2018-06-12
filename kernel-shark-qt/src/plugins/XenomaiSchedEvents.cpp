@@ -39,7 +39,7 @@ static void openBox(KsPlot::Rectangle **rec, KsPlot::Bin *bin)
 			    bin->_base._y - 1);
 }
 
-static void closeBox(KsPlot::Rectangle **rec, KsPlot::Bin *bin, KsPlot::ShapeList *list)
+static void closeBox(KsPlot::Rectangle **rec, KsPlot::Bin *bin, ShapeList *list)
 {
 	if (*rec == nullptr)
 		return;
@@ -66,7 +66,7 @@ static void xenomaiWakeupPluginDraw(struct xenomai_context *plugin_ctx,
 				    kshark_trace_histo *histo,
 				    KsPlot::Graph *graph,
 				    int pid,
-				    QList<KsPlot::Shape*> *shapes)
+				    ShapeList *shapes)
 {
 	struct kshark_entry *entryFront, *entryBack;
 	KsPlot::Rectangle *rec = nullptr;
@@ -81,14 +81,16 @@ static void xenomaiWakeupPluginDraw(struct xenomai_context *plugin_ctx,
 		 * until you find a trace entry that satisfies the condition defined
 		 * by kshark_check_pid.
 		 */
-		entryFront = ksmodel_get_entry_front(histo, bin, false, kshark_check_pid, pid);
+		entryFront = ksmodel_get_entry_front(histo, bin, false,
+						     kshark_check_pid, pid);
 
 		/*
 		 * Starting from the last element in this bin, go backward in time
 		 * until you find a trace entry that satisfies the condition defined
 		 * by cobalt_wakeup_check_pid.
 		 */
-		entryBack = ksmodel_get_entry_back(histo, bin, false, cobalt_wakeup_check_pid, pid);
+		entryBack = ksmodel_get_entry_back(histo, bin,
+						   false, cobalt_wakeup_check_pid, pid);
 
 		if (entryBack &&
 		    plugin_ctx->cobalt_wakeup_event &&
@@ -126,7 +128,7 @@ static void xenomaiSwitchPluginDraw(struct xenomai_context *plugin_ctx,
 				    kshark_trace_histo *histo,
 				    KsPlot::Graph *graph,
 				    int pid,
-				    QList<KsPlot::Shape*> *shapes)
+				    ShapeList *shapes)
 {
 	struct kshark_entry *entryFront, *entryBack;
 	KsPlot::Rectangle *rec = nullptr;
@@ -141,14 +143,16 @@ static void xenomaiSwitchPluginDraw(struct xenomai_context *plugin_ctx,
 		 * until you find a trace entry that satisfies the condition defined
 		 * by kshark_check_pid.
 		 */
-		entryFront = ksmodel_get_entry_front(histo, bin, false, kshark_check_pid, pid);
+		entryFront = ksmodel_get_entry_front(histo, bin, false,
+						     kshark_check_pid, pid);
 
 		/*
 		 * Starting from the last element in this bin, go backward in time
 		 * until you find a trace entry that satisfies the condition defined
 		 * by cobalt_switch_check_pid.
 		 */
-		entryBack = ksmodel_get_entry_back(histo, bin, false, cobalt_switch_check_pid, pid);
+		entryBack = ksmodel_get_entry_back(histo, bin, false,
+						   cobalt_switch_check_pid, pid);
 
 		if (entryBack && entryBack->pid != pid &&
 		    entryBack->event_id == plugin_ctx->cobalt_switch_event->id) {

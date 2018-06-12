@@ -447,7 +447,7 @@ static struct task_list *add_task_hash(struct kshark_context *kshark_ctx,
 	return list;
 }
 
-static bool kshark_view_task(struct kshark_context *kshark_ctx, int pid)
+static bool kshark_show_task(struct kshark_context *kshark_ctx, int pid)
 {
 	return (!kshark_ctx->show_task_filter ||
 		!filter_id_count(kshark_ctx->show_task_filter) ||
@@ -457,7 +457,7 @@ static bool kshark_view_task(struct kshark_context *kshark_ctx, int pid)
 		 !filter_id_find(kshark_ctx->hide_task_filter, pid));
 }
 
-static bool kshark_view_event(struct kshark_context *kshark_ctx, int event_id)
+static bool kshark_show_event(struct kshark_context *kshark_ctx, int event_id)
 {
 	return (!kshark_ctx->show_event_filter ||
 		!filter_id_count(kshark_ctx->show_event_filter) ||
@@ -470,8 +470,8 @@ static bool kshark_view_event(struct kshark_context *kshark_ctx, int event_id)
 static bool kshark_show_entry(struct kshark_context *kshark_ctx,
 			      int pid, int event_id)
 {
-	if (kshark_view_task(kshark_ctx, pid) &&
-	    kshark_view_event(kshark_ctx, event_id))
+	if (kshark_show_task(kshark_ctx, pid) &&
+	    kshark_show_event(kshark_ctx, event_id))
 		return true;
 
 	return false;
@@ -584,13 +584,20 @@ size_t kshark_load_data_entries(struct kshark_context *kshark_ctx,
 							     entry->event_id);
 			if (evt_handler) {
 				evt_handler->event_func(kshark_ctx, rec, entry);
-				entry->visible &= ~ KS_PLUGIN_UNTOUCHED_MASK;
+				entry->visible &= ~KS_PLUGIN_UNTOUCHED_MASK;
+			}
+
+			if (!kshark_show_task(kshark_ctx, entry->pid)) {
+				entry->visible &= ~kshark_ctx->filter_mask;
 			}
 
 			ret = pevent_filter_match(kshark_ctx->advanced_event_filter, rec);
 			if ((kshark_ctx->adv_filter_is_set && ret != FILTER_MATCH) ||
-			    !kshark_show_entry(kshark_ctx, entry->pid, entry->event_id)) {
-				entry->visible &= ~kshark_ctx->filter_mask;
+			    !kshark_show_event(kshark_ctx, entry->event_id)) {
+				int mask = kshark_ctx->filter_mask;
+				mask &= ~KS_GRAPH_FILTER_MASK;
+				mask |= KS_EVENT_FILTER_MASK;
+				entry->visible &= ~mask;
 			}
 
 			entry->next = NULL;
@@ -919,13 +926,19 @@ size_t kshark_filter_entries(struct kshark_context *kshark_ctx,
 	int i, count = 0;
 	for (i = 0; i < n_entries; ++i) {
 		data_rows[i]->visible = 0xFF;
-
-		if (!kshark_show_entry(kshark_ctx,
-				       data_rows[i]->pid,
-				       data_rows[i]->event_id)) {
+		if (!kshark_show_task(kshark_ctx, data_rows[i]->pid)) {
 			data_rows[i]->visible &= ~kshark_ctx->filter_mask;
-			++count;
 		}
+
+		if (!kshark_show_event(kshark_ctx, data_rows[i]->event_id)) {
+			int mask = kshark_ctx->filter_mask;
+			mask &= ~KS_GRAPH_FILTER_MASK;
+			mask |= KS_EVENT_FILTER_MASK;
+			data_rows[i]->visible &= ~mask;
+		}
+
+		if (data_rows[i]->visible != 0xFF)
+			++count;
 	}
 
 	return count;

@@ -250,7 +250,8 @@ void KsTraceViewer::onCustomContextMenu(const QPoint &point)
 		 */
 		size_t row = _proxyModel.data(_proxyModel.index(i.row(), 0)).toInt();
 		KsQuickFilterMenu menu(_data, row, this);
-		connect(&menu, &KsQuickFilterMenu::plotTask, this, &KsTraceViewer::plotTask);
+		connect(&menu,	&KsQuickFilterMenu::plotTask,
+			this,	&KsTraceViewer::plotTask);
 		menu.exec(mapToGlobal(point));
 	}
 }
@@ -490,15 +491,17 @@ void KsTraceViewer::resizeEvent(QResizeEvent* event)
 		tableSize += _view.columnWidth(c);
 	}
 
-	int viewSize = _view.width() - qApp->style()->pixelMetric(QStyle::PM_ScrollBarExtent);
+	int viewSize = _view.width() -
+		       qApp->style()->pixelMetric(QStyle::PM_ScrollBarExtent);
+
 	int freeSpace;
 	if ((freeSpace = viewSize - tableSize) > 0) {
 		_view.setColumnWidth(nColumns - 1, _view.columnWidth(nColumns - 1) +
 						   freeSpace -
 						   2); /* Just a little bit less space.
-							* This will allow the scroll bar to
-							* disappear when the widget is
-							* extended to maximum. */
+							* This will allow the scroll bar
+							* to disappear when the widget
+							* is extended to maximum. */
 	}
 }
 
@@ -614,10 +617,10 @@ void KsTraceViewer::searchItemsMapRed(int column,
 	};
 
 	int nThreads = std::thread::hardware_concurrency();
-	int delta = _data->size()/ nThreads;
+	int delta = _data->size() / nThreads;
 	std::vector<QPair<int, int>> ranges(nThreads);
-	int i(0);
 
+	int i(0);
 	for (auto &r: ranges) {
 		r.first = (i++) * delta;
 		r.second = r.first + delta - 1;

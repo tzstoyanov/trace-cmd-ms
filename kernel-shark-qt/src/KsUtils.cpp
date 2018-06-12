@@ -91,6 +91,16 @@ QString Ts2String(ssize_t ts, int prec)
 
 }; // KsUtils
 
+
+KsPlot::Color& operator <<(KsPlot::Color &thisColor, const QColor &c)
+{
+	thisColor._r = c.red();
+	thisColor._g = c.green();
+	thisColor._b = c.blue();
+
+	return thisColor;
+}
+
 KsDataStore::KsDataStore(QWidget *parent)
 : QObject(parent),
   _handle(nullptr),
@@ -528,14 +538,14 @@ KsGraphMark::KsGraphMark(DualMarkerState s)
 : _state(s), _isSet(false), _bin(-1), _cpu(-1), _task(-1), _pos(0), _color(Qt::darkGreen)
 {
 	_mark = new KsPlot::Mark;
-	_mark->_color = _color;
+	_mark->_color << _color;
 }
 
 KsGraphMark::KsGraphMark(DualMarkerState s, QColor col)
 : _state(s), _isSet(false), _bin(-1), _cpu(-1), _task(-1), _pos(0), _color(col)
 {
 	_mark = new KsPlot::Mark;
-	_mark->_color = _color;
+	_mark->_color << _color;
 }
 
 void KsGraphMark::reset()

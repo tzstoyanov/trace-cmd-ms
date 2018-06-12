@@ -298,6 +298,7 @@ void KsMainWindow::createMenus()
 	kshark_context *kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
 	kshark_ctx->filter_mask = KS_VIEW_FILTER_MASK | KS_GRAPH_FILTER_MASK;
+	kshark_ctx->filter_mask |= KS_EVENT_FILTER_MASK;
 
 	QCheckBox *cbf2g = make_cb_action(&_graphFilterSyncAction,
 					  "Apply filters to Graph");

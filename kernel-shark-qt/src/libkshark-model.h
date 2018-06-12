@@ -102,30 +102,30 @@ ksmodel_get_collection_entry_back(struct kshark_trace_histo *histo,
 
 int ksmodel_get_pid_front(struct kshark_trace_histo *histo,
 			  int bin, int cpu, bool vis_only,
+			  struct kshark_entry_collection *col,
 			  struct kshark_entry **e);
 
 int ksmodel_get_pid_back(struct kshark_trace_histo *histo,
 			 int bin, int cpu, bool vis_only,
+			 struct kshark_entry_collection *col,
 			 struct kshark_entry **e);
 
 int ksmodel_get_cpu(struct kshark_trace_histo *histo,
 		    int bin, int pid, bool vis_only,
+		    struct kshark_entry_collection *col,
 		    struct kshark_entry **e);
 
-int ksmodel_get_collection_pid_front(struct kshark_trace_histo *histo,
-				     int bin, int cpu, bool vis_only,
+bool ksmodel_cpu_visible_event_exist(struct kshark_trace_histo *histo,
+				     int bin,
+				     int cpu,
 				     struct kshark_entry_collection *col,
 				     struct kshark_entry **e);
 
-int ksmodel_get_collection_pid_back(struct kshark_trace_histo *histo,
-				    int bin, int cpu, bool vis_only,
-				    struct kshark_entry_collection *col,
-				    struct kshark_entry **e);
-
-int ksmodel_get_collection_cpu(struct kshark_trace_histo *histo,
-			       int bin, int pid, bool vis_only,
-			       struct kshark_entry_collection *col,
-			       struct kshark_entry **e);
+bool ksmodel_task_visible_event_exist(struct kshark_trace_histo *histo,
+				      int bin,
+				      int pid,
+				      struct kshark_entry_collection *col,
+				      struct kshark_entry **e);
 
 static inline double ksmodel_bin_time(struct kshark_trace_histo *histo, int bin)
 {

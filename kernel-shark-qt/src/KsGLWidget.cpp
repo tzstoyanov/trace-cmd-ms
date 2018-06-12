@@ -32,27 +32,13 @@
 
 void KsGLWidget::initializeGL()
 {
-	glDisable(GL_TEXTURE_2D);
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_COLOR_MATERIAL);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_POLYGON_SMOOTH);
 	_dpr = QApplication::desktop()->devicePixelRatio();
-	glLineWidth(1.5*_dpr);
-	glPointSize(2.5*_dpr);
-	glClearColor(1, 1, 1, 1);
+	KsPlot::initOpenGl(_dpr);
 }
 
 void KsGLWidget::resizeGL(int w, int h)
 {
-	glViewport(0, 0, w, h);
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	gluOrtho2D(0, w, h, 0);		// Set origin to top left corner.
-					// "Y" coordinate is inverted.
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
+	KsPlot::resizeOpenGL(w, h);
 
 	if(_data)
 		updateGraphs();
@@ -298,8 +284,7 @@ void KsGLWidget::makeGraphs(QVector<int> cpuList, QVector<int> taskList)
 	for (auto const &cpu: cpuList)
 		add_gpaph(newCpuGraph(cpu));
 
-
-// 	std::vector< std::future<KsPlot::Graph *> > futureGraphs;
+// 	std::vector<std::future<KsPlot::Graph *>> futureGraphs;
 // 	for (auto const &cpu: cpuList)
 // 		futureGraphs.push_back(std::async(&KsGLWidget::newCpuGraph, this, cpu));
 // 
@@ -401,9 +386,10 @@ KsPlot::Graph *KsGLWidget::newTaskGraph(int pid)
 	    col && col->size &&
 	    _data->size() / col->size < 100) {
 		/*
-		 * No need to use collection in this case. Free the collection data,
-		 * but keep the collection registered. This will prevent from recalculating
-		 * the same collection next time when this task is ploted.
+		 * No need to use collection in this case. Free the collection
+		 * data, but keep the collection registered. This will prevent
+		 * from recalculating the same collection next time when this
+		 * task is ploted.
 		 */
 		kshark_reset_data_collection(col);
 	}

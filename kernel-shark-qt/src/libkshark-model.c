@@ -641,7 +641,8 @@ ssize_t ksmodel_first_index_at_cpu(struct kshark_trace_histo *histo,
 	size_t i;
 	for (i = pos; i < pos + n; ++i) {
 		if (histo->data[i]->cpu == cpu) {
-			if (histo->data[i]->visible & KS_GRAPH_FILTER_MASK)
+			if ((histo->data[i]->visible & KS_GRAPH_FILTER_MASK) &&
+			    (histo->data[i]->visible & KS_EVENT_FILTER_MASK))
 				return i;
 			else
 				found = KS_FILTERED_BIN;
@@ -663,7 +664,8 @@ ssize_t ksmodel_first_index_at_pid(struct kshark_trace_histo *histo,
 	size_t i;
 	for (i = pos; i < pos + n; ++i) {
 		if (histo->data[i]->pid == pid) {
-			if (histo->data[i]->visible & KS_GRAPH_FILTER_MASK)
+			if ((histo->data[i]->visible & KS_GRAPH_FILTER_MASK) &&
+			    (histo->data[i]->visible & KS_EVENT_FILTER_MASK))
 				return i;
 			else
 				found = KS_FILTERED_BIN;
@@ -787,6 +789,14 @@ ksmodel_get_collection_entry_back(struct kshark_trace_histo *histo,
 	return entry;
 }
 
+
+static bool ksmodel_is_visible(struct kshark_entry *entry)
+{
+	if (!entry || !entry->visible) // No visible entry has been found.
+		return false;
+	return true;
+}
+
 static int ksmodel_get_entry_pid(struct kshark_entry *entry)
 {
 	if (!entry) // No data has been found.
@@ -811,6 +821,7 @@ static int ksmodel_get_entry_cpu(struct kshark_entry *entry)
 
 int ksmodel_get_pid_front(struct kshark_trace_histo *histo,
 			  int bin, int cpu, bool vis_only,
+			  struct kshark_entry_collection *col,
 			  struct kshark_entry **e)
 {
 	struct kshark_entry_request *req;
@@ -823,7 +834,11 @@ int ksmodel_get_pid_front(struct kshark_trace_histo *histo,
 	if (!req)
 		return KS_EMPTY_BIN;
 
-	entry = kshark_get_entry_front(req, histo->data);
+	if (col && col->size)
+		entry = kshark_get_collection_entry_front(&req, histo->data, col);
+	else
+		entry = kshark_get_entry_front(req, histo->data);
+
 	kshark_free_entry_request(req);
 
 	if (e)
@@ -834,6 +849,7 @@ int ksmodel_get_pid_front(struct kshark_trace_histo *histo,
 
 int ksmodel_get_pid_back(struct kshark_trace_histo *histo,
 			 int bin, int cpu, bool vis_only,
+			 struct kshark_entry_collection *col,
 			 struct kshark_entry **e)
 {
 	struct kshark_entry_request *req;
@@ -846,7 +862,11 @@ int ksmodel_get_pid_back(struct kshark_trace_histo *histo,
 	if (!req)
 		return KS_EMPTY_BIN;
 
-	entry = kshark_get_entry_back(req, histo->data);
+	if (col && col->size)
+		entry = kshark_get_collection_entry_back(&req, histo->data, col);
+	else
+		entry = kshark_get_entry_back(req, histo->data);
+
 	kshark_free_entry_request(req);
 
 	if (e)
@@ -855,9 +875,9 @@ int ksmodel_get_pid_back(struct kshark_trace_histo *histo,
 	return ksmodel_get_entry_pid(entry);
 }
 
-
 int ksmodel_get_cpu(struct kshark_trace_histo *histo,
 		    int bin, int pid, bool vis_only,
+		    struct kshark_entry_collection *col,
 		    struct kshark_entry **e)
 {
 	/* Get the number of entries in this bin. */
@@ -879,11 +899,19 @@ int ksmodel_get_cpu(struct kshark_trace_histo *histo,
 		 * backwards.
 		 */
 		req->first = ksmodel_bin_count(histo, bin) - 1;
-		entry =  kshark_get_entry_back(req, histo->data);
+
+		if (col && col->size)
+			entry =  kshark_get_collection_entry_back(&req, histo->data, col);
+		else
+			entry =  kshark_get_entry_back(req, histo->data);
 	} else {
 		/* Set the position at the beginning of the bin and go forward. */
 		req->first = ksmodel_first_index_at(histo, bin);
-		entry = kshark_get_entry_front(req, histo->data);
+
+		if (col && col->size)
+			entry =  kshark_get_collection_entry_front(&req, histo->data, col);
+		else
+			entry = kshark_get_entry_front(req, histo->data);
 	}
 
 	kshark_free_entry_request(req);
@@ -894,8 +922,9 @@ int ksmodel_get_cpu(struct kshark_trace_histo *histo,
 	return ksmodel_get_entry_cpu(entry);
 }
 
-int ksmodel_get_collection_pid_front(struct kshark_trace_histo *histo,
-				     int bin, int cpu, bool vis_only,
+bool ksmodel_cpu_visible_event_exist(struct kshark_trace_histo *histo,
+				     int bin,
+				     int cpu,
 				     struct kshark_entry_collection *col,
 				     struct kshark_entry **e)
 {
@@ -904,79 +933,53 @@ int ksmodel_get_collection_pid_front(struct kshark_trace_histo *histo,
 
 	/* Set the position at the beginning of the bin and go forward. */
 	req = ksmodel_entry_front_request_alloc(histo,
-						bin, vis_only,
+						bin, true,
 						kshark_check_cpu, cpu);
 	if (!req)
-		return KS_EMPTY_BIN;
+		return false;
 
-	entry = kshark_get_collection_entry_front(&req, histo->data, col);
-	kshark_free_entry_request(req);
+	req->vis_mask = KS_EVENT_FILTER_MASK;
 
-	if (e)
-		*e = entry;
-
-	return ksmodel_get_entry_pid(entry);
-}
-
-int ksmodel_get_collection_pid_back(struct kshark_trace_histo *histo,
-				    int bin, int cpu, bool vis_only,
-				    struct kshark_entry_collection *col,
-				    struct kshark_entry **e)
-{
-	struct kshark_entry_request *req;
-	struct kshark_entry *entry;
-
-	/* Set the position at the end of the bin and go backwards. */
-	req = ksmodel_entry_back_request_alloc(histo,
-					       bin, vis_only,
-					       kshark_check_cpu, cpu);
-	if (!req)
-		return KS_EMPTY_BIN;
-
-	entry = kshark_get_collection_entry_back(&req, histo->data, col);
-	kshark_free_entry_request(req);
-
-	if (e)
-		*e = entry;
-
-	return ksmodel_get_entry_pid(entry);
-}
-
-int ksmodel_get_collection_cpu(struct kshark_trace_histo *histo,
-			       int bin, int pid, bool vis_only,
-			       struct kshark_entry_collection *col,
-			       struct kshark_entry **e)
-{
-	/* Get the number of entries in this bin. */
-	size_t n = ksmodel_bin_count(histo, bin);
-	if (!n)
-		return KS_EMPTY_BIN;
-
-	struct kshark_entry_request *req;
-	struct kshark_entry *entry;
-
-	/* Create an entry request but keep the starting position unset. */
-	req = kshark_entry_request_alloc(0, n,
-					 kshark_check_pid, pid,
-					 vis_only, KS_GRAPH_FILTER_MASK);
-
-	if (bin == UPPER_OVERFLOW_BIN) {
-		/*
-		 * Set the position at the end of the Lower Overflow bin and go
-		 * backwards.
-		 */
-		req->first = ksmodel_bin_count(histo, bin) - 1;
-		entry =  kshark_get_collection_entry_back(&req, histo->data, col);
-	} else {
-		/* Set the position at the beginning of the bin and go forward. */
-		req->first = ksmodel_first_index_at(histo, bin);
+	if (col && col->size)
 		entry = kshark_get_collection_entry_front(&req, histo->data, col);
-	}
+	else
+		entry = kshark_get_entry_front(req, histo->data);
 
 	kshark_free_entry_request(req);
 
 	if (e)
 		*e = entry;
 
-	return ksmodel_get_entry_cpu(entry);
+	return ksmodel_is_visible(entry);
+}
+
+bool ksmodel_task_visible_event_exist(struct kshark_trace_histo *histo,
+				      int bin,
+				      int pid,
+				      struct kshark_entry_collection *col,
+				      struct kshark_entry **e)
+{
+	struct kshark_entry_request *req;
+	struct kshark_entry *entry;
+
+	/* Set the position at the beginning of the bin and go forward. */
+	req = ksmodel_entry_front_request_alloc(histo,
+						bin, true,
+						kshark_check_pid, pid);
+	if (!req)
+		return false;
+
+	req->vis_mask = KS_EVENT_FILTER_MASK;
+
+	if (col && col->size)
+		entry = kshark_get_collection_entry_front(&req, histo->data, col);
+	else
+		entry = kshark_get_entry_front(req, histo->data);
+
+	kshark_free_entry_request(req);
+
+	if (e)
+		*e = entry;
+
+	return ksmodel_is_visible(entry);
 }

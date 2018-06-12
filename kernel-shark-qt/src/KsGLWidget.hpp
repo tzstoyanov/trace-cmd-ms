@@ -29,6 +29,8 @@
 #include "KsPlotTools.hpp"
 #include "KsModel.hpp"
 
+typedef QList<KsPlot::Shape*> ShapeList;
+
 class KsGLWidget : public QOpenGLWidget
 {
 	Q_OBJECT
@@ -54,7 +56,7 @@ public:
 	void findGraphIds(const kshark_entry &e, int *graphCpu, int *graphTask);
 
 	QVector<KsPlot::Graph*>	_graphs;
-	KsPlot::ShapeList	_shapes;
+	ShapeList		_shapes;
 	QVector<int>		_cpuList;
 	QVector<int>		_taskList;
 	KsPlot::ColorTable	_pidColors;

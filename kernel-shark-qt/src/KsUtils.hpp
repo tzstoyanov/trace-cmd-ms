@@ -330,4 +330,6 @@ public:
 	}
 };
 
+KsPlot::Color& operator <<(KsPlot::Color &thisColor, const QColor &c);
+
 #endif
