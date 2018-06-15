@@ -66,7 +66,6 @@ static inline uint8_t knuth_hash8(uint32_t val)
 	 * ratio of 2^8.
 	 */
 	return UINT8_C(val) * UINT8_C(157);
-// 	return val*UINT8_C(2654435761);
 }
 
 static inline uint16_t knuth_hash16(uint32_t val)
@@ -76,7 +75,6 @@ static inline uint16_t knuth_hash16(uint32_t val)
 	 * ratio of 2^16.
 	 */
 	return UINT16_C(val) * UINT16_C(40507);
-// 	return val*UINT16_C(2654435761);
 }
 
 static inline uint32_t knuth_hash(uint32_t val)

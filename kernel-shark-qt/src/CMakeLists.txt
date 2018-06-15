@@ -71,7 +71,6 @@ if (Qt5Widgets_FOUND AND Qt5Network_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
 
     set_target_properties(kshark-gui PROPERTIES  SUFFIX ".so.${KS_VERSION_STRING}")
 
-
     message(STATUS "kernelshark")
     add_executable(kernelshark          kernelshark.cpp)
     target_link_libraries(kernelshark   kshark-gui)
@@ -79,6 +78,11 @@ if (Qt5Widgets_FOUND AND Qt5Network_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
     message(STATUS "kshark-record")
     add_executable(kshark-record        kshark-record.cpp)
     target_link_libraries(kshark-record kshark-gui)
+
+    install(TARGETS kernelshark kshark-record kshark kshark-gui
+            RUNTIME DESTINATION /usr/local/bin/
+            LIBRARY DESTINATION /usr/local/lib/kshark/)
+
 
     add_subdirectory(plugins)
     add_subdirectory(prototypes)
@@ -91,8 +95,8 @@ execute_process(COMMAND ${LSB_RELEASE} -is
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-# find_program(DO_AS_ROOT pkexec)
-find_program(DO_AS_ROOT gksu)
+find_program(DO_AS_ROOT pkexec)
+# find_program(DO_AS_ROOT gksu)
 if (NOT DO_AS_ROOT)
 
     find_program(DO_AS_ROOT beesu)

@@ -29,4 +29,7 @@ ADD_PLUGIN(NAME xenomai_sched_events
 
 list(APPEND PLUGIN_LIST "xenomai_sched_events") # This plugin isn't loaded by default
 
+install(TARGETS sched_events xenomai_sched_events
+        LIBRARY DESTINATION /usr/local/lib/kshark/)
+
 set(PLUGINS ${PLUGIN_LIST} PARENT_SCOPE)

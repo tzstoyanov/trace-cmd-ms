@@ -33,6 +33,7 @@ Building:
 the original libraries.
 
 2. Do:
-    cd ks_qtdev/build
+    cd kernel-shark-qt/build
     cmake ../
     make
+    sudo make install

@@ -664,14 +664,25 @@ void KsMainWindow::pluginSelect()
 
 void KsMainWindow::capture()
 {
-	QString distribLinux(LSB_DISTRIB);
-	QString desktop(DESKTOP_SESSION);
+	QString distribLinux("");
+	QString desktop("");
+
+#ifdef LSB_DISTRIB
+
+	distribLinux = LSB_DISTRIB;
+
+#endif
+#ifdef DESKTOP_SESSION
+
+	desktop = DESKTOP_SESSION;
+
+#endif
 
 	auto capture_error = [&] {
 		QStringList message;
 		message << "Record is currently not supported fot your distribution"
-			<< ", identified as " << LSB_DISTRIB
-			<< "(" << DESKTOP_SESSION << ")";
+			<< ", identified as " << distribLinux
+			<< "(" << desktop << ")";
 		QErrorMessage *em = new QErrorMessage(this);
 		em->showMessage(message.join(" "), "captureErr");
 	};
@@ -686,7 +697,6 @@ void KsMainWindow::capture()
 		return;
 	}
 
-	qInfo() << "start ->";
 	_capture.start();
 // 	_capture.waitForFinished();
 }
@@ -935,9 +945,10 @@ void KsMainWindow::initCapture()
 		capturArgs << "--description" << "Kernel Shark Record";
 	}
 
-	QString captureExe = KS_DIR;
-	captureExe += "/bin/kshark-record";
-	capturArgs << captureExe;
+// 	QString captureExe = KS_DIR;
+// 	captureExe += "/bin/kshark-record";
+// 	capturArgs << captureExe;
+	capturArgs << "kshark-record";
 
 	_capture.setArguments(capturArgs);
 

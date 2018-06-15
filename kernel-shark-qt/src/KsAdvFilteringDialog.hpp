@@ -50,8 +50,7 @@ class KsAdvFilteringDialog : public QDialog
 
 public:
 	KsAdvFilteringDialog() = delete;
-	KsAdvFilteringDialog(pevent *pe,
-			     QWidget *parent = nullptr);
+	KsAdvFilteringDialog(pevent *pe, QWidget *parent = nullptr);
 
 private slots:
 	void help();

@@ -52,6 +52,10 @@ include_directories(${KS_DIR}/src/
                     ${TRACEEVENT_INCLUDE_DIR}
                     ${JSONC_INCLUDE_DIR})
 
+
+SET(CMAKE_INSTALL_RPATH "/usr/local/lib/kshark/")
+SET(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+
 message("")
 message(STATUS "C flags      : " ${CMAKE_C_FLAGS})
 message(STATUS "CXX flags    : " ${CMAKE_CXX_FLAGS})
@@ -67,5 +71,11 @@ endif (GTEST_FOUND)
 
 configure_file( ${KS_DIR}/build/ks.desktop.cmake
                 ${KS_DIR}/kernelshark.desktop)
+
+install(FILES org.freedesktop.kshark-record.policy
+        DESTINATION /usr/share/polkit-1/actions/)
+
+install(FILES kernelshark.desktop
+        DESTINATION /usr/share/applications/)
 
 message("")

@@ -467,16 +467,6 @@ static bool kshark_show_event(struct kshark_context *kshark_ctx, int event_id)
 		 !filter_id_find(kshark_ctx->hide_event_filter, event_id));
 }
 
-static bool kshark_show_entry(struct kshark_context *kshark_ctx,
-			      int pid, int event_id)
-{
-	if (kshark_show_task(kshark_ctx, pid) &&
-	    kshark_show_event(kshark_ctx, event_id))
-		return true;
-
-	return false;
-}
-
 size_t kshark_load_data_records(struct kshark_context *kshark_ctx,
 				struct pevent_record ***data_rows)
 {
@@ -544,6 +534,7 @@ size_t kshark_load_data_records(struct kshark_context *kshark_ctx,
 			cpu_list[next_cpu] = cpu_list[next_cpu]->next;
 			free (temp_rec);
 		}
+
 		++count;
 	}
 
