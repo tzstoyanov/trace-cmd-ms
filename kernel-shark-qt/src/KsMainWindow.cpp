@@ -664,41 +664,22 @@ void KsMainWindow::pluginSelect()
 
 void KsMainWindow::capture()
 {
-	QString distribLinux("");
-	QString desktop("");
-
-#ifdef LSB_DISTRIB
-
-	distribLinux = LSB_DISTRIB;
-
-#endif
-#ifdef DESKTOP_SESSION
-
-	desktop = DESKTOP_SESSION;
-
-#endif
-
-	auto capture_error = [&] {
-		QStringList message;
-		message << "Record is currently not supported fot your distribution"
-			<< ", identified as " << distribLinux
-			<< "(" << desktop << ")";
-		QErrorMessage *em = new QErrorMessage(this);
-		em->showMessage(message.join(" "), "captureErr");
-	};
-
 #ifndef DO_AS_ROOT
-	capture_error();
-	return;
-#endif
 
-	if (distribLinux == "Fedora" && desktop.contains("gnome")) {
-		capture_error();
-		return;
-	}
+	QString message;
+	message = "Record is currently not supported.";
+	message += " Install \"pkexec\" and then do:<br>";
+	message += " cd build <br> sudo ./cmake_uninstall.sh <br>";
+	message += " ./cmake_clean.sh <br> cmake .. <br> make <br>";
+	message += " sudo make install";
+	QErrorMessage *em = new QErrorMessage(this);
+	em->showMessage(message);
+
+	return;
+
+#endif
 
 	_capture.start();
-// 	_capture.waitForFinished();
 }
 
 void KsMainWindow::setColorPhase(int f)
@@ -934,19 +915,12 @@ void KsMainWindow::initCapture()
 {
 #ifdef DO_AS_ROOT
 
-	QStringList capturArgs;
-	QString doAsRoot(DO_AS_ROOT);
-	_capture.setProgram(doAsRoot);
-
-	if (doAsRoot.contains("gksu")) {
-		capturArgs << "--description" << "Kernel Shark Record";
-	}
-
-	QString file = getenv("HOME");
-	file += "/trace.dat";
-	capturArgs << "kshark-record" << "-o" << file;
-
-	_capture.setArguments(capturArgs);
+// 	QStringList capturArgs;
+// 	QString doAsRoot(DO_AS_ROOT);
+	_capture.setProgram("kshark-su-record");
+// 	capturArgs << "kshark-su-record";
+/*
+	_capture.setArguments(capturArgs);*/
 
 	connect(&_capture,	&QProcess::started,
 		this,		&KsMainWindow::captureStarted);
@@ -972,8 +946,9 @@ void KsMainWindow::captureFinished(int exit, QProcess::ExitStatus st)
 
 	QProcess *capture = (QProcess *)sender();
 	if (exit != 0 || st != QProcess::NormalExit) {
-		QString message = "Capture process failed: ";
+		QString message = "Capture process failed:<br>";
 		message += capture->errorString();
+		message += "<br>Try doing:<br> sudo make install";
 		QErrorMessage *em = new QErrorMessage(this);
 		em->showMessage(message, "captureFinishedErr");
 		qCritical() << message;

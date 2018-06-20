@@ -78,4 +78,7 @@ install(FILES org.freedesktop.kshark-record.policy
 install(FILES kernelshark.desktop
         DESTINATION /usr/share/applications/)
 
+install(PROGRAMS bin/kshark-su-record
+        DESTINATION /usr/local/bin/)
+
 message("")
