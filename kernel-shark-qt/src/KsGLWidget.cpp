@@ -284,13 +284,6 @@ void KsGLWidget::makeGraphs(QVector<int> cpuList, QVector<int> taskList)
 	for (auto const &cpu: cpuList)
 		add_gpaph(newCpuGraph(cpu));
 
-// 	std::vector<std::future<KsPlot::Graph *>> futureGraphs;
-// 	for (auto const &cpu: cpuList)
-// 		futureGraphs.push_back(std::async(&KsGLWidget::newCpuGraph, this, cpu));
-// 
-// 	for (auto &f: futureGraphs)
-// 		add_gpaph(f.get());
-
 	/* Create Task graphs taskList to the taskList. */
 	for (auto const &pid: taskList)
 		add_gpaph(newTaskGraph(pid));

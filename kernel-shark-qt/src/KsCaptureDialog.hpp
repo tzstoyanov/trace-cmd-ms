@@ -47,6 +47,7 @@ public:
 
 	QStringList getArgs();
 	QString outputFileName() const {return _outputLineEdit.text();}
+	void setOutputFileName(const QString &f) {_outputLineEdit.setText(f);}
 
 	QCheckBox	_commandCheckBox;
 	QPushButton	_captureButton, _applyButton, _closeButton;
@@ -108,6 +109,8 @@ private slots:
 
 public:
 	explicit KsCaptureDialog(QWidget *parent = 0);
+
+	void setOutputFileName(const QString &f) {_captureCtrl.setOutputFileName(f);}
 
 private:
 	void sendOpenReq(const QString &fileName);

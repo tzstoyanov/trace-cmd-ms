@@ -795,9 +795,6 @@ void KsMainWindow::loadData(const QString& fileName)
 	pb.setValue(165);
 	_view.loadData(&_data);
 
-	//auto viewJob = [&] {_view.loadData(&_data);};
-	//std::thread t1(viewJob);
-
 	pb.setValue(180);
 	_graph.loadData(&_data);
 	pb.setValue(195);
@@ -811,7 +808,6 @@ void KsMainWindow::loadData(const QString& fileName)
 		_session.setDataFile(fileName, st.st_mtime);
 	else
 		_session.setDataFile(path + fileName, st.st_mtime);
-// 	t1.join();
 }
 
 void KsMainWindow::loadSession(const QString &fileName)
@@ -838,6 +834,7 @@ void KsMainWindow::loadSession(const QString &fileName)
 
 	int width, height;
 	_session.getMainWindowSize(&width, &height);
+
 // 	int graphSize, viewSize;
 // 	_session.getSplitterSize(&graphSize, &viewSize);
 // 	QList<int> sizes;
@@ -945,10 +942,9 @@ void KsMainWindow::initCapture()
 		capturArgs << "--description" << "Kernel Shark Record";
 	}
 
-// 	QString captureExe = KS_DIR;
-// 	captureExe += "/bin/kshark-record";
-// 	capturArgs << captureExe;
-	capturArgs << "kshark-record";
+	QString file = getenv("HOME");
+	file += "/trace.dat";
+	capturArgs << "kshark-record" << "-o" << file;
 
 	_capture.setArguments(capturArgs);
 
@@ -973,27 +969,37 @@ void KsMainWindow::captureStarted()
 void KsMainWindow::captureFinished(int exit, QProcess::ExitStatus st)
 {
 	_captureLocalServer.close();
+
+	QProcess *capture = (QProcess *)sender();
+	if (exit != 0 || st != QProcess::NormalExit) {
+		QString message = "Capture process failed: ";
+		message += capture->errorString();
+		QErrorMessage *em = new QErrorMessage(this);
+		em->showMessage(message, "captureFinishedErr");
+		qCritical() << message;
+	}
 }
 
 void KsMainWindow::readSocket()
 {
-	QString message;
-	QLocalSocket *socket = _captureLocalServer.nextPendingConnection();
-	if (!socket) {
-		message = "ERROR from Local Server: Pending connectio not found!";
+	auto socket_error = [&] (QString message)
+	{
 		QErrorMessage *em = new QErrorMessage(this);
+		message = "ERROR from Local Server: " + message;
 		em->showMessage(message, "readSocketErr");
 		qCritical() << message;
+	};
+
+	QLocalSocket *socket = _captureLocalServer.nextPendingConnection();
+	if (!socket) {
+		socket_error("Pending connectio not found!");
 		return;
 	}
 
 	QDataStream in(socket);
 	socket->waitForReadyRead();
 	if (socket->bytesAvailable() < (int)sizeof(quint32)) {
-		message = "ERROR from Local Server: message size is corrupted!";
-		QErrorMessage *em = new QErrorMessage(this);
-		em->showMessage(message, "readSocketErr");
-		qCritical() << message;
+		socket_error("Message size is corrupted!");
 		return;
 	};
 
@@ -1001,10 +1007,7 @@ void KsMainWindow::readSocket()
         in >> blockSize;
 
 	if (socket->bytesAvailable() < blockSize || in.atEnd()) {
-		QString message = "ERROR from Local Server: message is corrupted!";
-		QErrorMessage *em = new QErrorMessage(this);
-		em->showMessage(message, "readSocketErr");
-		qCritical() << message;
+		socket_error("Message is corrupted!");
 		return;
 	}
 
