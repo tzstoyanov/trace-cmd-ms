@@ -177,6 +177,16 @@ kshark_get_data_stream(struct kshark_context *kshark_ctx, int sd) {
 	return NULL;
 }
 
+int kshark_get_pid_easy(struct kshark_entry *entry);
+
+const char *kshark_get_task_easy(struct kshark_entry *entry);
+
+const char *kshark_get_latency_easy(struct kshark_entry *entry);
+
+const char *kshark_get_event_name_easy(struct kshark_entry *entry);
+
+const char *kshark_get_info_easy(struct kshark_entry *entry);
+
 char* kshark_dump_entry(const struct kshark_entry *entry);
 
 struct tep_record *kshark_read_at(struct kshark_context *kshark_ctx, int sd,
