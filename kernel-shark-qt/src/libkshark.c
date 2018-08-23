@@ -36,6 +36,9 @@ static bool kshark_default_context(struct kshark_context **context)
 	kshark_ctx->stream = calloc(KS_MAX_NUM_STREAMS,
 				    sizeof(*kshark_ctx->stream));
 
+	kshark_ctx->event_handlers = NULL;
+	kshark_ctx->plugins = NULL;
+
 	/* Will free kshark_context_handler. */
 	kshark_free(NULL);
 
@@ -343,6 +346,12 @@ void kshark_free(struct kshark_context *kshark_ctx)
 		kshark_close(kshark_ctx, sd);
 
 	free(kshark_ctx->stream);
+
+	if(kshark_ctx->plugins) {
+		kshark_handle_plugins(kshark_ctx, KSHARK_PLUGIN_UNLOAD);
+		kshark_free_plugin_list(kshark_ctx->plugins);
+		kshark_free_event_handler_list(kshark_ctx->event_handlers);
+	}
 
 	if (seq.buffer)
 		trace_seq_destroy(&seq);
@@ -737,6 +746,7 @@ static void free_rec_list(struct rec_list **rec_list, int n_cpus,
 static size_t get_records(struct kshark_context *kshark_ctx, int sd,
 			  struct rec_list ***rec_list, enum rec_type type)
 {
+	struct kshark_event_handler *evt_handler;
 	struct kshark_data_stream *stream;
 	struct event_filter *adv_filter;
 	struct kshark_task_list *task;
@@ -784,6 +794,17 @@ static size_t get_records(struct kshark_context *kshark_ctx, int sd,
 
 				entry = &temp_rec->entry;
 				kshark_set_entry_values(stream, rec, entry);
+
+				/* Execute all plugin-provided actions (if any). */
+				evt_handler = kshark_ctx->event_handlers;
+				while ((evt_handler = find_event_handler(evt_handler,
+									 entry->event_id))) {
+					evt_handler->event_func(kshark_ctx, rec, entry);
+
+					if ((evt_handler = evt_handler->next))
+						entry->visible &= ~KS_PLUGIN_UNTOUCHED_MASK;
+				}
+
 				pid = entry->pid;
 				/* Apply event filtering. */
 				ret = FILTER_MATCH;
