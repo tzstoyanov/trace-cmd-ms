@@ -1274,6 +1274,20 @@ const char *kshark_get_info_easy(struct kshark_entry *entry)
 }
 
 /**
+ * @brief Convert the timestamp of the trace record (nanosecond precision) into
+ *	  seconds and microseconds.
+ *
+ * @param time: Input location for the timestamp.
+ * @param sec: Output location for value of the seconds.
+ * @param usec: Output location for value of the microseconds.
+ */
+void kshark_convert_nano(uint64_t time, uint64_t *sec, uint64_t *usec)
+{
+	*sec = time / 1000000000ULL;
+	*usec = (time / 1000) % 1000000;
+}
+
+/**
  * @brief Dump into a string the content of one entry. The function allocates
  *	  a null terminated string and returns a pointer to this string. The
  *	  user has to free the returned string.
