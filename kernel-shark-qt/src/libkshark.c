@@ -591,8 +591,23 @@ static bool filter_is_set(struct tracecmd_filter_id *filter)
 	return filter && filter->count;
 }
 
-static bool kshark_filter_is_set(struct kshark_data_stream *stream)
+/**
+ * @brief Check if an Id filter is set.
+ *
+ * @param kshark_ctx: Input location for the session context pointer.
+ * @param sd: Data stream identifier.
+ *
+ * @returns True if at least one Id filter of the stream is set, otherwise
+ *	    False.
+ */
+bool kshark_filter_is_set(struct kshark_context *kshark_ctx, int sd)
 {
+	struct kshark_data_stream *stream;
+
+	stream = kshark_get_data_stream(kshark_ctx, sd);
+	if (!stream)
+		return false;
+
 	return filter_is_set(stream->show_task_filter) ||
 	       filter_is_set(stream->hide_task_filter) ||
 	       filter_is_set(stream->show_event_filter) ||
@@ -650,7 +665,7 @@ void kshark_filter_entries(struct kshark_context *kshark_ctx, int sd,
 		return;
 	}
 
-	if (!kshark_filter_is_set(stream))
+	if (!kshark_filter_is_set(kshark_ctx, sd))
 		return;
 
 	/* Apply only the Id filters. */
@@ -670,6 +685,25 @@ void kshark_filter_entries(struct kshark_context *kshark_ctx, int sd,
 		if (!kshark_show_task(stream, data[i]->pid))
 			data[i]->visible &= ~stream->filter_mask;
 	}
+}
+
+/**
+ * @brief This function loops over the array of entries specified by "data"
+ *	  and "n_entries" and resets the "visible" fields of each entry to
+ *	  the default value of "0xFF" (visible everywhere).
+ *
+ * @param kshark_ctx: Input location for the session context pointer.
+ * @param data: Input location for the trace data to be filtered.
+ * @param n_entries: The size of the inputted data.
+ */
+void kshark_clear_all_filters(struct kshark_context *kshark_ctx,
+			      struct kshark_entry **data,
+			      size_t n_entries)
+{
+	int i;
+
+	for (i = 0; i < n_entries; ++i)
+		data[i]->visible = 0xFF;
 }
 
 static void kshark_set_entry_values(struct kshark_data_stream *stream,
