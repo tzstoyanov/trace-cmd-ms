@@ -36,6 +36,9 @@ endif (Qt5Widgets_FOUND)
 set(LIBRARY_OUTPUT_PATH    "${KS_DIR}/lib")
 set(EXECUTABLE_OUTPUT_PATH "${KS_DIR}/bin")
 
+SET(CMAKE_INSTALL_RPATH "/usr/local/lib/kshark/")
+SET(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+
 set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -Wall -O2 -pthread")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O2 -std=c++11 -pthread")
 
