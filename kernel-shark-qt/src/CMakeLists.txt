@@ -38,6 +38,7 @@ if (Qt5Widgets_FOUND AND Qt5Network_FOUND)
                         KsWidgetsLib.hpp
                         KsTraceGraph.hpp
                         KsTraceViewer.hpp
+                        KsMainWindow.hpp
                         KsCaptureDialog.hpp
                         KsAdvFilteringDialog.hpp)
 
@@ -51,6 +52,7 @@ if (Qt5Widgets_FOUND AND Qt5Network_FOUND)
                                                             KsWidgetsLib.cpp
                                                             KsTraceGraph.cpp
                                                             KsTraceViewer.cpp
+                                                            KsMainWindow.cpp
                                                             KsCaptureDialog.cpp
                                                             KsAdvFilteringDialog.cpp)
 
