@@ -65,6 +65,10 @@ if (Qt5Widgets_FOUND AND Qt5Network_FOUND)
 
     set_target_properties(kshark-gui PROPERTIES  SUFFIX ".so.${KS_VERSION_STRING}")
 
+    message(STATUS "kernelshark")
+    add_executable(kernelshark          kernelshark.cpp)
+    target_link_libraries(kernelshark   kshark-gui)
+
     message(STATUS "kshark-record")
     add_executable(kshark-record        kshark-record.cpp)
     target_link_libraries(kshark-record kshark-gui)
