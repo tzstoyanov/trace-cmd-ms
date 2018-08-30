@@ -22,7 +22,10 @@ set(PLUGIN_LIST "")
 BUILD_PLUGIN(NAME sched_events
              SOURCE sched_events.c SchedEvents.cpp)
 list(APPEND PLUGIN_LIST "sched_events default") # This plugin will be loaded by default
-# list(APPEND PLUGIN_LIST "sched_events") # This plugin isn't loaded by default
+
+BUILD_PLUGIN(NAME rename_sched_events
+           SOURCE rename_sched_events.c)
+list(APPEND PLUGIN_LIST "rename_sched_events") # This plugin isn't loaded by default
 
 install(TARGETS sched_events
         LIBRARY DESTINATION /usr/local/lib/kshark/)
