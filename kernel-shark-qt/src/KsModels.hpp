@@ -203,4 +203,33 @@ private:
 	KsViewModel	 	*_source;
 };
 
+#define KS_DEFAULT_NBUNS	1024
+
+class KsGraphModel : public QAbstractTableModel
+{
+public:
+	explicit KsGraphModel(QObject *parent = nullptr);
+	virtual ~KsGraphModel();
+
+	int rowCount(const QModelIndex &) const override {return _histo.n_bins;}
+	int columnCount(const QModelIndex &) const override {return 0;}
+	QVariant data(const QModelIndex &index, int role) const override;
+
+	kshark_trace_histo *histo() {return &_histo;}
+
+	void fill(tep_handle *pevt, kshark_entry **entries, size_t n);
+
+	void shiftForward(size_t n);
+	void shiftBackward(size_t n);
+	void jumpTo(size_t ts);
+	void zoomOut(double r, int mark = -1);
+	void zoomIn(double r, int mark = -1);
+
+	void reset();
+	void update(KsDataStore *data = nullptr);
+
+private:
+	kshark_trace_histo	_histo;
+};
+
 #endif // _KS_MODELS_H

@@ -358,3 +358,87 @@ size_t KsViewModel::search(int column,
 
 	return matchList->count();
 }
+
+KsGraphModel::KsGraphModel(QObject *parent)
+: QAbstractTableModel(parent)
+{
+	ksmodel_init(&_histo);
+}
+
+KsGraphModel::~KsGraphModel()
+{
+	ksmodel_clear(&_histo);
+}
+
+QVariant KsGraphModel::data(const QModelIndex &index, int role) const
+{
+	return {};
+}
+
+void KsGraphModel::fill(tep_handle *pevent, kshark_entry **entries, size_t n)
+{
+	if (n == 0)
+		return;
+
+	beginResetModel();
+
+	if (_histo.n_bins == 0)
+		ksmodel_set_bining(&_histo,
+				   KS_DEFAULT_NBUNS,
+				   entries[0]->ts,
+				   entries[n-1]->ts);
+
+	ksmodel_fill(&_histo, entries, n);
+
+	endResetModel();
+}
+
+void KsGraphModel::shiftForward(size_t n)
+{
+	beginResetModel();
+	ksmodel_shift_forward(&_histo, n);
+	endResetModel();
+}
+
+void KsGraphModel::shiftBackward(size_t n)
+{
+	beginResetModel();
+	ksmodel_shift_backward(&_histo, n);
+	endResetModel();
+}
+
+void KsGraphModel::jumpTo(size_t ts)
+{
+	beginResetModel();
+	ksmodel_jump_to(&_histo, ts);
+	endResetModel();
+}
+
+void KsGraphModel::zoomOut(double r, int mark)
+{
+	beginResetModel();
+	ksmodel_zoom_out(&_histo, r, mark);
+	endResetModel();
+}
+
+void KsGraphModel::zoomIn(double r, int mark)
+{
+	beginResetModel();
+	ksmodel_zoom_in(&_histo, r, mark);
+	endResetModel();
+}
+
+void KsGraphModel::reset()
+{
+	beginResetModel();
+	ksmodel_clear(&_histo);
+	endResetModel();
+}
+
+void KsGraphModel::update(KsDataStore *data)
+{
+	beginResetModel();
+	if (data)
+		ksmodel_fill(&_histo, data->rows(), data->size());
+	endResetModel();
+}
