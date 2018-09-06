@@ -33,13 +33,8 @@ static bool kshark_default_context(struct kshark_context **context)
 	if (!kshark_ctx)
 		return false;
 
-	kshark_ctx->show_task_filter = tracecmd_filter_id_hash_alloc();
-	kshark_ctx->hide_task_filter = tracecmd_filter_id_hash_alloc();
-
-	kshark_ctx->show_event_filter = tracecmd_filter_id_hash_alloc();
-	kshark_ctx->hide_event_filter = tracecmd_filter_id_hash_alloc();
-
-	kshark_ctx->filter_mask = 0x0;
+	kshark_ctx->stream = calloc(KS_MAX_NUM_STREAMS,
+				    sizeof(*kshark_ctx->stream));
 
 	/* Will free kshark_context_handler. */
 	kshark_free(NULL);
@@ -99,57 +94,6 @@ bool kshark_instance(struct kshark_context **kshark_ctx)
 	if (!init_thread_seq())
 		return false;
 
-	return true;
-}
-
-static void kshark_free_task_list(struct kshark_context *kshark_ctx)
-{
-	struct kshark_task_list *task;
-	int i;
-
-	if (!kshark_ctx)
-		return;
-
-	for (i = 0; i < KS_TASK_HASH_SIZE; ++i) {
-		while (kshark_ctx->tasks[i]) {
-			task = kshark_ctx->tasks[i];
-			kshark_ctx->tasks[i] = task->next;
-			free(task);
-		}
-	}
-}
-
-/**
- * @brief Open and prepare for reading a trace data file specified by "file".
- *	  If the specified file does not exist, or contains no trace data,
- *	  the function returns false.
- *
- * @param kshark_ctx: Input location for context pointer.
- * @param file: The file to load.
- *
- * @returns True on success, or false on failure.
- */
-bool kshark_open(struct kshark_context *kshark_ctx, const char *file)
-{
-	struct tracecmd_input *handle;
-
-	kshark_free_task_list(kshark_ctx);
-
-	handle = tracecmd_open(file);
-	if (!handle)
-		return false;
-
-	if (pthread_mutex_init(&kshark_ctx->input_mutex, NULL) != 0) {
-		tracecmd_close(handle);
-		return false;
-	}
-
-	kshark_ctx->handle = handle;
-	kshark_ctx->pevent = tracecmd_get_pevent(handle);
-
-	kshark_ctx->advanced_event_filter =
-		tep_filter_alloc(kshark_ctx->pevent);
-
 	/*
 	 * Turn off function trace indent and turn on show parent
 	 * if possible.
@@ -160,36 +104,218 @@ bool kshark_open(struct kshark_context *kshark_ctx, const char *file)
 	return true;
 }
 
-/**
- * @brief Close the trace data file and free the trace data handle.
- *
- * @param kshark_ctx: Input location for the session context pointer.
- */
-void kshark_close(struct kshark_context *kshark_ctx)
+static void kshark_free_task_list(struct kshark_data_stream *stream)
 {
-	if (!kshark_ctx || !kshark_ctx->handle)
+	struct kshark_task_list *task;
+	int i;
+
+	if (!stream->tasks)
+		return;
+
+	for (i = 0; i < KS_TASK_HASH_SIZE; ++i) {
+		while (stream->tasks[i]) {
+			task = stream->tasks[i];
+			stream->tasks[i] = task->next;
+			free(task);
+		}
+	}
+
+	free(stream->tasks);
+}
+
+static void kshark_stream_free(struct kshark_data_stream *stream)
+{
+	if (!stream)
+		return;
+
+	tracecmd_filter_id_hash_free(stream->show_task_filter);
+	tracecmd_filter_id_hash_free(stream->hide_task_filter);
+
+	tracecmd_filter_id_hash_free(stream->show_event_filter);
+	tracecmd_filter_id_hash_free(stream->hide_event_filter);
+
+	kshark_free_task_list(stream);
+
+	free(stream);
+}
+
+/**
+ * @brief Add new Trace data stream.
+ *
+ * @param kshark_ctx: Input location for context pointer.
+ *
+ * @returns Zero on success or a negative error code in the case of an errno.
+ */
+int kshark_add_stream(struct kshark_context *kshark_ctx)
+{
+	struct kshark_data_stream *stream;
+	int sd;
+
+	for (sd = 0; sd < KS_MAX_NUM_STREAMS; ++sd)
+		if (!kshark_ctx->stream[sd])
+			break;
+
+	if (sd == KS_MAX_NUM_STREAMS)
+		return -EMFILE;
+
+	stream = malloc(sizeof(*stream));
+	if (!stream)
+		return -ENOMEM;
+
+	stream->filter_mask = 0x0;
+
+	stream->show_task_filter = tracecmd_filter_id_hash_alloc();
+	stream->hide_task_filter = tracecmd_filter_id_hash_alloc();
+
+	stream->show_event_filter = tracecmd_filter_id_hash_alloc();
+	stream->hide_event_filter = tracecmd_filter_id_hash_alloc();
+
+	stream->tasks = calloc(KS_TASK_HASH_SIZE,
+			       sizeof(*stream->tasks));
+
+	if (!stream->show_task_filter ||
+	    !stream->hide_task_filter ||
+	    !stream->show_event_filter ||
+	    !stream->hide_event_filter ||
+	    !stream->tasks) {
+		    kshark_stream_free(stream);
+		    stream = NULL;
+	}
+
+	kshark_ctx->stream[sd] = stream;
+
+	return sd;
+}
+
+/**
+ * @brief Use an existing Trace data stream to open and prepare for reading
+ *	  a trace data file specified by "file".
+ *
+ * @param stream: Input location for a Trace data stream pointer.
+ * @param file: The file to load.
+ *
+ * @returns Zero on success or a negative error code in the case of an errno.
+ */
+int kshark_stream_open(struct kshark_data_stream *stream, const char *file)
+{
+	struct tracecmd_input *handle;
+
+	if (!stream)
+		return -EFAULT;
+
+	handle = tracecmd_open(file);
+	if (!handle)
+		return -EEXIST;
+
+	if (pthread_mutex_init(&stream->input_mutex, NULL) != 0) {
+		tracecmd_close(handle);
+		return -EAGAIN;
+	}
+
+	stream->handle = handle;
+	stream->pevent = tracecmd_get_pevent(handle);
+
+	stream->advanced_event_filter =
+		tep_filter_alloc(stream->pevent);
+
+	return 0;
+}
+
+/**
+ * @brief Get an array containing the Ids of all opened Trace data streams.
+ * 	  The User is responsible for freeing the array.
+ *
+ * @param kshark_ctx: Input location for context pointer.
+ */
+int *kshark_all_streams(struct kshark_context *kshark_ctx)
+{
+	int *ids, n, i, count = 0;
+
+	n = kshark_ctx->n_streams;
+	ids = malloc(n * (sizeof(*ids)));
+	if (!ids) {
+		fprintf(stderr,
+			"Failed to allocate memory for stream array.\n");
+		return NULL;
+	}
+
+	for (i = 0; i < KS_MAX_NUM_STREAMS; ++i)
+		if (kshark_ctx->stream[i])
+			ids[count++] = i;
+
+	return ids;
+}
+
+/**
+ * @brief Open and prepare for reading a trace data file specified by "file".
+ *
+ * @param kshark_ctx: Input location for context pointer.
+ * @param file: The file to load.
+ *
+ * @returns The Id number of the data stream associated with this file on success.
+ * 	    Otherwise a negative errno code.
+ */
+int kshark_open(struct kshark_context *kshark_ctx, const char *file)
+{
+	int sd, rt;
+
+	sd = kshark_add_stream(kshark_ctx);
+	if (sd < 0)
+		return sd;
+
+	rt = kshark_stream_open(kshark_ctx->stream[sd], file);
+	if (rt < 0)
+		return rt;
+
+	kshark_ctx->n_streams++;
+
+	return sd;
+}
+
+static void kshark_stream_close(struct kshark_data_stream *stream)
+{
+	if (!stream || !stream->handle)
 		return;
 
 	/*
 	 * All filters are file specific. Make sure that the Pids and Event Ids
 	 * from this file are not going to be used with another file.
 	 */
-	tracecmd_filter_id_clear(kshark_ctx->show_task_filter);
-	tracecmd_filter_id_clear(kshark_ctx->hide_task_filter);
-	tracecmd_filter_id_clear(kshark_ctx->show_event_filter);
-	tracecmd_filter_id_clear(kshark_ctx->hide_event_filter);
+	tracecmd_filter_id_clear(stream->show_task_filter);
+	tracecmd_filter_id_clear(stream->hide_task_filter);
+	tracecmd_filter_id_clear(stream->show_event_filter);
+	tracecmd_filter_id_clear(stream->hide_event_filter);
 
-	if (kshark_ctx->advanced_event_filter) {
-		tep_filter_reset(kshark_ctx->advanced_event_filter);
-		tep_filter_free(kshark_ctx->advanced_event_filter);
-		kshark_ctx->advanced_event_filter = NULL;
+	if (stream->advanced_event_filter) {
+		tep_filter_reset(stream->advanced_event_filter);
+		tep_filter_free(stream->advanced_event_filter);
+		stream->advanced_event_filter = NULL;
 	}
 
-	tracecmd_close(kshark_ctx->handle);
-	kshark_ctx->handle = NULL;
-	kshark_ctx->pevent = NULL;
+	tracecmd_close(stream->handle);
+	stream->handle = NULL;
+	stream->pevent = NULL;
 
-	pthread_mutex_destroy(&kshark_ctx->input_mutex);
+	pthread_mutex_destroy(&stream->input_mutex);
+}
+
+/**
+ * @brief Close the trace data file and free the trace data handle.
+ *
+ * @param kshark_ctx: Input location for the session context pointer.
+ * @param sd: Data stream identifier.
+ */
+void kshark_close(struct kshark_context *kshark_ctx, int sd)
+{
+	struct kshark_data_stream *stream;
+
+	stream = kshark_get_data_stream(kshark_ctx, sd);
+	if (stream) {
+		kshark_stream_close(kshark_ctx->stream[sd]);
+		kshark_stream_free(kshark_ctx->stream[sd]);
+		kshark_ctx->stream[sd] = NULL;
+		kshark_ctx->n_streams--;
+	}
 }
 
 /**
@@ -203,6 +329,8 @@ void kshark_close(struct kshark_context *kshark_ctx)
  */
 void kshark_free(struct kshark_context *kshark_ctx)
 {
+	int sd;
+
 	if (kshark_ctx == NULL) {
 		if (kshark_context_handler == NULL)
 			return;
@@ -211,13 +339,10 @@ void kshark_free(struct kshark_context *kshark_ctx)
 		/* kshark_ctx_handler will be set to NULL below. */
 	}
 
-	tracecmd_filter_id_hash_free(kshark_ctx->show_task_filter);
-	tracecmd_filter_id_hash_free(kshark_ctx->hide_task_filter);
+	for (sd = 0; sd < KS_MAX_NUM_STREAMS; ++sd)
+		kshark_close(kshark_ctx, sd);
 
-	tracecmd_filter_id_hash_free(kshark_ctx->show_event_filter);
-	tracecmd_filter_id_hash_free(kshark_ctx->hide_event_filter);
-
-	kshark_free_task_list(kshark_ctx);
+	free(kshark_ctx->stream);
 
 	if (seq.buffer)
 		trace_seq_destroy(&seq);
@@ -240,11 +365,11 @@ static inline uint8_t knuth_hash8(uint32_t val)
 }
 
 static struct kshark_task_list *
-kshark_find_task(struct kshark_context *kshark_ctx, uint8_t key, int pid)
+kshark_find_task(struct kshark_data_stream *stream, uint8_t key, int pid)
 {
 	struct kshark_task_list *list;
 
-	for (list = kshark_ctx->tasks[key]; list; list = list->next) {
+	for (list = stream->tasks[key]; list; list = list->next) {
 		if (list->pid == pid)
 			return list;
 	}
@@ -253,13 +378,13 @@ kshark_find_task(struct kshark_context *kshark_ctx, uint8_t key, int pid)
 }
 
 static struct kshark_task_list *
-kshark_add_task(struct kshark_context *kshark_ctx, int pid)
+kshark_add_task(struct kshark_data_stream *stream, int pid)
 {
 	struct kshark_task_list *list;
 	uint8_t key;
 
 	key = knuth_hash8(pid);
-	list = kshark_find_task(kshark_ctx, key, pid);
+	list = kshark_find_task(stream, key, pid);
 	if (list)
 		return list;
 
@@ -268,8 +393,8 @@ kshark_add_task(struct kshark_context *kshark_ctx, int pid)
 		return NULL;
 
 	list->pid = pid;
-	list->next = kshark_ctx->tasks[key];
-	kshark_ctx->tasks[key] = list;
+	list->next = stream->tasks[key];
+	stream->tasks[key] = list;
 
 	return list;
 }
@@ -279,24 +404,31 @@ kshark_add_task(struct kshark_context *kshark_ctx, int pid)
  *	  the loaded trace data file.
  *
  * @param kshark_ctx: Input location for context pointer.
+ * @param sd: Data stream identifier.
  * @param pids: Output location for the Pids of the tasks. The user is
  *		responsible for freeing the elements of the outputted array.
  *
  * @returns The size of the outputted array of Pids in the case of success,
  *	    or a negative error code on failure.
  */
-ssize_t kshark_get_task_pids(struct kshark_context *kshark_ctx, int **pids)
+ssize_t kshark_get_task_pids(struct kshark_context *kshark_ctx, int sd,
+			     int **pids)
 {
 	size_t i, pid_count = 0, pid_size = KS_TASK_HASH_SIZE;
+	struct kshark_data_stream *stream;
 	struct kshark_task_list *list;
 	int *temp_pids;
+
+	stream = kshark_get_data_stream(kshark_ctx, sd);
+	if (!stream)
+		return -EBADF;
 
 	*pids = calloc(pid_size, sizeof(int));
 	if (!*pids)
 		goto fail;
 
 	for (i = 0; i < KS_TASK_HASH_SIZE; ++i) {
-		list = kshark_ctx->tasks[i];
+		list = kshark_ctx->stream[sd]->tasks[i];
 		while (list) {
 			(*pids)[pid_count] = list->pid;
 			list = list->next;
@@ -339,78 +471,110 @@ static bool filter_find(struct tracecmd_filter_id *filter, int pid,
 		!!(unsigned long)tracecmd_filter_id_find(filter, pid) == test;
 }
 
-static bool kshark_show_task(struct kshark_context *kshark_ctx, int pid)
+static bool kshark_show_task(struct kshark_data_stream *stream, int pid)
 {
-	return filter_find(kshark_ctx->show_task_filter, pid, true) &&
-	       filter_find(kshark_ctx->hide_task_filter, pid, false);
+	return filter_find(stream->show_task_filter, pid, true) &&
+	       filter_find(stream->hide_task_filter, pid, false);
 }
 
-static bool kshark_show_event(struct kshark_context *kshark_ctx, int pid)
+static bool kshark_show_event(struct kshark_data_stream *stream, int pid)
 {
-	return filter_find(kshark_ctx->show_event_filter, pid, true) &&
-	       filter_find(kshark_ctx->hide_event_filter, pid, false);
+	return filter_find(stream->show_event_filter, pid, true) &&
+	       filter_find(stream->hide_event_filter, pid, false);
 }
 
 /**
- * @brief Add an Id value to the filster specified by "filter_id".
+ * @brief Get an Id Filter.
+ *
+ * @param kshark_ctx: Input location for context pointer.
+ * @param sd: Data stream identifier.
+ * @param filter_id: Identifier of the filter.
+ */
+struct tracecmd_filter_id *
+kshark_get_filter(struct kshark_context *kshark_ctx, int sd, int filter_id)
+{
+	struct kshark_data_stream *stream;
+
+	stream = kshark_get_data_stream(kshark_ctx, sd);
+	if (!stream)
+		return NULL;
+
+	switch (filter_id) {
+	case KS_SHOW_EVENT_FILTER:
+		return stream->show_event_filter;
+	case KS_HIDE_EVENT_FILTER:
+		return stream->hide_event_filter;
+	case KS_SHOW_TASK_FILTER:
+		return stream->show_task_filter;
+	case KS_HIDE_TASK_FILTER:
+		return stream->hide_task_filter;
+	default:
+		return NULL;
+	}
+}
+
+/**
+ * @brief Add an Id value to the filter specified by "filter_id".
  *
  * @param kshark_ctx: Input location for the session context pointer.
+ * @param sd: Data stream identifier.
  * @param filter_id: Identifier of the filter.
  * @param id: Id value to be added to the filter.
  */
-void kshark_filter_add_id(struct kshark_context *kshark_ctx,
+void kshark_filter_add_id(struct kshark_context *kshark_ctx, int sd,
 			  int filter_id, int id)
 {
 	struct tracecmd_filter_id *filter;
 
-	switch (filter_id) {
-		case KS_SHOW_EVENT_FILTER:
-			filter = kshark_ctx->show_event_filter;
-			break;
-		case KS_HIDE_EVENT_FILTER:
-			filter = kshark_ctx->hide_event_filter;
-			break;
-		case KS_SHOW_TASK_FILTER:
-			filter = kshark_ctx->show_task_filter;
-			break;
-		case KS_HIDE_TASK_FILTER:
-			filter = kshark_ctx->hide_task_filter;
-			break;
-		default:
-			return;
-	}
-
-	tracecmd_filter_id_add(filter, id);
+	filter = kshark_get_filter(kshark_ctx, sd, filter_id);
+	if (filter)
+		tracecmd_filter_id_add(filter, id);
 }
 
 /**
- * @brief Clear (reset) the filster specified by "filter_id".
+ * @brief Get an array containing all Ids associated with a given Id Filter.
  *
- * @param kshark_ctx: Input location for the session context pointer.
+ * @param kshark_ctx: Input location for context pointer.
+ * @param sd: Data stream identifier.
  * @param filter_id: Identifier of the filter.
+ * @param n: Output location for the size of the returned array.
+ *
+ * @return The user is responsible for freeing the array.
  */
-void kshark_filter_clear(struct kshark_context *kshark_ctx, int filter_id)
+int *kshark_get_filter_ids(struct kshark_context *kshark_ctx, int sd,
+			   int filter_id, int *n)
 {
 	struct tracecmd_filter_id *filter;
 
-	switch (filter_id) {
-		case KS_SHOW_EVENT_FILTER:
-			filter = kshark_ctx->show_event_filter;
-			break;
-		case KS_HIDE_EVENT_FILTER:
-			filter = kshark_ctx->hide_event_filter;
-			break;
-		case KS_SHOW_TASK_FILTER:
-			filter = kshark_ctx->show_task_filter;
-			break;
-		case KS_HIDE_TASK_FILTER:
-			filter = kshark_ctx->hide_task_filter;
-			break;
-		default:
-			return;
+	filter = kshark_get_filter(kshark_ctx, sd, filter_id);
+	if (filter) {
+		if (n)
+			*n = filter->count;
+
+		return tracecmd_filter_ids(filter);
 	}
 
-	tracecmd_filter_id_clear(filter);
+	if (n)
+		*n = 0;
+
+	return NULL;
+}
+
+/**
+ * @brief Clear (reset) the filter specified by "filter_id".
+ *
+ * @param kshark_ctx: Input location for the session context pointer.
+ * @param sd: Data stream identifier.
+ * @param filter_id: Identifier of the filter.
+ */
+void kshark_filter_clear(struct kshark_context *kshark_ctx, int sd,
+			 int filter_id)
+{
+	struct tracecmd_filter_id *filter;
+
+	filter = kshark_get_filter(kshark_ctx, sd, filter_id);
+	if (filter)
+		tracecmd_filter_id_clear(filter);
 }
 
 static bool filter_is_set(struct tracecmd_filter_id *filter)
@@ -418,24 +582,24 @@ static bool filter_is_set(struct tracecmd_filter_id *filter)
 	return filter && filter->count;
 }
 
-static bool kshark_filter_is_set(struct kshark_context *kshark_ctx)
+static bool kshark_filter_is_set(struct kshark_data_stream *stream)
 {
-	return filter_is_set(kshark_ctx->show_task_filter) ||
-	       filter_is_set(kshark_ctx->hide_task_filter) ||
-	       filter_is_set(kshark_ctx->show_event_filter) ||
-	       filter_is_set(kshark_ctx->hide_event_filter);
+	return filter_is_set(stream->show_task_filter) ||
+	       filter_is_set(stream->hide_task_filter) ||
+	       filter_is_set(stream->show_event_filter) ||
+	       filter_is_set(stream->hide_event_filter);
 }
 
-static void unset_event_filter_flag(struct kshark_context *kshark_ctx,
+static void unset_event_filter_flag(struct kshark_data_stream *stream,
 				    struct kshark_entry *e)
 {
 	/*
 	 * All entries, filtered-out by the event filters, will be treated
 	 * differently, when visualized. Because of this, ignore the value
 	 * of the GRAPH_VIEW flag provided by the user via
-	 * kshark_ctx->filter_mask and unset the EVENT_VIEW flag.
+	 * stream->filter_mask and unset the EVENT_VIEW flag.
 	 */
-	int event_mask = kshark_ctx->filter_mask;
+	int event_mask = stream->filter_mask;
 
 	event_mask &= ~KS_GRAPH_VIEW_FILTER_MASK;
 	event_mask |= KS_EVENT_VIEW_FILTER_MASK;
@@ -454,43 +618,52 @@ static void unset_event_filter_flag(struct kshark_context *kshark_ctx,
  *	  hence the data has to be reloaded using kshark_load_data_entries().
  *
  * @param kshark_ctx: Input location for the session context pointer.
+ * @param sd: Data stream identifier.
  * @param data: Input location for the trace data to be filtered.
  * @param n_entries: The size of the inputted data.
  */
-void kshark_filter_entries(struct kshark_context *kshark_ctx,
-			   struct kshark_entry **data,
-			   size_t n_entries)
+void kshark_filter_entries(struct kshark_context *kshark_ctx, int sd,
+			   struct kshark_entry **data, size_t n_entries)
 {
+	struct kshark_data_stream *stream;
 	int i;
 
-	if (kshark_ctx->advanced_event_filter->filters) {
+	stream = kshark_get_data_stream(kshark_ctx, sd);
+	if (!stream)
+		return;
+
+	if (stream->advanced_event_filter->filters) {
 		/* The advanced filter is set. */
 		fprintf(stderr,
-			"Failed to filter!\n");
+			"Failed to filter (sd = %i)!\n", sd);
 		fprintf(stderr,
 			"Reset the Advanced filter or reload the data.\n");
 		return;
 	}
 
-	if (!kshark_filter_is_set(kshark_ctx))
+	if (!kshark_filter_is_set(stream))
 		return;
 
 	/* Apply only the Id filters. */
 	for (i = 0; i < n_entries; ++i) {
+		/* Chack is the entry belongs to this stream. */
+		if (data[i]->stream_id != sd)
+			continue;
+
 		/* Start with and entry which is visible everywhere. */
 		data[i]->visible = 0xFF;
 
 		/* Apply event filtering. */
-		if (!kshark_show_event(kshark_ctx, data[i]->event_id))
-			unset_event_filter_flag(kshark_ctx, data[i]);
+		if (!kshark_show_event(stream, data[i]->event_id))
+			unset_event_filter_flag(stream, data[i]);
 
 		/* Apply task filtering. */
-		if (!kshark_show_task(kshark_ctx, data[i]->pid))
-			data[i]->visible &= ~kshark_ctx->filter_mask;
+		if (!kshark_show_task(stream, data[i]->pid))
+			data[i]->visible &= ~stream->filter_mask;
 	}
 }
 
-static void kshark_set_entry_values(struct kshark_context *kshark_ctx,
+static void kshark_set_entry_values(struct kshark_data_stream *stream,
 				    struct tep_record *record,
 				    struct kshark_entry *entry)
 {
@@ -504,7 +677,7 @@ static void kshark_set_entry_values(struct kshark_context *kshark_ctx,
 	entry->ts = record->ts;
 
 	/* Event Id of the record */
-	entry->event_id = tep_data_type(kshark_ctx->pevent, record);
+	entry->event_id = tep_data_type(stream->pevent, record);
 
 	/*
 	 * Is visible mask. This default value means that the entry
@@ -513,7 +686,7 @@ static void kshark_set_entry_values(struct kshark_context *kshark_ctx,
 	entry->visible = 0xFF;
 
 	/* Process Id of the record */
-	entry->pid = tep_data_pid(kshark_ctx->pevent, record);
+	entry->pid = tep_data_pid(stream->pevent, record);
 }
 
 /**
@@ -561,9 +734,10 @@ static void free_rec_list(struct rec_list **rec_list, int n_cpus,
 	free(rec_list);
 }
 
-static size_t get_records(struct kshark_context *kshark_ctx,
+static size_t get_records(struct kshark_context *kshark_ctx, int sd,
 			  struct rec_list ***rec_list, enum rec_type type)
 {
+	struct kshark_data_stream *stream;
 	struct event_filter *adv_filter;
 	struct kshark_task_list *task;
 	struct tep_record *rec;
@@ -575,21 +749,23 @@ static size_t get_records(struct kshark_context *kshark_ctx,
 	int pid;
 	int cpu;
 
-	n_cpus = tracecmd_cpus(kshark_ctx->handle);
+	stream = kshark_get_data_stream(kshark_ctx, sd);
+
+	n_cpus = tracecmd_cpus(stream->handle);
 	cpu_list = calloc(n_cpus, sizeof(*cpu_list));
 	if (!cpu_list)
 		return -ENOMEM;
 
 	/* Just to shorten the name */
 	if (type == REC_ENTRY)
-		adv_filter = kshark_ctx->advanced_event_filter;
+		adv_filter = stream->advanced_event_filter;
 
 	for (cpu = 0; cpu < n_cpus; ++cpu) {
 		count = 0;
 		cpu_list[cpu] = NULL;
 		temp_next = &cpu_list[cpu];
 
-		rec = tracecmd_read_cpu_first(kshark_ctx->handle, cpu);
+		rec = tracecmd_read_cpu_first(stream->handle, cpu);
 		while (rec) {
 			*temp_next = temp_rec = calloc(1, sizeof(*temp_rec));
 			if (!temp_rec)
@@ -600,35 +776,35 @@ static size_t get_records(struct kshark_context *kshark_ctx,
 			switch (type) {
 			case REC_RECORD:
 				temp_rec->rec = rec;
-				pid = tep_data_pid(kshark_ctx->pevent, rec);
+				pid = tep_data_pid(stream->pevent, rec);
 				break;
 			case REC_ENTRY: {
 				struct kshark_entry *entry;
 				int ret;
 
 				entry = &temp_rec->entry;
-				kshark_set_entry_values(kshark_ctx, rec, entry);
+				kshark_set_entry_values(stream, rec, entry);
 				pid = entry->pid;
 				/* Apply event filtering. */
 				ret = FILTER_MATCH;
 				if (adv_filter->filters)
 					ret = tep_filter_match(adv_filter, rec);
 
-				if (!kshark_show_event(kshark_ctx, entry->event_id) ||
+				if (!kshark_show_event(stream, entry->event_id) ||
 				    ret != FILTER_MATCH) {
-					unset_event_filter_flag(kshark_ctx, entry);
+					unset_event_filter_flag(stream, entry);
 				}
 
 				/* Apply task filtering. */
-				if (!kshark_show_task(kshark_ctx, entry->pid)) {
-					entry->visible &= ~kshark_ctx->filter_mask;
+				if (!kshark_show_task(stream, entry->pid)) {
+					entry->visible &= ~stream->filter_mask;
 				}
 				free_record(rec);
 				break;
 			} /* REC_ENTRY */
 			}
 
-			task = kshark_add_task(kshark_ctx, pid);
+			task = kshark_add_task(stream, pid);
 			if (!task) {
 				free_record(rec);
 				goto fail;
@@ -637,7 +813,7 @@ static size_t get_records(struct kshark_context *kshark_ctx,
 			temp_next = &temp_rec->next;
 
 			++count;
-			rec = tracecmd_read_data(kshark_ctx->handle, cpu);
+			rec = tracecmd_read_data(stream->handle, cpu);
 		}
 
 		total += count;
@@ -693,6 +869,7 @@ static int pick_next_cpu(struct rec_list **rec_list, int n_cpus,
  *	  level of visibility/invisibility of the filtered entries.
  *
  * @param kshark_ctx: Input location for context pointer.
+ * @param sd: Data stream identifier.
  * @param data_rows: Output location for the trace data. The user is
  *		     responsible for freeing the elements of the outputted
  *		     array.
@@ -700,9 +877,10 @@ static int pick_next_cpu(struct rec_list **rec_list, int n_cpus,
  * @returns The size of the outputted data in the case of success, or a
  *	    negative error code on failure.
  */
-ssize_t kshark_load_data_entries(struct kshark_context *kshark_ctx,
+ssize_t kshark_load_data_entries(struct kshark_context *kshark_ctx, int sd,
 				struct kshark_entry ***data_rows)
 {
+	struct kshark_data_stream *stream;
 	struct kshark_entry **rows;
 	struct rec_list **rec_list;
 	enum rec_type type = REC_ENTRY;
@@ -712,11 +890,15 @@ ssize_t kshark_load_data_entries(struct kshark_context *kshark_ctx,
 	if (*data_rows)
 		free(*data_rows);
 
-	total = get_records(kshark_ctx, &rec_list, type);
+	stream = kshark_get_data_stream(kshark_ctx, sd);
+	if (!stream)
+		return -EBADF;;
+
+	total = get_records(kshark_ctx, sd, &rec_list, type);
 	if (total < 0)
 		goto fail;
 
-	n_cpus = tracecmd_cpus(kshark_ctx->handle);
+	n_cpus = tracecmd_cpus(stream->handle);
 
 	rows = calloc(total, sizeof(struct kshark_entry *));
 	if (!rows)
@@ -756,15 +938,17 @@ ssize_t kshark_load_data_entries(struct kshark_context *kshark_ctx,
  *	  to all fields of the record.
  *
  * @param kshark_ctx: Input location for the session context pointer.
+ * @param sd: Data stream identifier.
  * @param data_rows: Output location for the trace data. Use free_record()
  *	 	     to free the elements of the outputted array.
  *
  * @returns The size of the outputted data in the case of success, or a
  *	    negative error code on failure.
  */
-ssize_t kshark_load_data_records(struct kshark_context *kshark_ctx,
+ssize_t kshark_load_data_records(struct kshark_context *kshark_ctx, int sd,
 				struct tep_record ***data_rows)
 {
+	struct kshark_data_stream *stream;
 	struct tep_record **rows;
 	struct tep_record *rec;
 	struct rec_list **rec_list;
@@ -773,7 +957,14 @@ ssize_t kshark_load_data_records(struct kshark_context *kshark_ctx,
 	size_t count, total = 0;
 	int n_cpus;
 
-	total = get_records(kshark_ctx, &rec_list, REC_RECORD);
+	if (*data_rows)
+		free(*data_rows);
+
+	stream = kshark_get_data_stream(kshark_ctx, sd);
+	if (!stream)
+		return -EBADF;
+
+	total = get_records(kshark_ctx, sd, &rec_list, REC_RECORD);
 	if (total < 0)
 		goto fail;
 
@@ -781,7 +972,7 @@ ssize_t kshark_load_data_records(struct kshark_context *kshark_ctx,
 	if (!rows)
 		goto fail;
 
-	n_cpus = tracecmd_cpus(kshark_ctx->handle);
+	n_cpus = tracecmd_cpus(stream->handle);
 
 	for (count = 0; count < total; count++) {
 		int next_cpu;
@@ -809,7 +1000,7 @@ ssize_t kshark_load_data_records(struct kshark_context *kshark_ctx,
 	return -ENOMEM;
 }
 
-static struct tep_record *kshark_read_at(struct kshark_context *kshark_ctx,
+static struct tep_record *kshark_read_at(struct kshark_context *kshark_ctx, int sd,
 					 uint64_t offset)
 {
 	/*
@@ -817,12 +1008,19 @@ static struct tep_record *kshark_read_at(struct kshark_context *kshark_ctx,
 	 * TODO: Understand why and see if this can be fixed.
 	 * For the time being use a mutex to protect the access.
 	 */
-	pthread_mutex_lock(&kshark_ctx->input_mutex);
 
-	struct tep_record *data = tracecmd_read_at(kshark_ctx->handle,
-						      offset, NULL);
+	struct kshark_data_stream *stream;
+	struct tep_record *data;
 
-	pthread_mutex_unlock(&kshark_ctx->input_mutex);
+	stream = kshark_get_data_stream(kshark_ctx, sd);
+	if (!stream)
+		return NULL;
+
+	pthread_mutex_lock(&stream->input_mutex);
+
+	data = tracecmd_read_at(stream->handle, offset, NULL);
+
+	pthread_mutex_unlock(&stream->input_mutex);
 
 	return data;
 }
@@ -874,6 +1072,7 @@ char* kshark_dump_entry(const struct kshark_entry *entry)
 {
 	const char *event_name, *task, *lat, *info;
 	struct kshark_context *kshark_ctx;
+	struct kshark_data_stream *stream;
 	struct tep_record *data;
 	struct event_format *event;
 	char *temp_str, *entry_str;
@@ -883,14 +1082,18 @@ char* kshark_dump_entry(const struct kshark_entry *entry)
 	if (!kshark_instance(&kshark_ctx) || !init_thread_seq())
 		return NULL;
 
-	data = kshark_read_at(kshark_ctx, entry->offset);
+	stream = kshark_get_data_stream(kshark_ctx, entry->stream_id);
+	if (!stream)
+		return NULL;
 
-	event_id = tep_data_type(kshark_ctx->pevent, data);
-	event = tep_data_event_from_type(kshark_ctx->pevent, event_id);
+	data = kshark_read_at(kshark_ctx, entry->stream_id, entry->offset);
+
+	event_id = tep_data_type(stream->pevent, data);
+	event = tep_data_event_from_type(stream->pevent, event_id);
 
 	event_name = event? event->name : "[UNKNOWN EVENT]";
-	task = tep_data_comm_from_pid(kshark_ctx->pevent, entry->pid);
-	lat = kshark_get_latency(kshark_ctx->pevent, data);
+	task = tep_data_comm_from_pid(stream->pevent, entry->pid);
+	lat = kshark_get_latency(stream->pevent, data);
 
 	size = asprintf(&temp_str, "%li %s-%i; CPU %i; %s;",
 			entry->ts,
@@ -899,7 +1102,7 @@ char* kshark_dump_entry(const struct kshark_entry *entry)
 			entry->cpu,
 			lat);
 
-	info = kshark_get_info(kshark_ctx->pevent, data, event);
+	info = kshark_get_info(stream->pevent, data, event);
 	if (size > 0) {
 		size = asprintf(&entry_str, "%s %s; %s; 0x%x",
 				temp_str,
@@ -995,15 +1198,16 @@ ssize_t kshark_find_record_by_time(uint64_t time,
  *
  * @param kshark_ctx: Input location for the session context pointer.
  * @param e: kshark_entry to be checked.
+ * @param sd: Data stream identifier.
  * @param pid: Matching condition value.
  *
  * @returns True if the Pid of the entry matches the value of "pid".
  *	    Else false.
  */
 bool kshark_match_pid(struct kshark_context *kshark_ctx,
-		      struct kshark_entry *e, int pid)
+		      struct kshark_entry *e, int sd, int pid)
 {
-	if (e->pid == pid)
+	if (e->stream_id == sd && e->pid == pid)
 		return true;
 
 	return false;
@@ -1014,15 +1218,16 @@ bool kshark_match_pid(struct kshark_context *kshark_ctx,
  *
  * @param kshark_ctx: Input location for the session context pointer.
  * @param e: kshark_entry to be checked.
+ * @param sd: Data stream identifier.
  * @param cpu: Matching condition value.
  *
  * @returns True if the Cpu of the entry matches the value of "cpu".
  *	    Else false.
  */
 bool kshark_match_cpu(struct kshark_context *kshark_ctx,
-		      struct kshark_entry *e, int cpu)
+		      struct kshark_entry *e, int sd, int cpu)
 {
-	if (e->cpu == cpu)
+	if (e->stream_id == sd && e->cpu == cpu)
 		return true;
 
 	return false;
@@ -1036,6 +1241,7 @@ bool kshark_match_cpu(struct kshark_context *kshark_ctx,
  *		 where the search starts.
  * @param n: Number of array elements to search in.
  * @param cond: Matching condition function.
+ * @param sd: Data stream identifier.
  * @param val: Matching condition value, used by the Matching condition
  *	       function.
  * @param vis_only: If true, a visible entry is requested.
@@ -1048,7 +1254,7 @@ bool kshark_match_cpu(struct kshark_context *kshark_ctx,
  */
 struct kshark_entry_request *
 kshark_entry_request_alloc(size_t first, size_t n,
-			   matching_condition_func cond, int val,
+			   matching_condition_func cond, int sd, int val,
 			   bool vis_only, int vis_mask)
 {
 	struct kshark_entry_request *req = malloc(sizeof(*req));
@@ -1063,6 +1269,7 @@ kshark_entry_request_alloc(size_t first, size_t n,
 	req->first = first;
 	req->n = n;
 	req->cond = cond;
+	req->sd = sd;
 	req->val = val;
 	req->vis_only = vis_only;
 	req->vis_mask = vis_mask;
@@ -1112,7 +1319,7 @@ get_entry(const struct kshark_entry_request *req,
 		return e;
 
 	for (i = start; i != end; i += inc) {
-		if (req->cond(kshark_ctx, data[i], req->val)) {
+		if (req->cond(kshark_ctx, data[i], req->sd, req->val)) {
 			/*
 			 * Data satisfying the condition has been found.
 			 */

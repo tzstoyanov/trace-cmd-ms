@@ -13,8 +13,8 @@
 #define _KS_PLOT_TOOLS_H
 
 // C++
-#include <forward_list>
 #include <unordered_map>
+#include <forward_list>
 
 // KernelShark
 #include "libkshark.h"
@@ -420,9 +420,9 @@ public:
 	/** @brief Set the Hash table of Task's colors. */
 	void setColorTablePtr(KsPlot::ColorTable *ct) {_pidColors = ct;}
 
-	void fillCPUGraph(int cpu);
+	void fillCPUGraph(int sd, int cpu);
 
-	void fillTaskGraph(int pid);
+	void fillTaskGraph(int sd, int pid);
 
 	void draw(float s = 1);
 

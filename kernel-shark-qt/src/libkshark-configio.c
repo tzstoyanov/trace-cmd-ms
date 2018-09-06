@@ -1006,10 +1006,10 @@ bool kshark_import_task_filter(struct tracecmd_filter_id *filter,
 	}
 }
 
-static bool kshark_adv_filters_to_json(struct kshark_context *kshark_ctx,
+static bool kshark_adv_filters_to_json(struct kshark_data_stream *stream,
 				       struct json_object *jobj)
 {
-	struct event_filter *adv_filter = kshark_ctx->advanced_event_filter;
+	struct event_filter *adv_filter = stream->advanced_event_filter;
 	json_object *jfilter_data, *jevent, *jsystem, *jname, *jfilter;
 	struct event_format **events;
 	char *str;
@@ -1023,8 +1023,8 @@ static bool kshark_adv_filters_to_json(struct kshark_context *kshark_ctx,
 	 */
 	json_del_if_exist(jobj, KS_ADV_EVENT_FILTER_NAME);
 
-	if (!kshark_ctx->advanced_event_filter ||
-	    !kshark_ctx->advanced_event_filter->filters)
+	if (!stream->advanced_event_filter ||
+	    !stream->advanced_event_filter->filters)
 		return true;
 
 	/* Create a Json array and fill the Id values into it. */
@@ -1032,7 +1032,7 @@ static bool kshark_adv_filters_to_json(struct kshark_context *kshark_ctx,
 	if (!jfilter_data)
 		goto fail;
 
-	events = tep_list_events(kshark_ctx->pevent, EVENT_SORT_SYSTEM);
+	events = tep_list_events(stream->pevent, EVENT_SORT_SYSTEM);
 	if (!events)
 		return false;
 
@@ -1077,15 +1077,22 @@ static bool kshark_adv_filters_to_json(struct kshark_context *kshark_ctx,
  *	  Configuration document.
  *
  * @param kshark_ctx: Input location for session context pointer.
+ * @param sd: Data stream identifier.
  * @param conf: Input location for the kshark_config_doc instance. Currently
  *		only Json format is supported. If NULL, a new Adv. Filter
  *		Configuration document will be created.
  *
  * @returns True on success, otherwise False.
  */
-bool kshark_export_adv_filters(struct kshark_context *kshark_ctx,
+bool kshark_export_adv_filters(struct kshark_context *kshark_ctx, int sd,
 			       struct kshark_config_doc **conf)
 {
+	struct kshark_data_stream *stream =
+		kshark_get_data_stream(kshark_ctx, sd);
+
+	if (!stream)
+		return false;
+
 	if (!*conf)
 		*conf = kshark_filter_config_new(KS_CONFIG_JSON);
 
@@ -1094,7 +1101,7 @@ bool kshark_export_adv_filters(struct kshark_context *kshark_ctx,
 
 	switch ((*conf)->format) {
 	case KS_CONFIG_JSON:
-		return kshark_adv_filters_to_json(kshark_ctx,
+		return kshark_adv_filters_to_json(stream,
 						  (*conf)->conf_doc);
 
 	default:
@@ -1104,10 +1111,10 @@ bool kshark_export_adv_filters(struct kshark_context *kshark_ctx,
 	}
 }
 
-static bool kshark_adv_filters_from_json(struct kshark_context *kshark_ctx,
+static bool kshark_adv_filters_from_json(struct kshark_data_stream *stream,
 					 struct json_object *jobj)
 {
-	struct event_filter *adv_filter = kshark_ctx->advanced_event_filter;
+	struct event_filter *adv_filter = stream->advanced_event_filter;
 	json_object *jfilter, *jsystem, *jname, *jcond;
 	int i, length, n, ret = 0;
 	char *filter_str = NULL;
@@ -1158,8 +1165,8 @@ static bool kshark_adv_filters_from_json(struct kshark_context *kshark_ctx,
 	if (ret < 0) {
 		char error_str[200];
 		int error_status =
-			tep_strerror(kshark_ctx->pevent, ret, error_str,
-						         sizeof(error_str));
+			tep_strerror(stream->pevent, ret, error_str,
+						          sizeof(error_str));
 
 		if (error_status == 0)
 			fprintf(stderr, "filter failed due to: %s\n",
@@ -1175,6 +1182,7 @@ static bool kshark_adv_filters_from_json(struct kshark_context *kshark_ctx,
  *	  filter.
  *
  * @param kshark_ctx: Input location for session context pointer.
+ * @param sd: Data stream identifier.
  * @param conf: Input location for the kshark_config_doc instance. Currently
  *		only Json format is supported.
  *
@@ -1182,12 +1190,18 @@ static bool kshark_adv_filters_from_json(struct kshark_context *kshark_ctx,
  *	    document contains no data for the Adv. filter or in a case of
  *	    an error, the function returns False.
  */
-bool kshark_import_adv_filters(struct kshark_context *kshark_ctx,
+bool kshark_import_adv_filters(struct kshark_context *kshark_ctx, int sd,
 			       struct kshark_config_doc *conf)
 {
+	struct kshark_data_stream *stream =
+		kshark_get_data_stream(kshark_ctx, sd);
+
+	if (!stream)
+		return false;
+
 	switch (conf->format) {
 	case KS_CONFIG_JSON:
-		return kshark_adv_filters_from_json(kshark_ctx,
+		return kshark_adv_filters_from_json(stream,
 						    conf->conf_doc);
 
 	default:
@@ -1207,6 +1221,7 @@ static bool filter_is_set(struct tracecmd_filter_id *filter)
  *	  filters into a Json document.
  *
  * @param kshark_ctx: Input location for session context pointer.
+ * @param sd: Data stream identifier.
  * @param conf: Input location for the kshark_config_doc instance. Currently
  *		only Json format is supported. If NULL, a new Filter
  *		Configuration document will be created.
@@ -1214,10 +1229,15 @@ static bool filter_is_set(struct tracecmd_filter_id *filter)
  * @returns True, if a filter has been recorded. If both filters contain
  *	    no Id values or in a case of an error, the function returns False.
  */
-bool kshark_export_all_event_filters(struct kshark_context *kshark_ctx,
+bool kshark_export_all_event_filters(struct kshark_context *kshark_ctx, int sd,
 				     struct kshark_config_doc **conf)
 {
-	bool ret = true;
+	struct kshark_data_stream *stream =
+		kshark_get_data_stream(kshark_ctx, sd);
+	bool ret;
+
+	if (!stream)
+		return false;
 
 	if (!*conf)
 		*conf = kshark_filter_config_new(KS_CONFIG_JSON);
@@ -1226,15 +1246,16 @@ bool kshark_export_all_event_filters(struct kshark_context *kshark_ctx,
 		return false;
 
 	/* Save a filter only if it contains Id values. */
-	if (filter_is_set(kshark_ctx->show_event_filter))
-		ret &= kshark_export_event_filter(kshark_ctx->pevent,
-						  kshark_ctx->show_event_filter,
+	ret = true;
+	if (filter_is_set(stream->show_event_filter))
+		ret &= kshark_export_event_filter(stream->pevent,
+						  stream->show_event_filter,
 						  KS_SHOW_EVENT_FILTER_NAME,
 						  *conf);
 
-	if (filter_is_set(kshark_ctx->hide_event_filter))
-		ret &= kshark_export_event_filter(kshark_ctx->pevent,
-						  kshark_ctx->hide_event_filter,
+	if (filter_is_set(stream->hide_event_filter))
+		ret &= kshark_export_event_filter(stream->pevent,
+						  stream->hide_event_filter,
 						  KS_HIDE_EVENT_FILTER_NAME,
 						  *conf);
 
@@ -1246,6 +1267,7 @@ bool kshark_export_all_event_filters(struct kshark_context *kshark_ctx,
  *	  filters into a Configuration document.
  *
  * @param kshark_ctx: Input location for session context pointer.
+ * @param sd: Data stream identifier.
  * @param conf: Input location for the kshark_config_doc instance. Currently
  *		only Json format is supported. If NULL, a new Filter
  *		Configuration document will be created.
@@ -1253,10 +1275,15 @@ bool kshark_export_all_event_filters(struct kshark_context *kshark_ctx,
  * @returns True, if a filter has been recorded. If both filters contain
  *	    no Id values or in a case of an error, the function returns False.
  */
-bool kshark_export_all_task_filters(struct kshark_context *kshark_ctx,
+bool kshark_export_all_task_filters(struct kshark_context *kshark_ctx, int sd,
 				    struct kshark_config_doc **conf)
 {
-	bool ret = true;
+	struct kshark_data_stream *stream =
+		kshark_get_data_stream(kshark_ctx, sd);
+	bool ret;
+
+	if (!stream)
+		return false;
 
 	if (!*conf)
 		*conf = kshark_filter_config_new(KS_CONFIG_JSON);
@@ -1265,13 +1292,14 @@ bool kshark_export_all_task_filters(struct kshark_context *kshark_ctx,
 		return false;
 
 	/* Save a filter only if it contains Id values. */
-	if (filter_is_set(kshark_ctx->show_task_filter))
-		ret &= kshark_export_task_filter(kshark_ctx->show_task_filter,
+	ret = true;
+	if (filter_is_set(stream->show_task_filter))
+		ret &= kshark_export_task_filter(stream->show_task_filter,
 						 KS_SHOW_TASK_FILTER_NAME,
 						 *conf);
 
-	if (filter_is_set(kshark_ctx->hide_task_filter))
-		ret &= kshark_export_task_filter(kshark_ctx->hide_task_filter,
+	if (filter_is_set(stream->hide_task_filter))
+		ret &= kshark_export_task_filter(stream->hide_task_filter,
 						 KS_HIDE_TASK_FILTER_NAME,
 						 *conf);
 
@@ -1283,6 +1311,7 @@ bool kshark_export_all_task_filters(struct kshark_context *kshark_ctx,
  *	  and "hide event" filters.
  *
  * @param kshark_ctx: Input location for session context pointer.
+ * @param sd: Data stream identifier.
  * @param conf: Input location for the kshark_config_doc instance. Currently
  *		only Json format is supported.
  *
@@ -1290,18 +1319,23 @@ bool kshark_export_all_task_filters(struct kshark_context *kshark_ctx,
  *	    document contains no data for any event filter or in a case
  *	    of an error, the function returns False.
  */
-bool kshark_import_all_event_filters(struct kshark_context *kshark_ctx,
+bool kshark_import_all_event_filters(struct kshark_context *kshark_ctx, int sd,
 				     struct kshark_config_doc *conf)
 {
+	struct kshark_data_stream *stream =
+		kshark_get_data_stream(kshark_ctx, sd);
 	bool ret = false;
 
-	ret |= kshark_import_event_filter(kshark_ctx->pevent,
-					  kshark_ctx->hide_event_filter,
+	if (!stream)
+		return false;
+
+	ret |= kshark_import_event_filter(stream->pevent,
+					  stream->hide_event_filter,
 					  KS_HIDE_EVENT_FILTER_NAME,
 					  conf);
 
-	ret |= kshark_import_event_filter(kshark_ctx->pevent,
-					  kshark_ctx->show_event_filter,
+	ret |= kshark_import_event_filter(stream->pevent,
+					  stream->show_event_filter,
 					  KS_SHOW_EVENT_FILTER_NAME,
 					  conf);
 
@@ -1313,6 +1347,7 @@ bool kshark_import_all_event_filters(struct kshark_context *kshark_ctx,
  *	  and "hide task" filters.
  *
  * @param kshark_ctx: Input location for session context pointer.
+ * @param sd: Data stream identifier.
  * @param conf: Input location for the kshark_config_doc instance. Currently
  *		only Json format is supported.
  *
@@ -1320,16 +1355,21 @@ bool kshark_import_all_event_filters(struct kshark_context *kshark_ctx,
  *	    document contains no data for any task filter or in a case of an
  *	    error, the function returns False.
  */
-bool kshark_import_all_task_filters(struct kshark_context *kshark_ctx,
+bool kshark_import_all_task_filters(struct kshark_context *kshark_ctx, int sd,
 				    struct kshark_config_doc *conf)
 {
+	struct kshark_data_stream *stream =
+		kshark_get_data_stream(kshark_ctx, sd);
 	bool ret = false;
 
-	ret |= kshark_import_task_filter(kshark_ctx->hide_task_filter,
+	if (!stream)
+		return false;
+
+	ret |= kshark_import_task_filter(stream->hide_task_filter,
 					 KS_HIDE_TASK_FILTER_NAME,
 					 conf);
 
-	ret |= kshark_import_task_filter(kshark_ctx->show_task_filter,
+	ret |= kshark_import_task_filter(stream->show_task_filter,
 					 KS_SHOW_TASK_FILTER_NAME,
 					 conf);
 
@@ -1341,6 +1381,7 @@ bool kshark_import_all_task_filters(struct kshark_context *kshark_ctx,
  *	  configuration of all filters.
  *
  * @param kshark_ctx: Input location for session context pointer.
+ * @param sd: Data stream identifier.
  * @param format: Input location for the kshark_config_doc instance. Currently
  *		  only Json format is supported.
  *
@@ -1348,7 +1389,7 @@ bool kshark_import_all_task_filters(struct kshark_context *kshark_ctx,
  *	    kshark_free_config_doc() to free the object.
  */
 struct kshark_config_doc *
-kshark_export_all_filters(struct kshark_context *kshark_ctx,
+kshark_export_all_filters(struct kshark_context *kshark_ctx, int sd,
 			  enum kshark_config_formats format)
 {
 	/*  Create a new Configuration document. */
@@ -1357,9 +1398,9 @@ kshark_export_all_filters(struct kshark_context *kshark_ctx,
 
 	/* Save a filter only if it contains Id values. */
 	if (!conf ||
-	    !kshark_export_all_event_filters(kshark_ctx, &conf) ||
-	    !kshark_export_all_task_filters(kshark_ctx, &conf) ||
-	    !kshark_export_adv_filters(kshark_ctx, &conf)) {
+	    !kshark_export_all_event_filters(kshark_ctx, sd, &conf) ||
+	    !kshark_export_all_task_filters(kshark_ctx, sd, &conf) ||
+	    !kshark_export_adv_filters(kshark_ctx, sd, &conf)) {
 		kshark_free_config_doc(conf);
 		return NULL;
 	}
@@ -1371,6 +1412,7 @@ kshark_export_all_filters(struct kshark_context *kshark_ctx,
  * @brief Load from a Configuration document the configuration of all filters.
  *
  * @param kshark_ctx: Input location for session context pointer.
+ * @param sd: Data stream identifier.
  * @param conf: Input location for the kshark_config_doc instance. Currently
  *		only Json format is supported.
  *
@@ -1378,13 +1420,13 @@ kshark_export_all_filters(struct kshark_context *kshark_ctx,
  *	    document contains no data for any filter or in a case of an error,
  *	    the function returns False.
  */
-bool kshark_import_all_filters(struct kshark_context *kshark_ctx,
+bool kshark_import_all_filters(struct kshark_context *kshark_ctx, int sd,
 			       struct kshark_config_doc *conf)
 {
 	bool ret;
-	ret = kshark_import_all_task_filters(kshark_ctx, conf);
-	ret |= kshark_import_all_event_filters(kshark_ctx, conf);
-	ret |= kshark_import_adv_filters(kshark_ctx, conf);
+	ret = kshark_import_all_task_filters(kshark_ctx, sd, conf);
+	ret |= kshark_import_all_event_filters(kshark_ctx, sd, conf);
+	ret |= kshark_import_adv_filters(kshark_ctx, sd, conf);
 
 	return ret;
 }
