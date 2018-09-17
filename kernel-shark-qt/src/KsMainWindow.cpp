@@ -266,6 +266,11 @@ void KsMainWindow::createMenus()
 {
 	QMenu *file, *sessions, *filter, *plots, *tools, *help;
 	QCheckBox *cbf2g, *cbf2l;
+	kshark_context *kshark_ctx(NULL);
+	int *streamIds, sd;
+
+	if (!kshark_instance(&kshark_ctx))
+		return;
 
 	/* File menu */
 	file = menuBar()->addMenu("File");
@@ -297,10 +302,16 @@ void KsMainWindow::createMenus()
 	};
 
 	/* Set the default filter mask. Filter will apply to both View and Graph. */
-	kshark_context *kshark_ctx = NULL;
-	kshark_instance(&kshark_ctx);
-	kshark_ctx->filter_mask = KS_TEXT_VIEW_FILTER_MASK | KS_GRAPH_VIEW_FILTER_MASK;
-	kshark_ctx->filter_mask |= KS_EVENT_VIEW_FILTER_MASK;
+	streamIds = kshark_all_streams(kshark_ctx);
+	for (int i = 0; i < kshark_ctx->n_streams; ++i) {
+		sd = streamIds[i];
+		kshark_ctx->stream[sd]->filter_mask =
+			KS_TEXT_VIEW_FILTER_MASK | KS_GRAPH_VIEW_FILTER_MASK;
+
+		kshark_ctx->stream[sd]->filter_mask |= KS_EVENT_VIEW_FILTER_MASK;
+	}
+
+	free(streamIds);
 
 	cbf2g = make_cb_action(&_graphFilterSyncAction,
 					  "Apply filters to Graph");
@@ -411,7 +422,9 @@ void KsMainWindow::exportSession()
 
 void KsMainWindow::importFilter()
 {
+	kshark_context *kshark_ctx(nullptr);
 	kshark_config_doc *conf;
+	int *streamIds;
 
 	QString fileName =
 		QFileDialog::getOpenFileName(this,
@@ -424,22 +437,28 @@ void KsMainWindow::importFilter()
 
 	conf = kshark_open_config_file(fileName.toStdString().c_str(),
 				       "kshark.config.filter");
-	if (!conf)
+
+	if (!conf || !kshark_instance(&kshark_ctx))
 		return;
 
-	kshark_context *kshark_ctx = NULL;
-	kshark_instance(&kshark_ctx);
+	streamIds = kshark_all_streams(kshark_ctx);
+	for (int i = 0; i < kshark_ctx->n_streams; ++i) {
+		kshark_import_all_event_filters(kshark_ctx, streamIds[i], conf);
+		kshark_filter_entries(kshark_ctx, streamIds[i],
+				      _data.rows(), _data.size());
+	}
 
-	kshark_import_all_event_filters(kshark_ctx, conf);
+	free(streamIds);
+
 	kshark_free_config_doc(conf);
-
-	kshark_filter_entries(kshark_ctx, _data.rows(), _data.size());
 	emit _data.updateWidgets(&_data);
 }
 
 void KsMainWindow::exportFilter()
 {
-	kshark_config_doc *conf = NULL;
+	kshark_context *kshark_ctx(nullptr);
+	kshark_config_doc *conf(nullptr);
+	int *streamIds;
 
 	QString fileName =
 		QFileDialog::getSaveFileName(this,
@@ -453,10 +472,16 @@ void KsMainWindow::exportFilter()
 	if (!fileName.endsWith(".json"))
 		fileName += ".json";
 
-	kshark_context *kshark_ctx = NULL;
-	kshark_instance(&kshark_ctx);
+	if (!kshark_instance(&kshark_ctx))
+		return;
 
-	kshark_export_all_event_filters(kshark_ctx, &conf);
+	streamIds = kshark_all_streams(kshark_ctx);
+	for (int i = 0; i < kshark_ctx->n_streams; ++i) {
+		kshark_export_all_event_filters(kshark_ctx, streamIds[i], &conf);
+	}
+
+	free(streamIds);
+
 	kshark_save_config_file(fileName.toStdString().c_str(), conf);
 	kshark_free_config_doc(conf);
 }
@@ -479,17 +504,17 @@ void KsMainWindow::showEvents()
 	kshark_instance(&kshark_ctx);
 
 	KsCheckBoxWidget *events_cb =
-		new KsEventsCheckBoxWidget(_data.pevent(), this);
+		new KsEventsCheckBoxWidget(0, this); // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-	if (!kshark_ctx->show_event_filter ||
-	    !kshark_ctx->show_event_filter->count) {
+	if (!kshark_ctx->stream[0]->show_event_filter ||
+	    !kshark_ctx->stream[0]->show_event_filter->count) {
 		events_cb->setDefault(true);
 	} else {
 		int nEvts = _data.pevent()->nr_events;
 		QVector<bool> v(nEvts, false);
 		for (int i = 0; i < nEvts; ++i) {
-			if (tracecmd_filter_id_find(kshark_ctx->show_event_filter,
-					   _data.pevent()->events[i]->id))
+			if (tracecmd_filter_id_find(kshark_ctx->stream[0]->show_event_filter,
+						    _data.pevent()->events[i]->id))
 				v[i] = true;
 		}
 
@@ -510,17 +535,17 @@ void KsMainWindow::showTasks()
 	kshark_instance(&kshark_ctx);
 
 	KsCheckBoxWidget *tasks_cbd =
-		new KsTasksCheckBoxWidget(_data.pevent(), true, this);
+		new KsTasksCheckBoxWidget(0, true, this); // !!!!!!!!!!!!!!!!!!!!!!
 
-	if (!kshark_ctx->show_task_filter ||
-	    !kshark_ctx->show_task_filter->count) {
+	if (!kshark_ctx->stream[0]->show_task_filter ||
+	    !kshark_ctx->stream[0]->show_task_filter->count) {
 		tasks_cbd->setDefault(true);
 	} else {
-		QVector<int> pids = KsUtils::getPidList();
+		QVector<int> pids = KsUtils::getPidList(0);
 		int nPids = pids.count();
 		QVector<bool> v(nPids, false);
 		for (int i = 0; i < nPids; ++i) {
-			if (tracecmd_filter_id_find(kshark_ctx->show_task_filter,
+			if (tracecmd_filter_id_find(kshark_ctx->stream[0]->show_task_filter,
 					   pids[i]))
 				v[i] = true;
 		}
@@ -541,17 +566,17 @@ void KsMainWindow::hideTasks()
 	kshark_instance(&kshark_ctx);
 
 	KsCheckBoxWidget *tasks_cbd =
-		new KsTasksCheckBoxWidget(_data.pevent(), false, this);
+		new KsTasksCheckBoxWidget(0, false, this); // !!!!!!!!!!!!!!!!!!!!
 
-	if (!kshark_ctx->hide_task_filter ||
-	    !kshark_ctx->hide_task_filter->count) {
+	if (!kshark_ctx->stream[0]->hide_task_filter ||
+	    !kshark_ctx->stream[0]->hide_task_filter->count) {
 		tasks_cbd->setDefault(false);
 	} else {
-		QVector<int> pids = KsUtils::getPidList();
+		QVector<int> pids = KsUtils::getPidList(0);
 		int nPids = pids.count();
 		QVector<bool> v(nPids, false);
 		for (int i = 0; i < nPids; ++i) {
-			if (tracecmd_filter_id_find(kshark_ctx->hide_task_filter,
+			if (tracecmd_filter_id_find(kshark_ctx->stream[0]->hide_task_filter,
 					   pids[i]))
 				v[i] = true;
 		}
@@ -594,7 +619,7 @@ void KsMainWindow::clearFilters()
 void KsMainWindow::cpuSelect()
 {
 	KsCheckBoxWidget *cpus_cbd =
-		new KsCpuCheckBoxWidget(_data.pevent(), this);
+		new KsCpuCheckBoxWidget(0, this); // !!!!!!!!!!!!!!!!!
 
 	if(_data.pevent()) {
 		int nCpus = _data.pevent()->cpus;
@@ -619,8 +644,8 @@ void KsMainWindow::cpuSelect()
 void KsMainWindow::taskSelect()
 {
 	KsCheckBoxWidget *tasks_cbd =
-		new KsTasksCheckBoxWidget(_data.pevent(), true, this);
-	QVector<int> pids = KsUtils::getPidList();
+		new KsTasksCheckBoxWidget(0, true, this); // !!!!!!!!!!!!!!!!!!!!!!!!!
+	QVector<int> pids = KsUtils::getPidList(0);
 	int nPids = pids.count();
 
 	if (nPids == _graph.glPtr()->taskGraphCount()) {
@@ -883,10 +908,10 @@ void KsMainWindow::loadSession(const QString &fileName)
 	_session.getFilters(kshark_ctx);
 	pb.setValue(20);
 
-	if (kshark_ctx->advanced_event_filter->filters)
-		_data.reload();
+	if (kshark_ctx->stream[0]->advanced_event_filter->filters)
+		_data.reload(0);
 	else
-		kshark_filter_entries(kshark_ctx, _data.rows(), _data.size());
+		kshark_filter_entries(kshark_ctx, 0, _data.rows(), _data.size()); //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 	pb.setValue(66);
 	_data.registerCpuCollections();

@@ -43,7 +43,7 @@ public slots:
 	void scrollLeft();
 	void scrollRight();
 	void stopUpdating();
-	void resetPointer(uint64_t ts, int cpu, int pid);
+	void resetPointer(uint64_t ts, int sd, int cpu, int pid);
 	void setPointerInfo(size_t);
 	void markEntry(size_t);
 	void cpuReDraw(QVector<int>);

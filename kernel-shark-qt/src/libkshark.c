@@ -828,11 +828,13 @@ static size_t get_records(struct kshark_context *kshark_ctx, int sd,
 
 				entry = &temp_rec->entry;
 				kshark_set_entry_values(stream, rec, entry);
+				entry->stream_id = sd;
 
 				/* Execute all plugin-provided actions (if any). */
 				evt_handler = kshark_ctx->event_handlers;
 				while ((evt_handler = find_event_handler(evt_handler,
-									 entry->event_id))) {
+									 entry->event_id,
+									 entry->stream_id))) {
 					evt_handler->event_func(kshark_ctx, rec, entry);
 
 					if ((evt_handler = evt_handler->next))
@@ -1212,7 +1214,7 @@ const char *kshark_get_latency_easy(struct kshark_entry *entry)
 		return lat;
 
 	stream = kshark_get_data_stream(kshark_ctx, entry->stream_id);
-	if (stream)
+	if (!stream)
 		return NULL;
 
 	struct tep_record *data = kshark_read_at(kshark_ctx,
@@ -1249,7 +1251,7 @@ const char *kshark_get_event_name_easy(struct kshark_entry *entry)
 		return NULL;
 
 	stream = kshark_get_data_stream(kshark_ctx, entry->stream_id);
-	if (stream)
+	if (!stream)
 		goto unknown;
 
 	if (entry->visible & KS_PLUGIN_UNTOUCHED_MASK) {
@@ -1293,7 +1295,7 @@ const char *kshark_get_info_easy(struct kshark_entry *entry)
 		return NULL;
 
 	stream = kshark_get_data_stream(kshark_ctx, entry->stream_id);
-	if (stream)
+	if (!stream)
 		return NULL;
 
 	struct tep_record *data = kshark_read_at(kshark_ctx,

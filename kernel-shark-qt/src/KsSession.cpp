@@ -88,8 +88,8 @@ QString KsSession::getDataFile(kshark_context *kshark_ctx)
 
 void KsSession::setFilters(kshark_context *kshark_ctx)
 {
-	kshark_config_doc *filters =
-		kshark_export_all_filters(kshark_ctx, KS_CONFIG_JSON);
+	kshark_config_doc *filters = // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		kshark_export_all_filters(kshark_ctx, 0, KS_CONFIG_JSON);
 
 	kshark_config_doc_add(_config, "Filters", filters);
 }
@@ -100,8 +100,8 @@ void KsSession::getFilters(kshark_context *kshark_ctx)
 
 	if (!kshark_config_doc_get(_config, "Filters", filters))
 		return;
-
-	kshark_import_all_filters(kshark_ctx, filters);
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	kshark_import_all_filters(kshark_ctx, 0, filters);
 }
 
 void KsSession::setViewTop(size_t r) {

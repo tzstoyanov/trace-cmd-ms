@@ -25,6 +25,7 @@
 #include <QtWidgets>
 
 // KernelShark
+#include "libkshark.h"
 #include "KsWidgetsLib.hpp"
 
 class KsAdvFilteringDialog : public QDialog
@@ -62,7 +63,7 @@ private slots:
 	void insertField();
 
 signals:
-	void dataReload();
+	void dataReload(int sd);
 };
 
 #endif

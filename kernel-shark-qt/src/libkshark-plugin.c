@@ -23,7 +23,7 @@
 #include "libkshark.h"
 
 static struct kshark_event_handler *
-gui_event_handler_alloc(int event_id,
+gui_event_handler_alloc(int event_id, int sd,
 			kshark_plugin_event_handler_func evt_func,
 			kshark_plugin_draw_handler_func dw_func)
 {
@@ -37,6 +37,7 @@ gui_event_handler_alloc(int event_id,
 
 	handler->next = NULL;
 	handler->id = event_id;
+	handler->sd = sd;
 	handler->event_func = evt_func;
 	handler->draw_func = dw_func;
 
@@ -44,16 +45,17 @@ gui_event_handler_alloc(int event_id,
 }
 
 /**
- * @brief Search the list of event handlers for a handle associated with a given event type.
+ * @brief Search the list of event handlers for a handle associated with a
+ *	  given event type.
  *
  * @param handlers: Input location for the Event handler list.
  * @param event_id: Event Id to search for.
  */
 struct kshark_event_handler *
-find_event_handler(struct kshark_event_handler *handlers, int event_id)
+find_event_handler(struct kshark_event_handler *handlers, int event_id, int sd)
 {
 	for (; handlers; handlers = handlers->next)
-		if (handlers->id == event_id)
+		if (handlers->id == event_id && handlers->id == sd)
 			return handlers;
 
 	return NULL;
@@ -70,12 +72,12 @@ find_event_handler(struct kshark_event_handler *handlers, int event_id)
  * @returns Zero on success, or a negative error code on failure.
  */
 int kshark_register_event_handler(struct kshark_event_handler **handlers,
-				  int event_id,
+				  int event_id, int sd,
 				  kshark_plugin_event_handler_func evt_func,
 				  kshark_plugin_draw_handler_func dw_func)
 {
 	struct kshark_event_handler *handler =
-		gui_event_handler_alloc(event_id, evt_func, dw_func);
+		gui_event_handler_alloc(event_id, sd, evt_func, dw_func);
 
 	if(!handler)
 		return -ENOMEM;
@@ -95,7 +97,7 @@ int kshark_register_event_handler(struct kshark_event_handler **handlers,
  * @param dw_func: Draw action function of the handler to be unregistered.
  */
 void kshark_unregister_event_handler(struct kshark_event_handler **handlers,
-				     int event_id,
+				     int event_id, int sd,
 				     kshark_plugin_event_handler_func evt_func,
 				     kshark_plugin_draw_handler_func dw_func)
 {
@@ -104,6 +106,7 @@ void kshark_unregister_event_handler(struct kshark_event_handler **handlers,
 
 	for (list = *handlers; list; list = list->next) {
 		if (list->id == event_id &&
+		    list->sd == sd &&
 		    list->event_func == evt_func &&
 		    list->draw_func == dw_func) {
 			*last = list->next;

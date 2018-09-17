@@ -224,7 +224,7 @@ void KsTraceGraph::stopUpdating()
 	_keyPressed = false;
 }
 
-void KsTraceGraph::resetPointer(uint64_t ts, int cpu, int pid)
+void KsTraceGraph::resetPointer(uint64_t ts, int sd, int cpu, int pid)
 {
 	uint64_t sec, usec;
 	kshark_convert_nano(ts, &sec, &usec);
@@ -235,7 +235,7 @@ void KsTraceGraph::resetPointer(uint64_t ts, int cpu, int pid)
 	if (pid >= 0) {
 		struct kshark_context *kshark_ctx = NULL;
 		kshark_instance(&kshark_ctx);
-		QString comm(tep_data_comm_from_pid(kshark_ctx->pevent, pid));
+		QString comm(tep_data_comm_from_pid(kshark_ctx->stream[sd]->pevent, pid));
 		comm.append("-");
 		comm.append(QString("%1").arg(pid));
 		_labelI1.setText(comm);

@@ -25,6 +25,7 @@
 #include <QtWidgets>
 
 // KernelShark
+#include "libkshark.h"
 #include "KsWidgetsLib.hpp"
 
 class KsCaptureControl : public QWidget

@@ -103,6 +103,7 @@ void KsGLWidget::loadData(KsDataStore *data)
 	int nCpus, nBins;
 
 	_data = data;
+	_sd = 0; // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 	/*
 	 * From the size of the widget, calculate the number of bins.
@@ -349,10 +350,10 @@ KsPlot::Graph *KsGLWidget::newCpuGraph(int cpu)
 	kshark_instance(&kshark_ctx);
 	col = kshark_find_data_collection(kshark_ctx->collections,
 					  KsUtils::matchCPUVisible,
-					  cpu);
+					  _sd, cpu);
 
 	graph->setDataCollectionPtr(col);
-	graph->fillCPUGraph(cpu);
+	graph->fillCPUGraph(_sd, cpu);
 
 	return graph;
 }
@@ -369,7 +370,7 @@ KsPlot::Graph *KsGLWidget::newTaskGraph(int pid)
 
 	kshark_instance(&kshark_ctx);
 	col = kshark_find_data_collection(kshark_ctx->collections,
-					  kshark_match_pid, pid);
+					  kshark_match_pid, _sd, pid);
 	if (!col) {
 		/*
 		 * If a data collection for this task does not exist,
@@ -378,7 +379,8 @@ KsPlot::Graph *KsGLWidget::newTaskGraph(int pid)
 		col = kshark_register_data_collection(kshark_ctx,
 						      _data->rows(),
 						      _data->size(),
-						      kshark_match_pid, pid,
+						      kshark_match_pid,
+						      _sd, pid,
 						      25);
 	}
 
@@ -401,7 +403,7 @@ KsPlot::Graph *KsGLWidget::newTaskGraph(int pid)
 	}
 
 	graph->setDataCollectionPtr(col);
-	graph->fillTaskGraph(pid);
+	graph->fillTaskGraph(_sd, pid);
 
 	return graph;
 }
@@ -435,7 +437,7 @@ bool KsGLWidget::find(int bin, int cpu, int pid, int variance, size_t *row)
 	auto get_entry_by_cpu = [&] (int b) {
 		/* Get the first data entry in this bin. */
 		ssize_t found = ksmodel_first_index_at_cpu(_model.histo(),
-							   b, cpu);
+							   b, _sd, cpu);
 		if (found < 0) {
 			/*
 			 * The bin is empty or the entire connect of the bin
@@ -451,7 +453,7 @@ bool KsGLWidget::find(int bin, int cpu, int pid, int variance, size_t *row)
 	auto get_entry_by_pid = [&] (int b) {
 		/* Get the first data entry in this bin. */
 		ssize_t found = ksmodel_first_index_at_pid(_model.histo(),
-							   b, pid);
+							   b, _sd, pid);
 		if (found < 0) {
 			/*
 			 * The bin is empty or the entire connect of the bin
@@ -683,7 +685,7 @@ void KsGLWidget::mouseMoveEvent(QMouseEvent *event)
 	if (status) {
 		emit found(row);
 	} else {
-		emit notFound(ksmodel_bin_ts(_model.histo(), bin), cpu, pid);
+		emit notFound(ksmodel_bin_ts(_model.histo(), bin), _sd, cpu, pid);
 	}
 }
 

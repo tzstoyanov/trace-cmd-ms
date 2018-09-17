@@ -64,12 +64,13 @@ public:
 	QVector<int>		_taskList;
 	KsPlot::ColorTable	_pidColors;
 
+	int		_sd;
 	int		_hMargin, _vMargin;
 	unsigned int	_vSpacing;
 
 signals:
 	void found(size_t pos);
-	void notFound(uint64_t ts, int cpu, int pid);
+	void notFound(uint64_t ts, int sd, int cpu, int pid);
 	void zoomIn();
 	void zoomOut();
 	void scrollLeft();

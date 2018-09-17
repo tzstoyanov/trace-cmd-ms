@@ -84,6 +84,7 @@ KsMessageDialog::KsMessageDialog(QString message, QWidget *parent)
  */
 KsCheckBoxWidget::KsCheckBoxWidget(const QString &name, QWidget *parent)
 : QWidget(parent),
+  _sd(0),
   _allCb("all", this),
   _cbWidget(this),
   _cbLayout(&_cbWidget),
@@ -228,7 +229,7 @@ KsCheckBoxDialog::KsCheckBoxDialog(KsCheckBoxWidget *cbw, QWidget *parent)
 void KsCheckBoxDialog::_applyPress()
 {
 	QVector<int> vec = _checkBoxWidget->getCheckedIds();
-	emit apply(vec);
+	emit apply(vec, _checkBoxWidget->_sd);
 
 	/*
 	 * Disconnect _applyButton. This is done in order to protect
@@ -582,10 +583,11 @@ void KsCheckBoxTreeWidget::_verify()
  * @param pevent: Page event used to parse the page.
  * @param parent: The parent of this widget.
  */
-KsCpuCheckBoxWidget::KsCpuCheckBoxWidget(struct tep_handle *pevent,
-					 QWidget *parent)
+KsCpuCheckBoxWidget::KsCpuCheckBoxWidget(int sd, QWidget *parent)
 : KsCheckBoxTreeWidget("CPUs", parent)
 {
+	kshark_context *kshark_ctx(nullptr);
+	kshark_data_stream *stream(nullptr);
 	int nCpus(0), height(FONT_HEIGHT * 1.5);
 	QString style;
 
@@ -594,8 +596,12 @@ KsCpuCheckBoxWidget::KsCpuCheckBoxWidget(struct tep_handle *pevent,
 
 	_initTree();
 
-	if (pevent)
-		nCpus = pevent->cpus;
+	_sd = sd;
+	if (!kshark_instance(&kshark_ctx)) {
+		stream = kshark_get_data_stream(kshark_ctx, sd);
+		if (stream)
+			nCpus = stream->pevent->cpus;
+	}
 
 	_id.resize(nCpus);
 	_cb.resize(nCpus);
@@ -618,22 +624,46 @@ KsCpuCheckBoxWidget::KsCpuCheckBoxWidget(struct tep_handle *pevent,
 	_adjustSize();
 }
 
+KsEventsCheckBoxWidget::KsEventsCheckBoxWidget(tep_handle *pevent,
+					       QWidget *parent)
+: KsCheckBoxTreeWidget("Events", parent)
+{
+	int nEvts(0);
+
+	if (pevent)
+		nEvts = pevent->nr_events;
+
+	_makeItems(pevent, nEvts);
+}
+
 /**
  * @brief Create KsEventsCheckBoxWidget.
  *
  * @param pevent: Page event used to parse the page.
  * @param parent: The parent of this widget.
  */
-KsEventsCheckBoxWidget::KsEventsCheckBoxWidget(struct tep_handle *pevent,
-					       QWidget *parent)
+KsEventsCheckBoxWidget::KsEventsCheckBoxWidget(int sd, QWidget *parent)
 : KsCheckBoxTreeWidget("Events", parent)
+{
+	kshark_context *kshark_ctx(nullptr);
+	kshark_data_stream *stream(nullptr);
+	int nEvts(0);
+
+	_sd = sd;
+	if (!kshark_instance(&kshark_ctx)) {
+		stream = kshark_get_data_stream(kshark_ctx, sd);
+		if (stream)
+			nEvts = stream->pevent->nr_events;
+	}
+
+	_makeItems(stream->pevent, nEvts);
+}
+
+void KsEventsCheckBoxWidget::_makeItems(tep_handle *pevent, int nEvts)
 {
 	QTreeWidgetItem *sysItem, *evtItem;
 	QString sysName, evtName;
-	int nEvts(0), i(0);
-
-	if (pevent)
-		nEvts = pevent->nr_events;
+	int i(0);
 
 	_initTree();
 	_id.resize(nEvts);
@@ -675,35 +705,38 @@ KsEventsCheckBoxWidget::KsEventsCheckBoxWidget(struct tep_handle *pevent,
  * @param cond: If True make a "Show Task" widget. Otherwise make "Hide Task".
  * @param parent: The parent of this widget.
  */
-KsTasksCheckBoxWidget::KsTasksCheckBoxWidget(struct tep_handle *pevent,
-					     bool cond, QWidget *parent)
+KsTasksCheckBoxWidget::KsTasksCheckBoxWidget(int sd, bool cond, QWidget *parent)
 : KsCheckBoxTableWidget("Tasks", parent)
 {
 	kshark_context *kshark_ctx(nullptr);
+	kshark_data_stream *stream(nullptr);
 	QTableWidgetItem *pidItem, *comItem;
 	QStringList headers;
-	int n = _id.count();
+	int nTasks(0);
 	const char *comm;
 
-	if (!kshark_instance(&kshark_ctx))
-		return;
-
-	_id = KsUtils::getPidList();
-	n = _id.count();
+	_sd = sd;
+	if (!kshark_instance(&kshark_ctx)) {
+		stream = kshark_get_data_stream(kshark_ctx, sd);
+		if (stream) {
+			_id = KsUtils::getPidList(sd);
+			nTasks = _id.count();
+		}
+	}
 
 	if (_cond)
 		headers << "Show" << "Pid" << "Task";
 	else
 		headers << "Hide" << "Pid" << "Task";
 
-	_initTable(headers, n);
+	_initTable(headers, nTasks);
 
 	KsPlot::Color pidCol;
-	for (int i = 0; i < n; ++i) {
+	for (int i = 0; i < nTasks; ++i) {
 		pidItem	= new QTableWidgetItem(tr("%1").arg(_id[i]));
 		_table.setItem(i, 1, pidItem);
 
-		comm = tep_data_comm_from_pid(kshark_ctx->pevent, _id[i]);
+		comm = tep_data_comm_from_pid(stream->pevent, _id[i]);
 		comItem = new QTableWidgetItem(tr(comm));
 
 		pidItem->setBackgroundColor(QColor(pidCol.r(),
@@ -840,29 +873,33 @@ KsQuickEntryMenu::KsQuickEntryMenu(KsDataStore *data, size_t row,
 void KsQuickEntryMenu::_hideTask()
 {
 	int pid = _data->rows()[_row]->pid;
+	int sd = _data->rows()[_row]->stream_id;
 
-	_data->applyNegTaskFilter(QVector<int>(1, pid));
+	_data->applyNegTaskFilter(QVector<int>(1, pid), sd);
 }
 
 void KsQuickEntryMenu::_showTask()
 {
 	int pid = _data->rows()[_row]->pid;
+	int sd = _data->rows()[_row]->stream_id;
 
-	_data->applyPosTaskFilter(QVector<int>(1, pid));
+	_data->applyPosTaskFilter(QVector<int>(1, pid), sd);
 }
 
 void KsQuickEntryMenu::_hideEvent()
 {
 	int eventId = _data->rows()[_row]->event_id;
+	int sd = _data->rows()[_row]->stream_id;
 
-	_data->applyNegEventFilter(QVector<int>(1, eventId));
+	_data->applyNegEventFilter(QVector<int>(1, eventId), sd);
 }
 
 void KsQuickEntryMenu::_showEvent()
 {
 	int eventId = _data->rows()[_row]->event_id;
+	int sd = _data->rows()[_row]->stream_id;
 
-	_data->applyPosEventFilter(QVector<int>(1, eventId));
+	_data->applyPosEventFilter(QVector<int>(1, eventId), sd);
 }
 
 void KsQuickEntryMenu::_addTaskPlot()

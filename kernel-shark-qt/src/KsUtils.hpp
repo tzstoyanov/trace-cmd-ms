@@ -80,7 +80,7 @@ std::chrono::high_resolution_clock::now() - t0).count()
 
 namespace KsUtils {
 
-QVector<int> getPidList();
+QVector<int> getPidList(int sd);
 
 /** @brief Geat the list of plugins. */
 inline QStringList getPluginList() {return plugins.split(";");}
@@ -104,7 +104,7 @@ inline QString Ts2String(uint64_t ts, int prec)
 }
 
 bool matchCPUVisible(struct kshark_context *kshark_ctx,
-			      struct kshark_entry *e, int cpu);
+			      struct kshark_entry *e, int sd, int cpu);
 }; // KsUtils
 
 /** Identifier of the Dual Marker active state. */
@@ -138,19 +138,19 @@ public:
 	/** Get the size of the data array. */
 	size_t size() const {return _dataSize;}
 
-	void reload();
+	void reload(int sd);
 
 	void update();
 
 	void registerCpuCollections();
 
-	void applyPosTaskFilter(QVector<int>);
+	void applyPosTaskFilter(QVector<int>, int sd);
 
-	void applyNegTaskFilter(QVector<int>);
+	void applyNegTaskFilter(QVector<int>, int sd);
 
-	void applyPosEventFilter(QVector<int>);
+	void applyPosEventFilter(QVector<int>, int sd);
 
-	void applyNegEventFilter(QVector<int>);
+	void applyNegEventFilter(QVector<int>, int sd);
 
 	void clearAllFilters();
 
@@ -173,7 +173,7 @@ private:
 
 	void _freeData();
 	void _unregisterCpuCollections();
-	void _applyIdFilter(int filterId, QVector<int> vec);
+	void _applyIdFilter(int filterId, QVector<int> vec, int sd);
 };
 
 /** A Plugin Manage class. */
@@ -206,7 +206,7 @@ public:
 
 signals:
 	/** This signal is emitted when a plugin is loaded or unloaded. */
-	void dataReload();
+	void dataReload(int sd);
 
 private:
 	void _parsePluginList();

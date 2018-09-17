@@ -14,8 +14,12 @@
 
 namespace KsUtils {
 
-/** @brief Geat a sorteg vector of Task's Pids.  */
-QVector<int> getPidList()
+/**
+ * @brief Geat a sorteg vector of Task's Pids.\
+ *
+ * @param sd: Data stream identifier.
+ */
+QVector<int> getPidList(int sd)
 {
 	kshark_context *kshark_ctx(nullptr);
 	int nTasks, *tempPids;
@@ -24,7 +28,7 @@ QVector<int> getPidList()
 	if (!kshark_instance(&kshark_ctx))
 		return pids;
 
-	nTasks = kshark_get_task_pids(kshark_ctx, &tempPids);
+	nTasks = kshark_get_task_pids(kshark_ctx, sd, &tempPids);
 	for (int r = 0; r < nTasks; ++r) {
 		pids.append(tempPids[r]);
 	}
@@ -43,13 +47,19 @@ QVector<int> getPidList()
 void listFilterSync(bool state)
 {
 	kshark_context *kshark_ctx(nullptr);
+	kshark_data_stream *stream;
+
 	if (!kshark_instance(&kshark_ctx))
 		return;
 
-	if (state) {
-		kshark_ctx->filter_mask |= KS_TEXT_VIEW_FILTER_MASK;
-	} else {
-		kshark_ctx->filter_mask &= ~KS_TEXT_VIEW_FILTER_MASK;
+	int *streamIds = kshark_all_streams(kshark_ctx);
+	for (int i = 0; i < kshark_ctx->n_streams; ++i) {
+		stream = kshark_get_data_stream(kshark_ctx, streamIds[i]);
+
+		if (state)
+			stream->filter_mask |= KS_TEXT_VIEW_FILTER_MASK;
+		else
+			stream->filter_mask &= ~KS_TEXT_VIEW_FILTER_MASK;
 	}
 }
 
@@ -60,14 +70,23 @@ void listFilterSync(bool state)
 void graphFilterSync(bool state)
 {
 	kshark_context *kshark_ctx(nullptr);
+	kshark_data_stream *stream;
+	int *streamIds;
+
 	if (!kshark_instance(&kshark_ctx))
 		return;
 
-	if (state) {
-		kshark_ctx->filter_mask |= KS_GRAPH_VIEW_FILTER_MASK;
-	} else {
-		kshark_ctx->filter_mask &= ~KS_GRAPH_VIEW_FILTER_MASK;
+	streamIds = kshark_all_streams(kshark_ctx);
+	for (int i = 0; i < kshark_ctx->n_streams; ++i) {
+		stream = kshark_get_data_stream(kshark_ctx, streamIds[i]);
+
+		if (state)
+			stream->filter_mask |= KS_GRAPH_VIEW_FILTER_MASK;
+		else
+			stream->filter_mask &= ~KS_GRAPH_VIEW_FILTER_MASK;
 	}
+
+	free(streamIds);
 }
 
 /**
@@ -81,9 +100,11 @@ void graphFilterSync(bool state)
  * 	    the entry is visibility in Graph. Otherwise false.
  */
 bool matchCPUVisible(struct kshark_context *kshark_ctx,
-		     struct kshark_entry *e, int cpu)
+		     struct kshark_entry *e, int sd, int cpu)
 {
-	if (e->cpu == cpu && (e->visible & KS_GRAPH_VIEW_FILTER_MASK))
+	if (e->stream_id == sd &&
+	    e->cpu == cpu &&
+	    (e->visible & KS_GRAPH_VIEW_FILTER_MASK))
 		return true;
 
 	return false;
@@ -115,27 +136,29 @@ KsDataStore::~KsDataStore()
 void KsDataStore::loadDataFile(const QString &file)
 {
 	kshark_context *kshark_ctx(nullptr);
+	kshark_data_stream *stream;
+	int sd;
+
 	if (!kshark_instance(&kshark_ctx))
 		return;
 
-	if (kshark_ctx->handle)
-		clear();
+	clear();
 
-	if (!kshark_open(kshark_ctx, file.toStdString().c_str()) ||
-	    !kshark_ctx->handle ||
-	    !kshark_ctx->pevent) {
+	sd = kshark_open(kshark_ctx, file.toStdString().c_str());
+	stream = kshark_get_data_stream(kshark_ctx, sd);
+	if (!stream) {
 		qCritical() << "ERROR Loading file " << file;
 		return;
 	}
 
-	_pevent = kshark_ctx->pevent;
+	_pevent = stream->pevent;
 
 	if (kshark_ctx->event_handlers == nullptr)
 		kshark_handle_plugins(kshark_ctx, KSHARK_PLUGIN_LOAD);
 	else
 		kshark_handle_plugins(kshark_ctx, KSHARK_PLUGIN_RELOAD);
 
-	_dataSize = kshark_load_data_entries(kshark_ctx, &_rows);
+	_dataSize = kshark_load_data_entries(kshark_ctx, sd, &_rows);
 }
 
 void KsDataStore::_freeData()
@@ -150,16 +173,20 @@ void KsDataStore::_freeData()
 }
 
 /** Reload the trace data. */
-void KsDataStore::reload()
+void KsDataStore::reload(int sd)
 {
 	kshark_context *kshark_ctx(nullptr);
+
 	if (!kshark_instance(&kshark_ctx))
 		return;
 
 	_freeData();
 
-	_dataSize = kshark_load_data_entries(kshark_ctx, &_rows);
-	_pevent = kshark_ctx->pevent;
+	if (kshark_ctx->n_streams == 0)
+		return;
+
+	_dataSize = kshark_load_data_entries(kshark_ctx, sd, &_rows);
+	_pevent = kshark_ctx->stream[sd]->pevent;
 
 	emit updateWidgets(this);
 }
@@ -168,65 +195,97 @@ void KsDataStore::reload()
 void KsDataStore::clear()
 {
 	kshark_context *kshark_ctx(nullptr);
+	int *streamIds;
+
+	if (!kshark_instance(&kshark_ctx))
+		return;
 
 	_freeData();
 
 	_pevent = nullptr;
 
-	if (kshark_instance(&kshark_ctx) &&
-	    kshark_ctx->handle)
-		kshark_close(kshark_ctx);
+	streamIds = kshark_all_streams(kshark_ctx);
+	for (int i = 0; i < kshark_ctx->n_streams; ++i)
+		kshark_close(kshark_ctx, streamIds[0]);
+
+	free(streamIds);
 }
 
 /** Update the visibility of the entries (filter). */
 void KsDataStore::update()
 {
 	kshark_context *kshark_ctx(nullptr);
+	int *streamIds;
+
 	if (!kshark_instance(&kshark_ctx))
 		return;
 
-	if (kshark_filter_is_set(kshark_ctx)) {
-		kshark_filter_entries(kshark_ctx, _rows, _dataSize);
-		emit updateWidgets(this);
+	streamIds = kshark_all_streams(kshark_ctx);
+	for (int i = 0; i < kshark_ctx->n_streams; ++i) {
+		if (kshark_filter_is_set(kshark_ctx, streamIds[0]))
+			kshark_filter_entries(kshark_ctx, streamIds[0], _rows, _dataSize);
 	}
+
+	free(streamIds);
+
+	emit updateWidgets(this);
 }
 
 /** Register a collection of visible entries for each CPU. */
 void KsDataStore::registerCpuCollections()
 {
 	kshark_context *kshark_ctx(nullptr);
+	int *streamIds, nCpus, sd;
+
 	if (!kshark_instance(&kshark_ctx))
 		return;
 
-	if (!kshark_filter_is_set(kshark_ctx)) {
-		return;
+	streamIds = kshark_all_streams(kshark_ctx);
+	for (int i = 0; i < kshark_ctx->n_streams; ++i) {
+		sd = streamIds[i];
+		if (!kshark_filter_is_set(kshark_ctx, sd))
+			continue;
+
+		nCpus = kshark_ctx->stream[sd]->pevent->cpus;
+		for (int cpu = 0; cpu < nCpus; ++cpu) {
+			kshark_register_data_collection(kshark_ctx,
+							_rows, _dataSize,
+							KsUtils::matchCPUVisible,
+							sd,
+							cpu,
+							0);
+		}
 	}
 
-	int nCpus = _pevent->cpus;
-	for (int cpu = 0; cpu < nCpus; ++cpu) {
-		kshark_register_data_collection(kshark_ctx,
-						_rows, _dataSize,
-						KsUtils::matchCPUVisible,
-						cpu,
-						0);
-	}
+	free(streamIds);
 }
 
 void KsDataStore::_unregisterCpuCollections()
 {
 	kshark_context *kshark_ctx(nullptr);
+	int *streamIds, nCpus, sd;
+
 	if (!kshark_instance(&kshark_ctx))
 		return;
 
-	int nCpus = _pevent->cpus;
-	for (int cpu = 0; cpu < nCpus; ++cpu) {
-		kshark_unregister_data_collection(&kshark_ctx->collections,
-						  KsUtils::matchCPUVisible,
-						  cpu);
+	streamIds = kshark_all_streams(kshark_ctx);
+	for (int i = 0; i < kshark_ctx->n_streams; ++i) {
+		sd = streamIds[i];
+		if (!kshark_filter_is_set(kshark_ctx, sd))
+			continue;
+
+		nCpus = kshark_ctx->stream[sd]->pevent->cpus;
+		for (int cpu = 0; cpu < nCpus; ++cpu) {
+			kshark_unregister_data_collection(&kshark_ctx->collections,
+							  KsUtils::matchCPUVisible,
+							  sd, cpu);
+		}
 	}
+
+	free(streamIds);
 }
 
-void KsDataStore::_applyIdFilter(int filterId, QVector<int> vec)
+void KsDataStore::_applyIdFilter(int filterId, QVector<int> vec, int sd)
 {
 	kshark_context *kshark_ctx(nullptr);
 	if (!kshark_instance(&kshark_ctx))
@@ -235,20 +294,20 @@ void KsDataStore::_applyIdFilter(int filterId, QVector<int> vec)
 	switch (filterId) {
 		case KS_SHOW_EVENT_FILTER:
 		case KS_HIDE_EVENT_FILTER:
-			kshark_filter_clear(kshark_ctx, KS_SHOW_EVENT_FILTER);
-			kshark_filter_clear(kshark_ctx, KS_HIDE_EVENT_FILTER);
+			kshark_filter_clear(kshark_ctx, sd, KS_SHOW_EVENT_FILTER);
+			kshark_filter_clear(kshark_ctx, sd, KS_HIDE_EVENT_FILTER);
 			break;
 		case KS_SHOW_TASK_FILTER:
 		case KS_HIDE_TASK_FILTER:
-			kshark_filter_clear(kshark_ctx, KS_SHOW_TASK_FILTER);
-			kshark_filter_clear(kshark_ctx, KS_HIDE_TASK_FILTER);
+			kshark_filter_clear(kshark_ctx, sd, KS_SHOW_TASK_FILTER);
+			kshark_filter_clear(kshark_ctx, sd, KS_HIDE_TASK_FILTER);
 			break;
 		default:
 			return;
 	}
 
 	for (auto &&pid: vec)
-		kshark_filter_add_id(kshark_ctx, filterId, pid);
+		kshark_filter_add_id(kshark_ctx, sd, filterId, pid);
 
 	if (!_pevent)
 		return;
@@ -259,10 +318,10 @@ void KsDataStore::_applyIdFilter(int filterId, QVector<int> vec)
 	 * If the advanced event filter is set the data has to be reloaded,
 	 * because the advanced filter uses tep_records.
 	 */
-	if (kshark_ctx->advanced_event_filter->filters)
-		reload();
+	if (kshark_ctx->stream[sd]->advanced_event_filter->filters)
+		reload(sd);
 	else
-		kshark_filter_entries(kshark_ctx, _rows, _dataSize);
+		kshark_filter_entries(kshark_ctx, sd, _rows, _dataSize);
 
 	registerCpuCollections();
 
@@ -270,33 +329,35 @@ void KsDataStore::_applyIdFilter(int filterId, QVector<int> vec)
 }
 
 /** Apply Show Task filter. */
-void KsDataStore::applyPosTaskFilter(QVector<int> vec)
+void KsDataStore::applyPosTaskFilter(QVector<int> vec, int sd)
 {
-	_applyIdFilter(KS_SHOW_TASK_FILTER, vec);
+	_applyIdFilter(KS_SHOW_TASK_FILTER, vec, sd);
 }
 
 /** Apply Hide Task filter. */
-void KsDataStore::applyNegTaskFilter(QVector<int> vec)
+void KsDataStore::applyNegTaskFilter(QVector<int> vec, int sd)
 {
-	_applyIdFilter(KS_HIDE_TASK_FILTER, vec);
+	_applyIdFilter(KS_HIDE_TASK_FILTER, vec, sd);
 }
 
 /** Apply Show Event filter. */
-void KsDataStore::applyPosEventFilter(QVector<int> vec)
+void KsDataStore::applyPosEventFilter(QVector<int> vec, int sd)
 {
-	_applyIdFilter(KS_SHOW_EVENT_FILTER, vec);
+	_applyIdFilter(KS_SHOW_EVENT_FILTER, vec, sd);
 }
 
 /** Apply Hide Event filter. */
-void KsDataStore::applyNegEventFilter(QVector<int> vec)
+void KsDataStore::applyNegEventFilter(QVector<int> vec, int sd)
 {
-	_applyIdFilter(KS_HIDE_EVENT_FILTER, vec);
+	_applyIdFilter(KS_HIDE_EVENT_FILTER, vec, sd);
 }
 
 /** Disable all filters. */
 void KsDataStore::clearAllFilters()
 {
 	kshark_context *kshark_ctx(nullptr);
+	int *streamIds, sd;
+
 	kshark_instance(&kshark_ctx);
 
 	if (!_pevent)
@@ -304,13 +365,23 @@ void KsDataStore::clearAllFilters()
 
 	_unregisterCpuCollections();
 
-	kshark_filter_clear(kshark_ctx, KS_SHOW_TASK_FILTER);
-	kshark_filter_clear(kshark_ctx, KS_HIDE_TASK_FILTER);
-	kshark_filter_clear(kshark_ctx, KS_SHOW_EVENT_FILTER);
-	kshark_filter_clear(kshark_ctx, KS_HIDE_EVENT_FILTER);
+	streamIds = kshark_all_streams(kshark_ctx);
+	for (int i = 0; i < kshark_ctx->n_streams; ++i) {
+		sd = streamIds[i];
+		kshark_filter_clear(kshark_ctx, sd, KS_SHOW_TASK_FILTER);
 
-	tep_filter_reset(kshark_ctx->advanced_event_filter);
+		kshark_filter_clear(kshark_ctx, sd, KS_HIDE_TASK_FILTER);
+
+		kshark_filter_clear(kshark_ctx, sd, KS_SHOW_EVENT_FILTER);
+
+		kshark_filter_clear(kshark_ctx, sd, KS_HIDE_EVENT_FILTER);
+
+		tep_filter_reset(kshark_ctx->stream[sd]->advanced_event_filter);
+	}
+
 	kshark_clear_all_filters(kshark_ctx, _rows, _dataSize);
+
+	free(streamIds);
 
 	emit updateWidgets(this);
 }
@@ -541,6 +612,8 @@ void KsPluginManager::unloadAll()
 void KsPluginManager::updatePlugins(QVector<int> pluginIds)
 {
 	kshark_context *kshark_ctx(nullptr);
+	int *streamIds;
+
 	if (!kshark_instance(&kshark_ctx))
 		return;
 
@@ -564,7 +637,7 @@ void KsPluginManager::updatePlugins(QVector<int> pluginIds)
 		registerFromList(kshark_ctx);
 	};
 
-	if (!kshark_ctx->pevent) {
+	if (!kshark_ctx->n_streams) {
 		kshark_free_plugin_list(kshark_ctx->plugins);
 		kshark_ctx->plugins = nullptr;
 
@@ -584,5 +657,9 @@ void KsPluginManager::updatePlugins(QVector<int> pluginIds)
 	register_plugins(pluginIds);
 	kshark_handle_plugins(kshark_ctx, KSHARK_PLUGIN_LOAD);
 
-	emit dataReload();
+	streamIds = kshark_all_streams(kshark_ctx);
+	for (int i = 0; i < kshark_ctx->n_streams; ++i)
+		emit dataReload(streamIds[i]);
+
+	free(streamIds);
 }

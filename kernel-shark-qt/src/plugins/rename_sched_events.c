@@ -23,6 +23,9 @@
 extern "C" {
 #endif
 
+/** True if the job is done. */
+static bool done = false;
+
 /** Structure representing a plugin-specific context. */
 struct plugin_sched_context {
 	/** Input handle for the trace data file. */
@@ -39,43 +42,56 @@ struct plugin_sched_context {
 
 	/** Pointer to the sched_switch_comm_field format descriptor. */
 	struct format_field	*sched_switch_comm_field;
-
-	/** True if the job is done. */
-	bool done;
 };
 
 /** Plugin context instance. */
-static struct plugin_sched_context *plugin_sched_context_handler = NULL;
+static struct plugin_sched_context **plugin_sched_context_handler = NULL;
 
 static bool plugin_sched_update_context(struct kshark_context *kshark_ctx)
 {
 	struct plugin_sched_context *plugin_ctx;
+	struct kshark_data_stream *stream;
 	struct event_format *event;
+	int *stream_ids, sd;
+	int i, count = 0;
 
 	if (!plugin_sched_context_handler) {
 		plugin_sched_context_handler =
-		 malloc(sizeof(*plugin_sched_context_handler));
+			calloc(KS_MAX_NUM_STREAMS,
+			       sizeof(*plugin_sched_context_handler));
+// 		 malloc(sizeof(*plugin_sched_context_handler));
 	}
 
-	plugin_ctx = plugin_sched_context_handler;
-	plugin_ctx->handle = kshark_ctx->handle;
-	plugin_ctx->pevent = kshark_ctx->pevent;
+	stream_ids = kshark_all_streams(kshark_ctx);
 
-	event = tep_find_event_by_name(plugin_ctx->pevent, 
-				       "sched", "sched_switch");
-	if (!event)
-		return false;
+	for (i = 0; i < kshark_ctx->n_streams; ++i) {
+		plugin_ctx = malloc(sizeof(*plugin_sched_context_handler));
+		sd = stream_ids[i];
+		stream = kshark_get_data_stream(kshark_ctx, sd);
 
-	plugin_ctx->sched_switch_event = event;
-	plugin_ctx->sched_switch_next_field =
-		tep_find_any_field(event, "next_pid");
+		plugin_ctx->handle = stream->handle;
+		plugin_ctx->pevent = stream->pevent;
 
-	plugin_ctx->sched_switch_comm_field =
-		tep_find_field(event, "next_comm");
+		event = tep_find_event_by_name(plugin_ctx->pevent,
+					       "sched", "sched_switch");
+		if (!event)
+			continue;
 
-	plugin_ctx->done = false;
+		plugin_ctx->sched_switch_event = event;
+		plugin_ctx->sched_switch_next_field =
+			tep_find_any_field(event, "next_pid");
 
-	return true;
+		plugin_ctx->sched_switch_comm_field =
+			tep_find_field(event, "next_comm");
+
+		++count;
+
+		plugin_sched_context_handler[sd] = plugin_ctx;
+	}
+
+	free(stream_ids);
+
+	return count;
 }
 
 static void plugin_nop(struct kshark_context *kshark_ctx,
@@ -83,11 +99,11 @@ static void plugin_nop(struct kshark_context *kshark_ctx,
 		       struct kshark_entry *entry)
 {}
 
-static int plugin_get_next_pid(struct tep_record *record)
+static int plugin_get_next_pid(struct tep_record *record, int sd)
 {
 	unsigned long long val;
 	struct plugin_sched_context *plugin_ctx =
-		plugin_sched_context_handler;
+		plugin_sched_context_handler[sd];
 
 	tep_read_number_field(plugin_ctx->sched_switch_next_field,
 			      record->data, &val);
@@ -96,18 +112,19 @@ static int plugin_get_next_pid(struct tep_record *record)
 
 static bool plugin_sched_switch_match_pid(struct kshark_context *kshark_ctx,
 					  struct kshark_entry *e,
-					  int pid)
+					  int sd, int pid)
 {
-	struct plugin_sched_context *plugin_ctx =
-		plugin_sched_context_handler;
+	struct plugin_sched_context *plugin_ctx;
 	struct tep_record *record = NULL;
 	int switch_pid;
 
-	if (plugin_ctx->sched_switch_event &&
+	plugin_ctx = plugin_sched_context_handler[e->stream_id];
+	if (plugin_ctx &&
+	    plugin_ctx->sched_switch_event &&
+	    e->stream_id == sd &&
 	    e->event_id == plugin_ctx->sched_switch_event->id) {
-		record = kshark_read_at(kshark_ctx, e->offset);
-
-		switch_pid = plugin_get_next_pid(record);
+		record = kshark_read_at(kshark_ctx, e->stream_id, e->offset);
+		switch_pid = plugin_get_next_pid(record, e->stream_id);
 		free(record);
 
 		if (switch_pid == pid)
@@ -120,17 +137,18 @@ static bool plugin_sched_switch_match_pid(struct kshark_context *kshark_ctx,
 static void plugin_rename(struct kshark_cpp_argv *argv,
 			  int pid, int draw_action)
 {
-	struct plugin_sched_context *plugin_ctx =
-		plugin_sched_context_handler;
+	struct plugin_sched_context *plugin_ctx;
 	struct kshark_context *kshark_ctx;
 	const struct kshark_entry *entry;
 	struct kshark_entry_request req;
 	struct tep_record *record;
-	int *pids, n_tasks, r;
+	int *stream_ids, sd;
+	int *pids, n_tasks;
 	const char *comm;
 	ssize_t index;
+	int r;
 
-	if (plugin_ctx->done)
+	if (done)
 		return;
 
 	req.first = argv->histo->data_size - 1;
@@ -140,22 +158,35 @@ static void plugin_rename(struct kshark_cpp_argv *argv,
 
 	kshark_ctx = NULL;
 	kshark_instance(&kshark_ctx);
-	n_tasks = kshark_get_task_pids(kshark_ctx, &pids);
-	for (r = 0; r < n_tasks; ++r) {
-		req.val = pids[r];
-		entry = kshark_get_entry_back(&req, argv->histo->data, &index);
-		if (!entry)
-			continue;
 
-		record = kshark_read_at(kshark_ctx, entry->offset);
-		comm = record->data +
+	stream_ids = kshark_all_streams(kshark_ctx);
+
+	for (int i = 0; i < kshark_ctx->n_streams; ++i) {
+		sd = stream_ids[i];
+		n_tasks = kshark_get_task_pids(kshark_ctx, sd, &pids);
+		printf("stream %i  nt: %i\n", sd, n_tasks);
+		for (r = 0; r < n_tasks; ++r) {
+			req.val = pids[r];
+			req.sd = sd;
+			entry = kshark_get_entry_back(&req, argv->histo->data,
+						      &index);
+			if (!entry)
+				continue;
+
+			plugin_ctx =
+				plugin_sched_context_handler[entry->stream_id];
+
+			record = kshark_read_at(kshark_ctx, entry->stream_id,
+							    entry->offset);
+
+			comm = record->data +
 			       plugin_ctx->sched_switch_comm_field->offset;
 
-		printf("%li task: %s  pid: %i\n", index, comm, pids[r]);
+			printf("%li task: %s  pid: %i\n", index, comm, pids[r]);
+		}
 	}
 
-	plugin_ctx->done = true;
-
+	done = true;
 	free(pids);
 }
 
@@ -164,6 +195,7 @@ static void plugin_rename_sched_load()
 {
 	struct kshark_context *kshark_ctx = NULL;
 	struct plugin_sched_context *plugin_ctx;
+	int *stream_ids, sd;
 
 	kshark_instance(&kshark_ctx);
 
@@ -173,31 +205,49 @@ static void plugin_rename_sched_load()
 		return;
 	}
 
-	plugin_ctx = plugin_sched_context_handler;
-	kshark_register_event_handler(&kshark_ctx->event_handlers,
-				      plugin_ctx->sched_switch_event->id,
-				      plugin_nop,
-				      plugin_rename);
+	stream_ids = kshark_all_streams(kshark_ctx);
+
+	for (int i = 0; i < kshark_ctx->n_streams; ++i) {
+		sd = stream_ids[i];
+		plugin_ctx = plugin_sched_context_handler[sd];
+
+		kshark_register_event_handler(&kshark_ctx->event_handlers,
+					      plugin_ctx->sched_switch_event->id,
+					      sd,
+					      plugin_nop,
+					      plugin_rename);
+	}
 }
 
 static void plugin_rename_sched_unload()
 {
 	struct kshark_context *kshark_ctx = NULL;
 	struct plugin_sched_context *plugin_ctx;
+	int *stream_ids, sd;
 
 	if (!plugin_sched_context_handler)
 		return;
 
-	plugin_ctx = plugin_sched_context_handler;
-	kshark_instance(&kshark_ctx);
-	if (kshark_ctx) {
+	if (!kshark_instance(&kshark_ctx))
+		return;
+
+	stream_ids = kshark_all_streams(kshark_ctx);
+
+	for (int i = 0; i < kshark_ctx->n_streams; ++i) {
+		sd = stream_ids[i];
+		if (!(plugin_ctx = plugin_sched_context_handler[sd]))
+			continue;
+
 		kshark_unregister_event_handler(&kshark_ctx->event_handlers,
 						plugin_ctx->sched_switch_event->id,
+						sd,
 						plugin_nop,
 						plugin_rename);
+
+		free(plugin_ctx);
 	}
 
-	free(plugin_ctx);
+	free(plugin_sched_context_handler);
 	plugin_sched_context_handler = NULL;
 }
 

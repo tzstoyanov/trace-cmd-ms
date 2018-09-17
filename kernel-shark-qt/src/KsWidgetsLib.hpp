@@ -15,6 +15,9 @@
 // Qt
 #include <QtWidgets>
 
+// KernelShark
+#include "libkshark.h"
+
 /**
  * The KsProgressBar class provides a visualization of the progress of a
  * running job.
@@ -75,6 +78,8 @@ public:
 
 	QVector<int> getCheckedIds();
 
+	int		_sd;
+
 protected:
 	/** The "all" checkboxe. */
 	QCheckBox	_allCb;
@@ -121,7 +126,7 @@ public:
 
 signals:
 	/** Signal emitted when the "Apply" button is pressed. */
-	void apply(QVector<int>);
+	void apply(QVector<int>, int sd);
 
 private:
 	void _applyPress();
@@ -267,8 +272,7 @@ private:
 struct KsCpuCheckBoxWidget : public KsCheckBoxTreeWidget
 {
 	KsCpuCheckBoxWidget() = delete;
-	KsCpuCheckBoxWidget(struct tep_handle *pe,
-			    QWidget *parent = nullptr);
+	KsCpuCheckBoxWidget(int sd, QWidget *parent = nullptr);
 };
 
 /**
@@ -278,8 +282,7 @@ struct KsCpuCheckBoxWidget : public KsCheckBoxTreeWidget
 struct KsTasksCheckBoxWidget : public KsCheckBoxTableWidget
 {
 	KsTasksCheckBoxWidget() = delete;
-	KsTasksCheckBoxWidget(struct tep_handle *pe,
-			      bool cond = true,
+	KsTasksCheckBoxWidget(int sd, bool cond = true,
 			      QWidget *parent = nullptr);
 
 private:
@@ -297,8 +300,11 @@ private:
 struct KsEventsCheckBoxWidget : public KsCheckBoxTreeWidget
 {
 	KsEventsCheckBoxWidget() = delete;
-	KsEventsCheckBoxWidget(struct tep_handle *pe,
-			       QWidget *parent = nullptr);
+	KsEventsCheckBoxWidget(int sd, QWidget *parent = nullptr);
+	KsEventsCheckBoxWidget(tep_handle *pevent, QWidget *parent = nullptr);
+
+private:
+	void _makeItems(tep_handle *pevent, int nEvts);
 };
 
 /**
@@ -312,7 +318,6 @@ struct KsPluginCheckBoxWidget : public KsCheckBoxTableWidget
 };
 
 class KsDataStore;
-class KsGLWidget;
 
 /**
  * The KsQuickFilterMenu class provides a menu for easy filtering and plotting.

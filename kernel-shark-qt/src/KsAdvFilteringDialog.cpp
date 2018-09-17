@@ -74,14 +74,21 @@ KsAdvFilteringDialog::KsAdvFilteringDialog(tep_handle *pevent,
 	add_line();
 
 	kshark_context *kshark_ctx = NULL;
+	kshark_data_stream *stream;
+
 	kshark_instance(&kshark_ctx);
-	event_format **events = tep_list_events(kshark_ctx->pevent, EVENT_SORT_SYSTEM);
+
+	stream = kshark_get_data_stream(kshark_ctx, 0);
+	if (!stream)
+		return;
+
+	event_format **events = tep_list_events(stream->pevent, EVENT_SORT_SYSTEM);
 	QStringList filters;
 	QVector<event_format*> filteredEvents;
 	char *str;
 
 	for (int i = 0; events[i]; i++) {
-		str = tep_filter_make_string(kshark_ctx->advanced_event_filter, events[i]->id);
+		str = tep_filter_make_string(stream->advanced_event_filter, events[i]->id);
 		if (!str)
 			continue;
 
@@ -337,7 +344,12 @@ void KsAdvFilteringDialog::insertField()
 void KsAdvFilteringDialog::applyPress()
 {
 	kshark_context *kshark_ctx = NULL;
+	kshark_data_stream *stream;
+
 	kshark_instance(&kshark_ctx);
+	stream = kshark_get_data_stream(kshark_ctx, 0); // !!!!!!!!!!!!!!!!!!!!!
+	if (!stream)
+		return;
 
 	tep_errno ret;
 
@@ -346,8 +358,8 @@ void KsAdvFilteringDialog::applyPress()
 	while (f.hasNext()) {
 		f.next();
 		if (_table->_cb[i]->checkState() == Qt::Checked) {
-			tep_filter_remove_event(kshark_ctx->advanced_event_filter,
-						   f.key());
+			tep_filter_remove_event(stream->advanced_event_filter,
+						f.key());
 		}
 		++i;
 	}
@@ -358,7 +370,7 @@ void KsAdvFilteringDialog::applyPress()
 		* against multiple clicks.
 		*/
 		disconnect(_applyButtonConnection);
-		emit dataReload();
+		emit dataReload(0); // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	};
 
 	const char *text = _filterEdit.text().toLocal8Bit().data();
@@ -370,13 +382,13 @@ void KsAdvFilteringDialog::applyPress()
 	char *filter = (char*) malloc(strlen(text) + 1);
 	strcpy(filter, text);
 
-	ret = tep_filter_add_filter_str(kshark_ctx->advanced_event_filter,
-					   filter);
+	ret = tep_filter_add_filter_str(stream->advanced_event_filter,
+					filter);
 
 	if (ret < 0) {
 		char error_str[200];
 
-		tep_strerror(kshark_ctx->pevent, ret, error_str,
+		tep_strerror(stream->pevent, ret, error_str,
 						       sizeof(error_str));
 
 		fprintf(stderr, "filter failed due to: %s\n", error_str);

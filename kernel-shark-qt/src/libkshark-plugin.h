@@ -112,6 +112,8 @@ struct kshark_event_handler {
 	/** Unique Id ot the trace event type. */
 	int					id;
 
+	int					sd;
+
 	/**
 	 * Event action function. This action can be used to modify the content
 	 * of all kshark_entries having Event Ids equal to "id".
@@ -128,15 +130,15 @@ struct kshark_event_handler {
 
 struct kshark_event_handler *
 find_event_handler(struct kshark_event_handler *handlers,
-						int event_id);
+		   int event_id, int sd);
 
 int kshark_register_event_handler(struct kshark_event_handler **handlers,
-				  int event_id,
+				  int event_id, int sd,
 				  kshark_plugin_event_handler_func evt_func,
 				  kshark_plugin_draw_handler_func dw_func);
 
 void kshark_unregister_event_handler(struct kshark_event_handler **handlers,
-				     int event_id,
+				     int event_id, int sd,
 				     kshark_plugin_event_handler_func evt_func,
 				     kshark_plugin_draw_handler_func dw_func);
 
