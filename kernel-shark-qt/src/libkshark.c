@@ -129,6 +129,92 @@ static void kshark_free_task_list(struct kshark_task_list **tasks)
 	}
 }
 
+static void kshark_stream_free(struct kshark_data_stream *stream)
+{
+	if (!stream)
+		return;
+
+	tracecmd_filter_id_hash_free(stream->show_task_filter);
+	tracecmd_filter_id_hash_free(stream->hide_task_filter);
+
+	tracecmd_filter_id_hash_free(stream->show_event_filter);
+	tracecmd_filter_id_hash_free(stream->hide_event_filter);
+
+	kshark_free_task_list(stream->tasks);
+
+	free(stream);
+}
+
+struct kshark_data_stream *kshark_stream_alloc()
+{
+	struct kshark_data_stream *stream;
+
+	stream = malloc(sizeof(*stream));
+	if (!stream)
+		goto fail;
+
+	stream->filter_mask = 0x0;
+
+	stream->show_task_filter = tracecmd_filter_id_hash_alloc();
+	stream->hide_task_filter = tracecmd_filter_id_hash_alloc();
+
+	stream->show_event_filter = tracecmd_filter_id_hash_alloc();
+	stream->hide_event_filter = tracecmd_filter_id_hash_alloc();
+
+	stream->tasks = calloc(KS_TASK_HASH_SIZE, sizeof(*stream->tasks));
+
+	if (!stream->show_task_filter ||
+	    !stream->hide_task_filter ||
+	    !stream->show_event_filter ||
+	    !stream->hide_event_filter ||
+	    !stream->tasks) {
+		    goto fail;
+	}
+
+	return stream;
+
+ fail:
+	fprintf(stderr, "Failed to allocate memory for data stream.\n");
+	if (stream)
+		kshark_stream_free(stream);
+
+	return NULL;
+}
+
+/**
+ * @brief Use an existing Trace data stream to open and prepare for reading
+ *	  a trace data file specified by "file".
+ *
+ * @param stream: Input location for a Trace data stream pointer.
+ * @param file: The file to load.
+ *
+ * @returns Zero on success or a negative error code in the case of an errno.
+ */
+int kshark_stream_open(struct kshark_data_stream *stream, const char *file)
+{
+	struct tracecmd_input *handle;
+
+	if (!stream)
+		return -EFAULT;
+
+	handle = tracecmd_open(file);
+	if (!handle)
+		return -EEXIST;
+
+	if (pthread_mutex_init(&stream->input_mutex, NULL) != 0) {
+		tracecmd_close(handle);
+		return -EAGAIN;
+	}
+
+	stream->handle = handle;
+	stream->pevent = tracecmd_get_pevent(handle);
+
+	stream->advanced_event_filter =
+		tep_filter_alloc(stream->pevent);
+
+	return 0;
+}
+
 /**
  * @brief Open and prepare for reading a trace data file specified by "file".
  *	  If the specified file does not exist, or contains no trace data,
@@ -161,6 +247,33 @@ bool kshark_open(struct kshark_context *kshark_ctx, const char *file)
 		tep_filter_alloc(kshark_ctx->pevent);
 
 	return true;
+}
+
+static void kshark_stream_close(struct kshark_data_stream *stream)
+{
+	if (!stream || !stream->handle)
+		return;
+
+	/*
+	 * All filters are file specific. Make sure that the Pids and Event Ids
+	 * from this file are not going to be used with another file.
+	 */
+	tracecmd_filter_id_clear(stream->show_task_filter);
+	tracecmd_filter_id_clear(stream->hide_task_filter);
+	tracecmd_filter_id_clear(stream->show_event_filter);
+	tracecmd_filter_id_clear(stream->hide_event_filter);
+
+	if (stream->advanced_event_filter) {
+		tep_filter_reset(stream->advanced_event_filter);
+		tep_filter_free(stream->advanced_event_filter);
+		stream->advanced_event_filter = NULL;
+	}
+
+	tracecmd_close(stream->handle);
+	stream->handle = NULL;
+	stream->pevent = NULL;
+
+	pthread_mutex_destroy(&stream->input_mutex);
 }
 
 /**

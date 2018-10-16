@@ -83,6 +83,46 @@ struct kshark_task_list {
 	int			 pid;
 };
 
+/** tructure representing a stream of trace data. */
+struct kshark_data_stream {
+	/** Input handle for the trace data file. */
+	struct tracecmd_input	*handle;
+
+	/** Page event used to parse the page. */
+	struct tep_handle	*pevent;
+
+	/** Hash table of task PIDs. */
+	struct kshark_task_list	**tasks;
+
+	/** A mutex, used to protect the access to the input file. */
+	pthread_mutex_t		input_mutex;
+
+	/** Hash of tasks to filter on. */
+	struct tracecmd_filter_id	*show_task_filter;
+
+	/** Hash of tasks to not display. */
+	struct tracecmd_filter_id	*hide_task_filter;
+
+	/** Hash of events to filter on. */
+	struct tracecmd_filter_id	*show_event_filter;
+
+	/** Hash of events to not display. */
+	struct tracecmd_filter_id	*hide_event_filter;
+
+	/**
+	 * Bit mask, controlling the visibility of the entries after filtering.
+	 * If given bit is set here, all entries which are filtered-out will
+	 * have this bit unset in their "visible" fields.
+	 */
+	uint8_t				filter_mask;
+
+	/**
+	 * Filter allowing sophisticated filtering based on the content of
+	 * the event.
+	 */
+	struct tep_event_filter		*advanced_event_filter;
+};
+
 /** Structure representing a kshark session. */
 struct kshark_context {
 	/** Input handle for the trace data file. */
@@ -133,6 +173,8 @@ struct kshark_context {
 };
 
 bool kshark_instance(struct kshark_context **kshark_ctx);
+
+int kshark_stream_open(struct kshark_data_stream *stream, const char *file);
 
 bool kshark_open(struct kshark_context *kshark_ctx, const char *file);
 
