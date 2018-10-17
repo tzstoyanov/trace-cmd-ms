@@ -13,7 +13,7 @@ target_link_libraries(kshark ${CMAKE_DL_LIBS}
                              ${TRACECMD_LIBRARY})
 
 set_target_properties(kshark  PROPERTIES SUFFIX	".so.${KS_VERSION_STRING}")
-# 
+
 # if (OPENGL_FOUND AND GLUT_FOUND)
 # 
 #     message(STATUS "libkshark-plot")
@@ -34,7 +34,6 @@ set_target_properties(kshark  PROPERTIES SUFFIX	".so.${KS_VERSION_STRING}")
 #     set (ks-guiLib_hdr  KsUtils.hpp
 #                         KsModels.hpp
 #                         KsGLWidget.hpp
-#                         KsSearchFSM.hpp
 #                         KsDualMarker.hpp
 #                         KsWidgetsLib.hpp
 #                         KsTraceGraph.hpp
@@ -50,7 +49,6 @@ set_target_properties(kshark  PROPERTIES SUFFIX	".so.${KS_VERSION_STRING}")
 #                                                             KsModels.cpp
 #                                                             KsSession.cpp
 #                                                             KsGLWidget.cpp
-#                                                             KsSearchFSM.cpp
 #                                                             KsDualMarker.cpp
 #                                                             KsWidgetsLib.cpp
 #                                                             KsTraceGraph.cpp
