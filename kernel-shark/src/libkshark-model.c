@@ -776,7 +776,8 @@ static bool ksmodel_is_visible(struct kshark_entry *e)
 static struct kshark_entry_request *
 ksmodel_entry_front_request_alloc(struct kshark_trace_histo *histo,
 				  int bin, bool vis_only,
-				  matching_condition_func func, int val)
+				  matching_condition_func func,
+				  int sd, int val)
 {
 	size_t first, n;
 
@@ -788,14 +789,15 @@ ksmodel_entry_front_request_alloc(struct kshark_trace_histo *histo,
 	first = ksmodel_first_index_at_bin(histo, bin);
 
 	return kshark_entry_request_alloc(first, n,
-					  func, val,
+					  func, sd, val,
 					  vis_only, KS_GRAPH_VIEW_FILTER_MASK);
 }
 
 static struct kshark_entry_request *
 ksmodel_entry_back_request_alloc(struct kshark_trace_histo *histo,
 				 int bin, bool vis_only,
-				 matching_condition_func func, int val)
+				 matching_condition_func func,
+				 int sd, int val)
 {
 	size_t first, n;
 
@@ -807,7 +809,7 @@ ksmodel_entry_back_request_alloc(struct kshark_trace_histo *histo,
 	first = ksmodel_last_index_at_bin(histo, bin);
 
 	return kshark_entry_request_alloc(first, n,
-					  func, val,
+					  func, sd, val,
 					  vis_only, KS_GRAPH_VIEW_FILTER_MASK);
 }
 
@@ -816,12 +818,13 @@ ksmodel_entry_back_request_alloc(struct kshark_trace_histo *histo,
  *
  * @param histo: Input location for the model descriptor.
  * @param bin: Bin id.
+ * @param sd: Data stream identifier.
  * @param cpu: Cpu Id.
  *
  * @returns Index of the first entry from a given Cpu in this bin.
  */
 ssize_t ksmodel_first_index_at_cpu(struct kshark_trace_histo *histo,
-				   int bin, int cpu)
+				   int bin, int sd,int cpu)
 {
 	size_t i, n, first, not_found = KS_EMPTY_BIN;
 
@@ -832,7 +835,8 @@ ssize_t ksmodel_first_index_at_cpu(struct kshark_trace_histo *histo,
 	first = ksmodel_first_index_at_bin(histo, bin);
 
 	for (i = first; i < first + n; ++i) {
-		if (histo->data[i]->cpu == cpu) {
+		if (histo->data[i]->cpu == cpu &&
+		    histo->data[i]->stream_id == sd) {
 			if (ksmodel_is_visible(histo->data[i]))
 				return i;
 			else
@@ -848,12 +852,13 @@ ssize_t ksmodel_first_index_at_cpu(struct kshark_trace_histo *histo,
  *
  * @param histo: Input location for the model descriptor.
  * @param bin: Bin id.
+ * @param sd: Data stream identifier.
  * @param pid: Process Id of a task.
  *
  * @returns Index of the first entry from a given Task in this bin.
  */
 ssize_t ksmodel_first_index_at_pid(struct kshark_trace_histo *histo,
-				   int bin, int pid)
+				   int bin, int sd, int pid)
 {
 	size_t i, n, first, not_found = KS_EMPTY_BIN;
 
@@ -864,7 +869,8 @@ ssize_t ksmodel_first_index_at_pid(struct kshark_trace_histo *histo,
 	first = ksmodel_first_index_at_bin(histo, bin);
 
 	for (i = first; i < first + n; ++i) {
-		if (histo->data[i]->pid == pid) {
+		if (histo->data[i]->pid == pid &&
+		    histo->data[i]->stream_id == sd) {
 			if (ksmodel_is_visible(histo->data[i]))
 				return i;
 			else
@@ -884,6 +890,7 @@ ssize_t ksmodel_first_index_at_pid(struct kshark_trace_histo *histo,
  * @param bin: Bin id.
  * @param vis_only: If true, a visible entry is requested.
  * @param func: Matching condition function.
+ * @param sd: Data stream identifier.
  * @param val: Matching condition value, used by the Matching condition
  *	       function.
  * @param col: Optional input location for Data collection.
@@ -895,7 +902,7 @@ ssize_t ksmodel_first_index_at_pid(struct kshark_trace_histo *histo,
 const struct kshark_entry *
 ksmodel_get_entry_front(struct kshark_trace_histo *histo,
 			int bin, bool vis_only,
-			matching_condition_func func, int val,
+			matching_condition_func func, int sd, int val,
 			struct kshark_entry_collection *col,
 			ssize_t *index)
 {
@@ -907,7 +914,7 @@ ksmodel_get_entry_front(struct kshark_trace_histo *histo,
 
 	/* Set the position at the beginning of the bin and go forward. */
 	req = ksmodel_entry_front_request_alloc(histo, bin, vis_only,
-							    func, val);
+							    func, sd, val);
 	if (!req)
 		return NULL;
 
@@ -931,6 +938,7 @@ ksmodel_get_entry_front(struct kshark_trace_histo *histo,
  * @param bin: Bin id.
  * @param vis_only: If true, a visible entry is requested.
  * @param func: Matching condition function.
+ * @param sd: Data stream identifier.
  * @param val: Matching condition value, used by the Matching condition
  *	       function.
  * @param col: Optional input location for Data collection.
@@ -942,7 +950,7 @@ ksmodel_get_entry_front(struct kshark_trace_histo *histo,
 const struct kshark_entry *
 ksmodel_get_entry_back(struct kshark_trace_histo *histo,
 		       int bin, bool vis_only,
-		       matching_condition_func func, int val,
+		       matching_condition_func func, int sd, int val,
 		       struct kshark_entry_collection *col,
 		       ssize_t *index)
 {
@@ -954,7 +962,7 @@ ksmodel_get_entry_back(struct kshark_trace_histo *histo,
 
 	/* Set the position at the end of the bin and go backwards. */
 	req = ksmodel_entry_back_request_alloc(histo, bin, vis_only,
-							   func, val);
+							   func, sd, val);
 	if (!req)
 		return NULL;
 
@@ -992,6 +1000,7 @@ static int ksmodel_get_entry_pid(const struct kshark_entry *entry)
  *
  * @param histo: Input location for the model descriptor.
  * @param bin: Bin id.
+ * @param sd: Data stream identifier.
  * @param cpu: CPU Id.
  * @param vis_only: If true, a visible entry is requested.
  * @param col: Optional input location for Data collection.
@@ -1002,7 +1011,7 @@ static int ksmodel_get_entry_pid(const struct kshark_entry *entry)
  *	    Identifier (KS_EMPTY_BIN or KS_FILTERED_BIN).
  */
 int ksmodel_get_pid_front(struct kshark_trace_histo *histo,
-			  int bin, int cpu, bool vis_only,
+			  int bin, int sd, int cpu, bool vis_only,
 			  struct kshark_entry_collection *col,
 			  ssize_t *index)
 {
@@ -1012,7 +1021,7 @@ int ksmodel_get_pid_front(struct kshark_trace_histo *histo,
 		return KS_EMPTY_BIN;
 
 	entry = ksmodel_get_entry_front(histo, bin, vis_only,
-					       kshark_match_cpu, cpu,
+					       kshark_match_cpu, sd, cpu,
 					       col, index);
 
 	return ksmodel_get_entry_pid(entry);
@@ -1025,6 +1034,7 @@ int ksmodel_get_pid_front(struct kshark_trace_histo *histo,
  *
  * @param histo: Input location for the model descriptor.
  * @param bin: Bin id.
+ * @param sd: Data stream identifier.
  * @param cpu: CPU Id.
  * @param vis_only: If true, a visible entry is requested.
  * @param col: Optional input location for Data collection.
@@ -1035,7 +1045,7 @@ int ksmodel_get_pid_front(struct kshark_trace_histo *histo,
  *	    Identifier (KS_EMPTY_BIN or KS_FILTERED_BIN).
  */
 int ksmodel_get_pid_back(struct kshark_trace_histo *histo,
-			 int bin, int cpu, bool vis_only,
+			 int bin, int sd, int cpu, bool vis_only,
 			 struct kshark_entry_collection *col,
 			 ssize_t *index)
 {
@@ -1045,7 +1055,7 @@ int ksmodel_get_pid_back(struct kshark_trace_histo *histo,
 		return KS_EMPTY_BIN;
 
 	entry = ksmodel_get_entry_back(histo, bin, vis_only,
-					      kshark_match_cpu, cpu,
+					      kshark_match_cpu, sd, cpu,
 					      col, index);
 
 	return ksmodel_get_entry_pid(entry);
@@ -1074,6 +1084,7 @@ static int ksmodel_get_entry_cpu(const struct kshark_entry *entry)
  *
  * @param histo: Input location for the model descriptor.
  * @param bin: Bin id.
+ * @param sd: Data stream identifier.
  * @param pid: Process Id.
  * @param vis_only: If true, a visible entry is requested.
  * @param col: Optional input location for Data collection.
@@ -1084,7 +1095,7 @@ static int ksmodel_get_entry_cpu(const struct kshark_entry *entry)
  *	    Identifier (KS_EMPTY_BIN or KS_FILTERED_BIN).
  */
 int ksmodel_get_cpu_front(struct kshark_trace_histo *histo,
-			  int bin, int pid, bool vis_only,
+			  int bin, int sd, int pid, bool vis_only,
 			  struct kshark_entry_collection *col,
 			  ssize_t *index)
 {
@@ -1094,7 +1105,7 @@ int ksmodel_get_cpu_front(struct kshark_trace_histo *histo,
 		return KS_EMPTY_BIN;
 
 	entry = ksmodel_get_entry_front(histo, bin, vis_only,
-					       kshark_match_pid, pid,
+					       kshark_match_pid, sd, pid,
 					       col,
 					       index);
 	return ksmodel_get_entry_cpu(entry);
@@ -1107,6 +1118,7 @@ int ksmodel_get_cpu_front(struct kshark_trace_histo *histo,
  *
  * @param histo: Input location for the model descriptor.
  * @param bin: Bin id.
+ * @param sd: Data stream identifier.
  * @param pid: Process Id.
  * @param vis_only: If true, a visible entry is requested.
  * @param col: Optional input location for Data collection.
@@ -1117,7 +1129,7 @@ int ksmodel_get_cpu_front(struct kshark_trace_histo *histo,
  *	    Identifier (KS_EMPTY_BIN or KS_FILTERED_BIN).
  */
 int ksmodel_get_cpu_back(struct kshark_trace_histo *histo,
-			 int bin, int pid, bool vis_only,
+			 int bin, int sd, int pid, bool vis_only,
 			 struct kshark_entry_collection *col,
 			 ssize_t *index)
 {
@@ -1127,7 +1139,7 @@ int ksmodel_get_cpu_back(struct kshark_trace_histo *histo,
 		return KS_EMPTY_BIN;
 
 	entry = ksmodel_get_entry_back(histo, bin, vis_only,
-					      kshark_match_pid, pid,
+					      kshark_match_pid, sd, pid,
 					      col,
 					      index);
 
@@ -1139,6 +1151,7 @@ int ksmodel_get_cpu_back(struct kshark_trace_histo *histo,
  *
  * @param histo: Input location for the model descriptor.
  * @param bin: Bin id.
+ * @param sd: Data stream identifier.
  * @param cpu: Cpu Id.
  * @param col: Optional input location for Data collection.
  * @param index: Optional output location for the index of the requested
@@ -1147,7 +1160,7 @@ int ksmodel_get_cpu_back(struct kshark_trace_histo *histo,
  * @returns True, if a visible entry exists in this bin. Else false.
  */
 bool ksmodel_cpu_visible_event_exist(struct kshark_trace_histo *histo,
-				     int bin, int cpu,
+				     int bin, int sd, int cpu,
 				     struct kshark_entry_collection *col,
 				     ssize_t *index)
 {
@@ -1160,7 +1173,7 @@ bool ksmodel_cpu_visible_event_exist(struct kshark_trace_histo *histo,
 	/* Set the position at the beginning of the bin and go forward. */
 	req = ksmodel_entry_front_request_alloc(histo,
 						bin, true,
-						kshark_match_cpu, cpu);
+						kshark_match_cpu, sd, cpu);
 	if (!req)
 		return false;
 
@@ -1192,6 +1205,7 @@ bool ksmodel_cpu_visible_event_exist(struct kshark_trace_histo *histo,
  *
  * @param histo: Input location for the model descriptor.
  * @param bin: Bin id.
+ * @param sd: Data stream identifier.
  * @param pid: Process Id of the task.
  * @param col: Optional input location for Data collection.
  * @param index: Optional output location for the index of the requested
@@ -1200,7 +1214,7 @@ bool ksmodel_cpu_visible_event_exist(struct kshark_trace_histo *histo,
  * @returns True, if a visible entry exists in this bin. Else false.
  */
 bool ksmodel_task_visible_event_exist(struct kshark_trace_histo *histo,
-				      int bin, int pid,
+				      int bin, int sd, int pid,
 				      struct kshark_entry_collection *col,
 				      ssize_t *index)
 {
@@ -1213,7 +1227,7 @@ bool ksmodel_task_visible_event_exist(struct kshark_trace_histo *histo,
 	/* Set the position at the beginning of the bin and go forward. */
 	req = ksmodel_entry_front_request_alloc(histo,
 						bin, true,
-						kshark_match_pid, pid);
+						kshark_match_pid, sd, pid);
 	if (!req)
 		return false;
 
@@ -1241,15 +1255,15 @@ bool ksmodel_task_visible_event_exist(struct kshark_trace_histo *histo,
 }
 
 static bool match_cpu_missed_events(struct kshark_context *kshark_ctx,
-				    struct kshark_entry *e, int cpu)
+				    struct kshark_entry *e, int sd, int cpu)
 {
-	return e->event_id == -EOVERFLOW && e->cpu == cpu;
+	return e->event_id == -EOVERFLOW && e->cpu == cpu && e->stream_id == sd;
 }
 
 static bool match_pid_missed_events(struct kshark_context *kshark_ctx,
-				    struct kshark_entry *e, int pid)
+				    struct kshark_entry *e, int sd, int pid)
 {
-	return e->event_id == -EOVERFLOW && e->pid == pid;
+	return e->event_id == -EOVERFLOW && e->pid == pid && e->stream_id == sd;
 }
 
 /**
@@ -1258,6 +1272,7 @@ static bool match_pid_missed_events(struct kshark_context *kshark_ctx,
  *
  * @param histo: Input location for the model descriptor.
  * @param bin: Bin id.
+ * @param sd: Data stream identifier.
  * @param cpu: CPU Id.
  * @param col: Optional input location for Data collection.
  * @param index: Optional output location for the index of the requested
@@ -1267,12 +1282,12 @@ static bool match_pid_missed_events(struct kshark_context *kshark_ctx,
  */
 const struct kshark_entry *
 ksmodel_get_cpu_missed_events(struct kshark_trace_histo *histo,
-			      int bin, int cpu,
+			      int bin, int sd, int cpu,
 			      struct kshark_entry_collection *col,
 			      ssize_t *index)
 {
 	return ksmodel_get_entry_front(histo, bin, true,
-				       match_cpu_missed_events, cpu,
+				       match_cpu_missed_events, sd, cpu,
 				       col, index);
 }
 
@@ -1282,6 +1297,7 @@ ksmodel_get_cpu_missed_events(struct kshark_trace_histo *histo,
  *
  * @param histo: Input location for the model descriptor.
  * @param bin: Bin id.
+ * @param sd: Data stream identifier.
  * @param pid: Process Id of the task.
  * @param col: Optional input location for Data collection.
  * @param index: Optional output location for the index of the requested
@@ -1291,11 +1307,11 @@ ksmodel_get_cpu_missed_events(struct kshark_trace_histo *histo,
  */
 const struct kshark_entry *
 ksmodel_get_task_missed_events(struct kshark_trace_histo *histo,
-			       int bin, int pid,
+			       int bin, int sd, int pid,
 			       struct kshark_entry_collection *col,
 			       ssize_t *index)
 {
 	return ksmodel_get_entry_front(histo, bin, true,
-				       match_pid_missed_events, pid,
+				       match_pid_missed_events, sd, pid,
 				       col, index);
 }
