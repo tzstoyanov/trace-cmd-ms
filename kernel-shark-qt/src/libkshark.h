@@ -48,7 +48,10 @@ struct kshark_entry {
 	 * kshark_filter_masks to check the level of visibility/invisibility
 	 * of the entry.
 	 */
-	uint16_t	visible;
+	uint8_t		visible;
+
+	/** Data stream identifier. */
+	uint8_t		stream_id;
 
 	/** The CPU core of the record. */
 	int16_t		cpu;
@@ -123,44 +126,16 @@ struct kshark_data_stream {
 	struct tep_event_filter		*advanced_event_filter;
 };
 
+/** Hard-coded maximum number of data stream. */
+#define KS_MAX_NUM_STREAMS	256
+
 /** Structure representing a kshark session. */
 struct kshark_context {
-	/** Input handle for the trace data file. */
-	struct tracecmd_input	*handle;
+	/** Array of data stream descriptors. */
+	struct kshark_data_stream	**stream;
 
-	/** Page event used to parse the page. */
-	struct tep_handle	*pevent;
-
-	/** Hash table of task PIDs. */
-	struct kshark_task_list	*tasks[KS_TASK_HASH_SIZE];
-
-	/** A mutex, used to protect the access to the input file. */
-	pthread_mutex_t		input_mutex;
-
-	/** Hash of tasks to filter on. */
-	struct tracecmd_filter_id	*show_task_filter;
-
-	/** Hash of tasks to not display. */
-	struct tracecmd_filter_id	*hide_task_filter;
-
-	/** Hash of events to filter on. */
-	struct tracecmd_filter_id	*show_event_filter;
-
-	/** Hash of events to not display. */
-	struct tracecmd_filter_id	*hide_event_filter;
-
-	/**
-	 * Bit mask, controlling the visibility of the entries after filtering.
-	 * If given bit is set here, all entries which are filtered-out will
-	 * have this bit unset in their "visible" fields.
-	 */
-	uint8_t				filter_mask;
-
-	/**
-	 * Filter allowing sophisticated filtering based on the content of
-	 * the event.
-	 */
-	struct tep_event_filter		*advanced_event_filter;
+	/** The number of data streams. */
+	int				n_streams;
 
 	/** List of Data collections. */
 	struct kshark_entry_collection *collections;
@@ -174,21 +149,33 @@ struct kshark_context {
 
 bool kshark_instance(struct kshark_context **kshark_ctx);
 
+int kshark_open(struct kshark_context *kshark_ctx, const char *file);
+
 int kshark_stream_open(struct kshark_data_stream *stream, const char *file);
 
-bool kshark_open(struct kshark_context *kshark_ctx, const char *file);
+int kshark_add_stream(struct kshark_context *kshark_ctx);
 
-ssize_t kshark_load_data_entries(struct kshark_context *kshark_ctx,
+int *kshark_all_streams(struct kshark_context *kshark_ctx);
+
+ssize_t kshark_load_data_entries(struct kshark_context *kshark_ctx, int sd,
 				 struct kshark_entry ***data_rows);
 
-ssize_t kshark_load_data_records(struct kshark_context *kshark_ctx,
+ssize_t kshark_load_data_records(struct kshark_context *kshark_ctx, int sd,
 				 struct tep_record ***data_rows);
 
-ssize_t kshark_get_task_pids(struct kshark_context *kshark_ctx, int **pids);
+ssize_t kshark_get_task_pids(struct kshark_context *kshark_ctx, int sd,
+			     int **pids);
 
-void kshark_close(struct kshark_context *kshark_ctx);
+void kshark_close(struct kshark_context *kshark_ctx, int sd);
 
 void kshark_free(struct kshark_context *kshark_ctx);
+
+inline static struct kshark_data_stream *
+kshark_get_data_stream(struct kshark_context *kshark_ctx, int sd) {
+	if (sd >= 0 && sd < KS_MAX_NUM_STREAMS)
+		return kshark_ctx->stream[sd];
+	return NULL;
+}
 
 int kshark_get_pid_easy(struct kshark_entry *entry);
 
@@ -206,7 +193,7 @@ void kshark_convert_nano(uint64_t time, uint64_t *sec, uint64_t *usec);
 
 char* kshark_dump_entry(const struct kshark_entry *entry);
 
-struct tep_record *kshark_read_at(struct kshark_context *kshark_ctx,
+struct tep_record *kshark_read_at(struct kshark_context *kshark_ctx, int sd,
 				  uint64_t offset);
 
 /** Bit masks used to control the visibility of the entry after filtering. */
@@ -263,17 +250,18 @@ enum kshark_filter_type {
 	KS_HIDE_TASK_FILTER,
 };
 
-void kshark_filter_add_id(struct kshark_context *kshark_ctx,
+void kshark_filter_add_id(struct kshark_context *kshark_ctx, int sd,
 			  int filter_id, int id);
 
-int *kshark_get_filter_ids(struct kshark_context *kshark_ctx,
+int *kshark_get_filter_ids(struct kshark_context *kshark_ctx, int sd,
 			   int filter_id, int *n);
 
-void kshark_filter_clear(struct kshark_context *kshark_ctx, int filter_id);
+void kshark_filter_clear(struct kshark_context *kshark_ctx, int sd,
+			 int filter_id);
 
-bool kshark_filter_is_set(struct kshark_context *kshark_ctx);
+bool kshark_filter_is_set(struct kshark_context *kshark_ctx, int sd);
 
-void kshark_filter_entries(struct kshark_context *kshark_ctx,
+void kshark_filter_entries(struct kshark_context *kshark_ctx, int sd,
 			   struct kshark_entry **data,
 			   size_t n_entries);
 
@@ -311,10 +299,10 @@ ssize_t kshark_find_record_by_time(uint64_t time,
 				   size_t l, size_t h);
 
 bool kshark_match_pid(struct kshark_context *kshark_ctx,
-		      struct kshark_entry *e, int pid);
+		      struct kshark_entry *e, int sd, int pid);
 
 bool kshark_match_cpu(struct kshark_context *kshark_ctx,
-		      struct kshark_entry *e, int cpu);
+		      struct kshark_entry *e, int sd, int cpu);
 
 /**
  * Empty bin identifier.
@@ -329,7 +317,7 @@ bool kshark_match_cpu(struct kshark_context *kshark_ctx,
 /** Matching condition function type. To be user for data requests */
 typedef bool (matching_condition_func)(struct kshark_context*,
 				       struct kshark_entry*,
-				       int);
+				       int, int);
 
 /**
  * Data request structure, defining the properties of the required
@@ -351,6 +339,9 @@ struct kshark_entry_request {
 	/** Matching condition function. */
 	matching_condition_func *cond;
 
+	/** Data stream identifier. */
+	int sd;
+
 	/**
 	 * Matching condition value, used by the Matching condition function.
 	 */
@@ -368,7 +359,7 @@ struct kshark_entry_request {
 
 struct kshark_entry_request *
 kshark_entry_request_alloc(size_t first, size_t n,
-			   matching_condition_func cond, int val,
+			   matching_condition_func cond, int sd, int val,
 			   bool vis_only, int vis_mask);
 
 void kshark_free_entry_request(struct kshark_entry_request *req);
@@ -403,6 +394,9 @@ struct kshark_entry_collection {
 	/** Matching condition function, used to define the collections. */
 	matching_condition_func *cond;
 
+	/** Data stream identifier. */
+	int sd;
+
 	/**
 	 * Matching condition value, used by the Matching condition finction
 	 * to define the collections.
@@ -427,17 +421,17 @@ struct kshark_entry_collection {
 struct kshark_entry_collection *
 kshark_register_data_collection(struct kshark_context *kshark_ctx,
 				struct kshark_entry **data, size_t n_rows,
-				matching_condition_func cond, int val,
+				matching_condition_func cond, int sd, int val,
 				size_t margin);
 
 void kshark_unregister_data_collection(struct kshark_entry_collection **col,
 				       matching_condition_func cond,
-				       int val);
+				       int sd, int val);
 
 struct kshark_entry_collection *
 kshark_find_data_collection(struct kshark_entry_collection *col,
 			    matching_condition_func cond,
-			    int val);
+			    int sd, int val);
 
 void kshark_reset_data_collection(struct kshark_entry_collection *col);
 
