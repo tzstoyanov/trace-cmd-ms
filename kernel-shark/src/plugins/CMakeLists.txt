@@ -23,9 +23,9 @@ BUILD_PLUGIN(NAME sched_events
              SOURCE sched_events.c SchedEvents.cpp)
 list(APPEND PLUGIN_LIST "sched_events default") # This plugin will be loaded by default
 
-BUILD_PLUGIN(NAME rename_sched_events
-           SOURCE rename_sched_events.c)
-list(APPEND PLUGIN_LIST "rename_sched_events") # This plugin isn't loaded by default
+# BUILD_PLUGIN(NAME rename_sched_events
+#              SOURCE rename_sched_events.c)
+# list(APPEND PLUGIN_LIST "rename_sched_events") # This plugin isn't loaded by default
 
 BUILD_PLUGIN(NAME missed_events
              SOURCE missed_events.c MissedEvents.cpp)

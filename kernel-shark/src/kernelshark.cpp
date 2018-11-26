@@ -17,17 +17,19 @@
 
 #define default_input_file (char*)"trace.dat"
 
-static char *input_file;
+static char *prior_input_file, *app_input_file;
 
 void usage(const char *prog)
 {
 	printf("Usage: %s\n", prog);
 	printf("  -h	Display this help message\n");
 	printf("  -v	Display version and exit\n");
-	printf("  -i	input_file, default is %s\n", default_input_file);
+	printf("  -i	prior input file, default is %s\n", default_input_file);
+	printf("  -a	input file to append to the prior\n");
 	printf("  -p	register plugin, use plugin name, absolute or relative path\n");
 	printf("  -u	unregister plugin, use plugin name or absolute path\n");
 	printf("  -s	import a session\n");
+	printf("  -l	import the last session\n");
 }
 
 int main(int argc, char **argv)
@@ -40,7 +42,7 @@ int main(int argc, char **argv)
 	int c;
 	bool fromSession = false;
 
-	while ((c = getopt(argc, argv, "hvi:p:u:s:")) != -1) {
+	while ((c = getopt(argc, argv, "hvi:a:p:u:s:l")) != -1) {
 		switch(c) {
 		case 'h':
 			usage(argv[0]);
@@ -51,7 +53,11 @@ int main(int argc, char **argv)
 			return 0;
 
 		case 'i':
-			input_file = optarg;
+			prior_input_file = optarg;
+			break;
+
+		case 'a':
+			app_input_file = optarg;
 			break;
 
 		case 'p':
@@ -65,6 +71,16 @@ int main(int argc, char **argv)
 		case 's':
 			ks.loadSession(QString(optarg));
 			fromSession = true;
+			break;
+
+		case 'l':
+		{
+			QString session(KS_CONF_DIR);
+			session += "/lastsession.json";
+			ks.loadSession(session);
+			fromSession = true;
+			break;
+		}
 
 		default:
 			break;
@@ -73,19 +89,22 @@ int main(int argc, char **argv)
 
 	if (!fromSession) {
 		if ((argc - optind) >= 1) {
-			if (input_file)
+			if (prior_input_file)
 				usage(argv[0]);
-			input_file = argv[optind];
+			prior_input_file = argv[optind];
 		}
 
-		if (!input_file) {
+		if (!prior_input_file) {
 			struct stat st;
 			if (stat(default_input_file, &st) == 0)
-				input_file = default_input_file;
+				prior_input_file = default_input_file;
 		}
 
-		if (input_file)
-			ks.loadDataFile(QString(input_file));
+		if (prior_input_file)
+			ks.loadDataFile(QString(prior_input_file));
+
+		if (app_input_file)
+			ks.appendDataFile(QString(app_input_file));
 	}
 
 	ks.show();

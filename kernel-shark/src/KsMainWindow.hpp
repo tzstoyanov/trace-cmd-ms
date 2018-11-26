@@ -35,6 +35,8 @@ public:
 
 	void loadDataFile(const QString &fileName);
 
+	void appendDataFile(const QString &fileName);
+
 	void loadSession(const QString &fileName);
 
 	/**
@@ -97,6 +99,8 @@ private:
 	// File menu.
 	QAction		_openAction;
 
+	QAction		_appendAction;
+
 	QAction		_restorSessionAction;
 
 	QAction		_importSessionAction;
@@ -129,6 +133,8 @@ private:
 
 	QAction		_taskSelectAction;
 
+	QAction		_virtComboSelectAction;
+
 	// Tools menu.
 	QAction		_pluginsAction;
 
@@ -149,7 +155,11 @@ private:
 
 	QShortcut        _deselectShortcut;
 
+	void _load(const QString& fileName, bool append);
+
 	void _open();
+
+	void _append();
 
 	void _restorSession();
 
@@ -182,6 +192,8 @@ private:
 	void _cpuSelect();
 
 	void _taskSelect();
+
+	void _virtComboSelect();
 
 	void _pluginSelect();
 
