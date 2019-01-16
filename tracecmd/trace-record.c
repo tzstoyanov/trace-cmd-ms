@@ -203,6 +203,12 @@ enum trace_cmd {
 	CMD_record_agent,
 };
 
+enum {
+	DATA_FL_NONE		= 0,
+	DATA_FL_DATE		= 1,
+	DATA_FL_OFFSET		= 2,
+};
+
 struct common_record_context {
 	enum trace_cmd curr_cmd;
 	struct buffer_instance *instance;
@@ -3239,7 +3245,60 @@ again:
 	return msg_handle;
 }
 
-static void add_options(struct tracecmd_output *handle, struct common_record_context *ctx);
+static void add_option_hooks(struct tracecmd_output *handle)
+{
+	struct hook_list *hook;
+	int len;
+
+	for (hook = hooks; hook; hook = hook->next) {
+		len = strlen(hook->hook);
+		tracecmd_add_option(handle, TRACECMD_OPTION_HOOK,
+				    len + 1, hook->hook);
+	}
+}
+
+static void add_uname(struct tracecmd_output *handle)
+{
+	struct utsname buf;
+	char *str;
+	int len;
+	int ret;
+
+	ret = uname(&buf);
+	/* if this fails for some reason, just ignore it */
+	if (ret < 0)
+		return;
+
+	len = strlen(buf.sysname) + strlen(buf.nodename) +
+		strlen(buf.release) + strlen(buf.machine) + 4;
+	str = malloc(len);
+	if (!str)
+		return;
+	sprintf(str, "%s %s %s %s", buf.sysname, buf.nodename, buf.release, buf.machine);
+	tracecmd_add_option(handle, TRACECMD_OPTION_UNAME, len, str);
+	free(str);
+}
+
+static void add_options(struct tracecmd_output *handle,
+			struct common_record_context *ctx)
+{
+	int type = 0;
+
+	if (ctx->date2ts) {
+		if (ctx->data_flags & DATA_FL_DATE)
+			type = TRACECMD_OPTION_DATE;
+		else if (ctx->data_flags & DATA_FL_OFFSET)
+			type = TRACECMD_OPTION_OFFSET;
+	}
+
+	if (type)
+		tracecmd_add_option(handle, type,
+				    strlen(ctx->date2ts)+1, ctx->date2ts);
+
+	tracecmd_add_option(handle, TRACECMD_OPTION_TRACECLOCK, 0, NULL);
+	add_option_hooks(handle);
+	add_uname(handle);
+}
 
 static struct tracecmd_msg_handle *
 setup_connection(struct buffer_instance *instance, struct common_record_context *ctx)
@@ -3517,40 +3576,6 @@ add_buffer_stat(struct tracecmd_output *handle, struct buffer_instance *instance
 				    instance->s_save[i].buffer);
 }
 
-static void add_option_hooks(struct tracecmd_output *handle)
-{
-	struct hook_list *hook;
-	int len;
-
-	for (hook = hooks; hook; hook = hook->next) {
-		len = strlen(hook->hook);
-		tracecmd_add_option(handle, TRACECMD_OPTION_HOOK,
-				    len + 1, hook->hook);
-	}
-}
-
-static void add_uname(struct tracecmd_output *handle)
-{
-	struct utsname buf;
-	char *str;
-	int len;
-	int ret;
-
-	ret = uname(&buf);
-	/* if this fails for some reason, just ignore it */
-	if (ret < 0)
-		return;
-
-	len = strlen(buf.sysname) + strlen(buf.nodename) +
-		strlen(buf.release) + strlen(buf.machine) + 4;
-	str = malloc(len);
-	if (!str)
-		return;
-	sprintf(str, "%s %s %s %s", buf.sysname, buf.nodename, buf.release, buf.machine);
-	tracecmd_add_option(handle, TRACECMD_OPTION_UNAME, len, str);
-	free(str);
-}
-
 static void print_stat(struct buffer_instance *instance)
 {
 	int cpu;
@@ -3563,31 +3588,6 @@ static void print_stat(struct buffer_instance *instance)
 
 	for (cpu = 0; cpu < instance->cpu_count; cpu++)
 		trace_seq_do_printf(&instance->s_print[cpu]);
-}
-
-enum {
-	DATA_FL_NONE		= 0,
-	DATA_FL_DATE		= 1,
-	DATA_FL_OFFSET		= 2,
-};
-
-static void add_options(struct tracecmd_output *handle, struct common_record_context *ctx)
-{
-	int type = 0;
-
-	if (ctx->date2ts) {
-		if (ctx->data_flags & DATA_FL_DATE)
-			type = TRACECMD_OPTION_DATE;
-		else if (ctx->data_flags & DATA_FL_OFFSET)
-			type = TRACECMD_OPTION_OFFSET;
-	}
-
-	if (type)
-		tracecmd_add_option(handle, type, strlen(ctx->date2ts)+1, ctx->date2ts);
-
-	tracecmd_add_option(handle, TRACECMD_OPTION_TRACECLOCK, 0, NULL);
-	add_option_hooks(handle);
-	add_uname(handle);
 }
 
 static void write_guest_file(struct buffer_instance *instance)
