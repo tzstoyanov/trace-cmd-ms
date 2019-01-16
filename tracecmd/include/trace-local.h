@@ -236,6 +236,18 @@ void show_instance_file(struct buffer_instance *instance, const char *name);
 
 int count_cpus(void);
 
+struct clock_synch_event_descr {
+	char *file;
+	char *set;
+	char *reset;
+};
+struct buffer_instance *clock_synch_enable(char *clock,
+					   struct clock_synch_event_descr *events);
+void clock_synch_disable(struct buffer_instance *instance,
+			 struct clock_synch_event_descr *events);
+struct tep_handle *clock_synch_get_tep(struct buffer_instance *instance,
+				       char **systems);
+void get_vsocket_params(int fd, int *lcid, int *lport, int *rcid, int *rport);
 #define VCPUS_MAX	256
 int *get_guest_vcpu_pids(int cid);
 

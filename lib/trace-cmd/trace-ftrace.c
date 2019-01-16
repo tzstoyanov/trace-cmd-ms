@@ -411,32 +411,37 @@ void tracecmd_ftrace_load_options(void)
 	trace_util_add_options("ftrace", trace_ftrace_options);
 }
 
-int tracecmd_ftrace_overrides(struct tracecmd_input *handle,
-	struct tracecmd_ftrace *finfo)
+int tracecmd_ftrace_overrides_tep(struct tep_handle *tep, void *context)
 {
-	struct tep_handle *pevent;
+	tep_register_event_handler(tep, -1, "ftrace", "function",
+				      function_handler, context);
+
+	tep_register_event_handler(tep, -1, "ftrace", "funcgraph_entry",
+				      fgraph_ent_handler, context);
+
+	tep_register_event_handler(tep, -1, "ftrace", "funcgraph_exit",
+				      fgraph_ret_handler, context);
+
+	tep_register_event_handler(tep, -1, "ftrace", "kernel_stack",
+				      trace_stack_handler, context);
+
+	return 0;
+}
+
+int tracecmd_ftrace_overrides(struct tracecmd_input *handle,
+			      struct tracecmd_ftrace *finfo)
+{
+	struct tep_handle *tep;
 	struct tep_event *event;
 
 	finfo->handle = handle;
 
-	pevent = tracecmd_get_pevent(handle);
+	tep = tracecmd_get_pevent(handle);
 
-	tep_register_event_handler(pevent, -1, "ftrace", "function",
-				      function_handler, NULL);
-
-	tep_register_event_handler(pevent, -1, "ftrace", "funcgraph_entry",
-				      fgraph_ent_handler, finfo);
-
-	tep_register_event_handler(pevent, -1, "ftrace", "funcgraph_exit",
-				      fgraph_ret_handler, finfo);
-
-	tep_register_event_handler(pevent, -1, "ftrace", "kernel_stack",
-				      trace_stack_handler, finfo);
-
-	trace_util_add_options("ftrace", trace_ftrace_options);
+	tracecmd_ftrace_overrides_tep(tep, finfo);
 
 	/* Store the func ret id and event for later use */
-	event = tep_find_event_by_name(pevent, "ftrace", "funcgraph_exit");
+	event = tep_find_event_by_name(tep, "ftrace", "funcgraph_exit");
 	if (!event)
 		return 0;
 

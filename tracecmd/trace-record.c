@@ -3221,6 +3221,39 @@ static void check_protocol_version(struct tracecmd_msg_handle *msg_handle)
 	}
 }
 
+static void sync_time_with_listener_v3(struct tracecmd_msg_handle *msg_handle,
+				       struct common_record_context *ctx)
+{
+	struct buffer_instance	*instance;
+	long long toffset = 0;
+	char *clock = NULL;
+
+	instance = ctx->instance;
+	while (instance) {
+		clock = instance->clock;
+		if (clock)
+			break;
+		instance = instance->next;
+	}
+
+	if (ctx->data_flags & DATA_FL_DATE ||
+	    ctx->data_flags & DATA_FL_OFFSET) {
+		tracecmd_msg_snd_time_sync(msg_handle, clock, NULL);
+		return;
+	}
+
+	tracecmd_msg_snd_time_sync(msg_handle, clock, &toffset);
+
+	free(ctx->date2ts);
+	/* 20 digits + \0 */
+	ctx->date2ts = malloc(21);
+	if (ctx->date2ts) {
+		snprintf(ctx->date2ts, 21, "%lld", toffset);
+		ctx->data_flags |= DATA_FL_OFFSET;
+	}
+
+}
+
 static struct tracecmd_msg_handle *setup_network(struct buffer_instance *instance)
 {
 	struct tracecmd_msg_handle *msg_handle = NULL;
@@ -3465,6 +3498,8 @@ static void connect_to_agent(struct buffer_instance *instance)
 
 	/* the msg_handle now points to the guest fd */
 	instance->msg_handle = msg_handle;
+
+	tracecmd_msg_rcv_time_sync(msg_handle);
 }
 
 static void setup_guest(struct buffer_instance *instance)
@@ -3489,9 +3524,12 @@ static void setup_guest(struct buffer_instance *instance)
 	close(fd);
 }
 
-static void setup_agent(struct buffer_instance *instance, struct common_record_context *ctx)
+static void setup_agent(struct buffer_instance *instance,
+			struct common_record_context *ctx)
 {
 	struct tracecmd_output *network_handle;
+
+	sync_time_with_listener_v3(instance->msg_handle, ctx);
 
 	network_handle = tracecmd_create_init_fd_msg(instance->msg_handle,
 						     listed_events);
@@ -5894,4 +5932,106 @@ int trace_record_agent(struct tracecmd_msg_handle *msg_handle,
 
 	free(argv_plus);
 	return 0;
+}
+
+void get_vsocket_params(int fd, int *lcid,
+			int *lport, int *rcid, int *rport)
+{
+	struct sockaddr_vm addr;
+	socklen_t addr_len = sizeof(addr);
+
+	if (lcid || lport) {
+		memset(&addr, 0, sizeof(addr));
+		if (getsockname(fd, (struct sockaddr *)&addr, &addr_len))
+			return;
+		if (addr.svm_family != AF_VSOCK)
+			return;
+		if (lport)
+			*lport = addr.svm_port;
+		if (lcid)
+			*lcid = addr.svm_cid;
+	}
+
+	if (rcid || rport) {
+		memset(&addr, 0, sizeof(addr));
+		addr_len = sizeof(addr);
+		if (getpeername(fd, (struct sockaddr *)&addr, &addr_len))
+			return;
+		if (addr.svm_family != AF_VSOCK)
+			return;
+
+		if (rport)
+			*rport = addr.svm_port;
+		if (rcid)
+			*rcid = addr.svm_cid;
+	}
+}
+
+static void set_clock_synch_events(struct buffer_instance *instance,
+				   struct clock_synch_event_descr *events,
+				   bool enable)
+{
+	int i = 0;
+
+	if (!enable)
+		write_tracing_on(instance, 0);
+
+	while (events[i].file) {
+		if (enable && events[i].set)
+			write_instance_file(instance, events[i].file,
+					    events[i].set, NULL);
+		if (!enable && events[i].reset)
+			write_instance_file(instance, events[i].file,
+					    events[i].reset, NULL);
+		i++;
+	}
+
+	if (enable)
+		write_tracing_on(instance, 1);
+}
+
+static void vsock_trace_reset(struct buffer_instance *vinst)
+{
+	write_instance_file(vinst, "trace", "0", NULL);
+}
+
+struct tep_handle *clock_synch_get_tep(struct buffer_instance *instance, char **systems)
+{
+	struct tep_handle *tep = NULL;
+	char *path;
+
+	path = get_instance_dir(instance);
+	tep = tracecmd_local_events_system(path, systems);
+	tracecmd_put_tracing_file(path);
+
+	tep_set_file_bigendian(tep, tracecmd_host_bigendian());
+	tep_set_host_bigendian(tep, tracecmd_host_bigendian());
+
+	return tep;
+}
+
+struct buffer_instance *clock_synch_enable(char *clock,
+					   struct clock_synch_event_descr *events)
+{
+	struct buffer_instance *vinst;
+	char inst_name[256];
+
+	snprintf(inst_name, 256, "clock_synch-%d", rand()%100);
+	vinst = create_instance(strdup(inst_name));
+	init_instance(vinst);
+	vinst->cpu_count = local_cpu_count;
+	make_one_instance(vinst);
+	vsock_trace_reset(vinst);
+	vinst->clock = strdup(clock);
+	set_clock(vinst);
+	set_clock_synch_events(vinst, events, true);
+	return vinst;
+}
+
+void clock_synch_disable(struct buffer_instance *instance,
+			 struct clock_synch_event_descr *events)
+{
+	set_clock_synch_events(instance, events, false);
+	tracecmd_remove_one_instance(instance);
+	/* todo: clean up the instance */
 }

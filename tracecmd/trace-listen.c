@@ -404,6 +404,9 @@ static int communicate_with_client(struct tracecmd_msg_handle *msg_handle)
 
 		msg_handle->version = V3_PROTOCOL;
 
+		/* time sync with the v3 client */
+		tracecmd_msg_rcv_time_sync(msg_handle);
+
 		/* read the CPU count, the page size, and options */
 		if ((pagesize = tracecmd_msg_initial_setting(msg_handle)) < 0)
 			goto out;
