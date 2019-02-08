@@ -2758,6 +2758,7 @@ struct guest {
 	char *name;
 	int cid;
 	int pid;
+	int cpu_pid[VCPUS_MAX];
 };
 
 static struct guest *guests;
@@ -2778,9 +2779,10 @@ static char *get_qemu_guest_name(char *arg)
 static void read_qemu_guests(void)
 {
 	static bool initialized;
+	struct dirent *entry_t;
 	struct dirent *entry;
 	char path[PATH_MAX];
-	DIR *dir;
+	DIR *dir, *dir_t;
 
 	if (initialized)
 		return;
@@ -2836,6 +2838,49 @@ static void read_qemu_guests(void)
 		if (!is_qemu)
 			goto next;
 
+		snprintf(path, sizeof(path), "/proc/%s/task", entry->d_name);
+		dir_t = opendir(path);
+		if (dir_t) {
+			unsigned int vcpu;
+			char *buf = NULL;
+			char *cpu_str;
+			FILE *ft;
+			size_t n;
+			int j;
+
+			for (entry_t = readdir(dir_t); entry_t; entry_t = readdir(dir_t)) {
+				if (!(entry_t->d_type == DT_DIR &&
+				    is_digits(entry_t->d_name)))
+					continue;
+				snprintf(path, sizeof(path),
+					 "/proc/%s/task/%s/comm",
+					 entry->d_name, entry_t->d_name);
+				ft = fopen(path, "r");
+				if (!ft)
+					continue;
+				getline(&buf, &n, ft);
+				if (buf && strncmp(buf, "CPU ", 4) == 0) {
+					cpu_str = buf;
+					while (*cpu_str != '\0' &&
+						isdigit(*cpu_str) == 0)
+						cpu_str++;
+					if (*cpu_str != '\0') {
+						j = 0;
+						while (cpu_str[j] != '\0' &&
+						       isdigit(cpu_str[j]) != 0)
+							j++;
+						cpu_str[j] = '\0';
+						vcpu = atoi(cpu_str);
+						if (vcpu < VCPUS_MAX)
+							guest.cpu_pid[vcpu] = atoi(entry_t->d_name);
+					}
+				}
+				free(buf);
+				fclose(ft);
+				buf = NULL;
+			}
+		}
+
 		guests = realloc(guests, (guests_len + 1) * sizeof(*guests));
 		if (!guests)
 			die("Can not allocate guest buffer");
@@ -2879,6 +2924,16 @@ static char *parse_guest_name(char *guest, int *cid, int *port)
 	}
 
 	return guest;
+}
+
+int *get_guest_vcpu_pids(int cid)
+{
+	int i;
+
+	for (i = 0; i < guests_len; i++)
+		if (cid == guests[i].cid)
+			return guests[i].cpu_pid;
+	return NULL;
 }
 
 static void set_prio(int prio)
