@@ -977,7 +977,6 @@ static int sync_events_cmp(const void *a, const void *b)
 	return 0;
 }
 
-
 static int clock_synch_find_events(struct tep_handle *tep,
 				   struct buffer_instance *instance,
 				   struct clock_synch_event *events)
@@ -997,7 +996,7 @@ static int clock_synch_find_events(struct tep_handle *tep,
 	int r;
 
 	page_size = getpagesize();
-#if 0
+#ifdef TSYNC_RBUFFER_DEBUG
 	file = get_instance_file(instance, "trace");
 	if (!file)
 		return ts;
@@ -1020,7 +1019,7 @@ static int clock_synch_find_events(struct tep_handle *tep,
 		fclose(fp);
 	}
 	tracecmd_put_tracing_file(file);
-#endif
+#endif /* TSYNC_RBUFFER_DEBUG */
 	path = get_instance_file(instance, "per_cpu");
 	if (!path)
 		return ts;
@@ -1058,6 +1057,14 @@ static int clock_synch_find_events(struct tep_handle *tep,
 	}
 	qsort(events_array, events_count, sizeof(*events_array), sync_events_cmp);
 	r = find_sync_events(tep, events_array, events_count, events);
+#ifdef TSYNC_RBUFFER_DEBUG
+	len = 0;
+	while (events[len].id) {
+		printf("Found %d @ cpu %d: %lld\n\r",
+			events[len].id,  events[len].cpu, events[len].ts);
+		len++;
+	}
+#endif
 	free(events_array);
 	free(file);
 	free(page);
@@ -1072,7 +1079,7 @@ int tracecmd_msg_rcv_time_sync(struct tracecmd_msg_handle *msg_handle)
 {
 	struct clock_synch_event events[3];
 	struct buffer_instance *vinst;
-	int lcid, lport, rcid, rport;
+	unsigned int lcid, lport, rcid, rport;
 	struct tep_event *event;
 	struct tracecmd_msg msg;
 	struct tep_handle *tep;
@@ -1084,7 +1091,7 @@ int tracecmd_msg_rcv_time_sync(struct tracecmd_msg_handle *msg_handle)
 	struct clock_synch_event_descr events_descr[] = {
 		{"events/kvm/kvm_exit/enable", "1", "0"},
 		{"events/vsock/virtio_transport_recv_pkt/enable", "1", "0"},
-		{"events/vsock/virtio_transport_recv_pkt/filter", vsock_rx_filter, NULL},
+		{"events/vsock/virtio_transport_recv_pkt/filter", vsock_rx_filter, "\0"},
 		{NULL, NULL, NULL}
 	};
 
@@ -1094,14 +1101,14 @@ int tracecmd_msg_rcv_time_sync(struct tracecmd_msg_handle *msg_handle)
 	if (!msg.time_sync_init.clock[0])
 		return 0;
 	clock = strdup(msg.time_sync_init.clock);
-	memset(events, 0, sizeof(struct clock_synch_event)*4);
+	memset(events, 0, sizeof(struct clock_synch_event)*3);
 
 	rcid = 0;
 	get_vsocket_params(msg_handle->fd, &lcid, &lport, &rcid, &rport);
 	if (rcid)
 		cpu_pid = get_guest_vcpu_pids(rcid);
 	snprintf(vsock_rx_filter, 255,
-		"src_cid==%d && src_port==%d && dst_cid==%d && dst_port==%d && len!=0",
+		"src_cid==%u && src_port==%u && dst_cid==%u && dst_port==%u && len!=0",
 		rcid, rport, lcid, lport);
 
 	vinst = clock_synch_enable(clock, events_descr);
@@ -1164,13 +1171,13 @@ int tracecmd_msg_snd_time_sync(struct tracecmd_msg_handle *msg_handle,
 	int probes = 0;
 	char *clock;
 	char vsock_tx_filter[255];
-	int lcid, lport, rcid, rport;
+	unsigned int lcid, lport, rcid, rport;
 	char *systems[] = {"vsock", "ftrace", NULL};
 	struct clock_synch_event_descr events_descr[] = {
 		{"set_ftrace_filter", "vp_notify", "\0"},
 		{"current_tracer", "function", "nop"},
 		{"events/vsock/virtio_transport_alloc_pkt/enable", "1", "0"},
-		{"events/vsock/virtio_transport_alloc_pkt/filter", vsock_tx_filter, NULL},
+		{"events/vsock/virtio_transport_alloc_pkt/filter", vsock_tx_filter, "\0"},
 		{NULL, NULL, NULL}
 	};
 #ifdef TSYNC_DEBUG
@@ -1204,10 +1211,10 @@ int tracecmd_msg_snd_time_sync(struct tracecmd_msg_handle *msg_handle,
 	}
 	get_vsocket_params(msg_handle->fd, &lcid, &lport, &rcid, &rport);
 	snprintf(vsock_tx_filter, 255,
-		"src_cid==%d && src_port==%d && dst_cid==%d && dst_port==%d && len!=0",
+		"src_cid==%u && src_port==%u && dst_cid==%u && dst_port==%u && len!=0",
 		lcid, lport, rcid, rport);
 
-	memset(events_s, 0, sizeof(struct clock_synch_event)*2);
+	memset(events_s, 0, sizeof(struct clock_synch_event)*3);
 	vinst = clock_synch_enable(clock_str, events_descr);
 	tep = clock_synch_get_tep(vinst, systems);
 	event = tep_find_event_by_name(tep, "vsock", "virtio_transport_alloc_pkt");
@@ -1230,7 +1237,6 @@ int tracecmd_msg_snd_time_sync(struct tracecmd_msg_handle *msg_handle,
 		events_s[1].ts = 0;	/* vp_notify ts */
 		events_s[1].cpu = 0;
 		tracecmd_msg_init(MSG_TIME_SYNC, &msg_req);
-
 		tracecmd_msg_send(msg_handle->fd, &msg_req);
 		/* Get the ts and CPU of the sent event */
 		clock_synch_find_events(tep, vinst, events_s);

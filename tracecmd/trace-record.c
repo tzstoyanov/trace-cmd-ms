@@ -5934,8 +5934,8 @@ int trace_record_agent(struct tracecmd_msg_handle *msg_handle,
 	return 0;
 }
 
-void get_vsocket_params(int fd, int *lcid,
-			int *lport, int *rcid, int *rport)
+void get_vsocket_params(int fd, unsigned int *lcid, unsigned int *lport,
+			unsigned int *rcid, unsigned int *rport)
 {
 	struct sockaddr_vm addr;
 	socklen_t addr_len = sizeof(addr);
@@ -5992,7 +5992,7 @@ static void set_clock_synch_events(struct buffer_instance *instance,
 
 static void vsock_trace_reset(struct buffer_instance *vinst)
 {
-	write_instance_file(vinst, "trace", "0", NULL);
+	write_instance_file(vinst, "trace", "\0", NULL);
 }
 
 struct tep_handle *clock_synch_get_tep(struct buffer_instance *instance, char **systems)
@@ -6022,7 +6022,8 @@ struct buffer_instance *clock_synch_enable(char *clock,
 	vinst->cpu_count = local_cpu_count;
 	make_one_instance(vinst);
 	vsock_trace_reset(vinst);
-	vinst->clock = strdup(clock);
+	if (clock)
+		vinst->clock = strdup(clock);
 	set_clock(vinst);
 	set_clock_synch_events(vinst, events, true);
 	return vinst;
