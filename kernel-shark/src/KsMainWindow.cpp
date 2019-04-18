@@ -379,7 +379,7 @@ void KsMainWindow::_append()
 		QFileDialog::getOpenFileName(this,
 					     "Append File",
 					     KS_DIR,
-					     "trace-cmd files (*.dat);;All files (*)");
+					     "trace-cmd files (*.dat);;Text files (*.txt);;All files (*)");
 
 	if (!fileName.isEmpty())
 		appendDataFile(fileName);

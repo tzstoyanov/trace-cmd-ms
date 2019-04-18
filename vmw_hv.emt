@@ -1,0 +1,19 @@
+VMMLoad {
+	if (VCPUID == 0) {
+		printf("%-8s\t%-8s\t%-8s\t%-8s\t%-8s\n",
+		       "tsc", "probe", "vcpu", "pcpu", "tid");
+	}
+}
+
+void probe() {
+	printf("%-8d\t%-8s\t%-8d\t%-8d\t%-8d\n",
+	       TSC, PROBENAME, VCPUID, PCPUID, THREADID);
+}
+
+HV_Resume {
+	probe();
+}
+
+HV_Exit {
+	probe();
+}

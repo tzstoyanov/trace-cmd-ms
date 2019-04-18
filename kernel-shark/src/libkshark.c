@@ -169,6 +169,7 @@ static struct kshark_data_stream *kshark_stream_alloc()
 	stream->hide_cpu_filter = tracecmd_filter_id_hash_alloc();
 
 	stream->tasks = calloc(KS_TASK_HASH_SIZE, sizeof(*stream->tasks));
+	stream->is_text = false;
 
 	if (!stream->show_task_filter ||
 	    !stream->hide_task_filter ||
@@ -211,6 +212,12 @@ int kshark_add_stream(struct kshark_context *kshark_ctx)
 	return sd;
 }
 
+static bool is_text(const char *filename)
+{
+	char *ext = strrchr(filename, '.');
+	return ext && strcmp(ext, ".txt") == 0;
+}
+
 /**
  * @brief Use an existing Trace data stream to open and prepare for reading
  *	  a trace data file specified by "file".
@@ -227,14 +234,19 @@ int kshark_stream_open(struct kshark_data_stream *stream, const char *file)
 	if (!stream)
 		return -EFAULT;
 
+	if (pthread_mutex_init(&stream->input_mutex, NULL) != 0)
+		return -EAGAIN;
+
+	if (is_text(file)) {
+		stream->file = strdup(file);
+		stream->is_text = true;
+		stream->fp = fopen(file, "r");
+		return 0;
+	}
+
 	handle = tracecmd_open(file);
 	if (!handle)
 		return -EEXIST;
-
-	if (pthread_mutex_init(&stream->input_mutex, NULL) != 0) {
-		tracecmd_close(handle);
-		return -EAGAIN;
-	}
 
 	stream->handle = handle;
 	stream->pevent = tracecmd_get_pevent(handle);
@@ -1103,6 +1115,128 @@ static int pick_next_cpu(struct rec_list **rec_list, int n_cpus,
 	return next_cpu;
 }
 
+static long stol(char *s, int beg, int end)
+{
+	char save;
+	long ret;
+
+	save = s[end];
+	s[end] = '\0';
+	ret = atol(s + beg);
+	s[end] = save;
+	return ret;
+}
+
+static void fixup_entries_next(struct kshark_entry **events, size_t nr_events, int nr_cpus)
+{
+	struct kshark_entry **last;
+	int i;
+
+	last = calloc(nr_cpus, sizeof(*last));
+	for (i = 0; i < nr_cpus; i++) {
+		int cpu = events[i]->cpu;
+		if (last[cpu])
+			last[cpu]->next = events[i];
+		last[cpu] = events[i];
+	}
+	free(last);
+}
+
+static ssize_t load_text_entries(struct kshark_context *kshark_ctx, int sd,
+				struct kshark_entry ***data_rows)
+{
+	const char *regex = "^(\\w+)\\s*\t(\\w+)\\s*\t(\\w+)\\s*\t(\\w+)\\s*\t(\\w+)\\s*$";
+	struct kshark_data_stream *stream;
+	struct kshark_entry **rows = NULL;
+	struct kshark_entry *entries = NULL;
+	long header_offset, last_offset;
+	regmatch_t groups[20];
+	size_t line_len = 0;
+	char *line = NULL;
+	size_t total = 0;
+	ssize_t ret = 0;
+	int nr_cpus = 0;
+	regex_t comp;
+	size_t i;
+
+	stream = kshark_get_data_stream(kshark_ctx, sd);
+	if (!stream)
+		return -EBADF;
+
+	if (regcomp(&comp, regex, REG_EXTENDED)) {
+		fprintf(stderr, "could not compile '%s'\n", regex);
+		return -1;
+	}
+
+	/* Skip the header */
+	fseek(stream->fp, 0, SEEK_SET);
+	if (getline(&line, &line_len, stream->fp) < 0) {
+		perror("error reading input");
+		return -errno;
+	}
+	header_offset = ftell(stream->fp);
+
+	/* Count the events */
+	while (getline(&line, &line_len, stream->fp) > 0) {
+		if (regexec(&comp, line, 20, groups, 0) != 0)
+			continue;
+
+		total++;
+	}
+
+	/* Allocate entries */
+	rows = calloc(total, sizeof(*rows));
+	entries = calloc(total, sizeof(*entries));
+	if (!rows || !entries) {
+		ret = -ENOMEM;
+		goto error;
+	}
+
+	/* Load the events into `rows` */
+	i = 0;
+	last_offset = header_offset;
+	fseek(stream->fp, header_offset, SEEK_SET);
+	while (getline(&line, &line_len, stream->fp) > 0) {
+		struct kshark_entry *entry;
+
+		if (regexec(&comp, line, 20, groups, 0) != 0)
+			goto next;
+
+		entry = rows[i] = &entries[i];
+		i++;
+
+		/* groups[1-5] are [tsc, probe, vcpu, pcpu, tid] */
+		entry->stream_id = sd;
+		entry->cpu = stol(line, groups[4].rm_so, groups[4].rm_eo); /* pcpu */
+		entry->pid = stol(line, groups[3].rm_so, groups[3].rm_eo); /* vcpu */
+		entry->event_id = strncmp(line + groups[2].rm_so, "HV_Resume", 9) == 0 ? 0 : 1;
+		entry->offset = last_offset;
+		entry->ts = stol(line, groups[1].rm_so, groups[1].rm_eo);
+		if (entry->cpu >= nr_cpus)
+			nr_cpus = entry->cpu + 1;
+
+next:
+		last_offset = ftell(stream->fp);
+	}
+	free(line);
+	regfree(&comp);
+
+	/* Compute entries[i]->next */
+	fixup_entries_next(rows, total, nr_cpus);
+
+	stream->nr_cpus = nr_cpus;
+	*data_rows = rows;
+
+	return total;
+
+error:
+	free(rows);
+	free(entries);
+	free(line);
+	regfree(&comp);
+	return ret;
+}
+
 /**
  * @brief Load the content of the trace data file into an array of
  *	  kshark_entries. This function provides an abstraction of the
@@ -1140,6 +1274,9 @@ ssize_t kshark_load_data_entries(struct kshark_context *kshark_ctx, int sd,
 	stream = kshark_get_data_stream(kshark_ctx, sd);
 	if (!stream)
 		return -EBADF;
+
+	if (stream->is_text)
+		return load_text_entries(kshark_ctx, sd, data_rows);
 
 	total = get_records(kshark_ctx, sd, &rec_list, type);
 	if (total < 0)

@@ -141,6 +141,10 @@ struct kshark_data_stream {
 	 * the event.
 	 */
 	struct tep_event_filter		*advanced_event_filter;
+
+	bool is_text;
+	FILE *fp;
+	int nr_cpus;
 };
 
 /** Hard-coded maximum number of data stream. */

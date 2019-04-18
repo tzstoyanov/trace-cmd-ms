@@ -55,7 +55,7 @@ static bool plugin_sched_init_context(struct kshark_context *kshark_ctx,
 	bool wakeup_found;
 
 	stream = kshark_get_data_stream(kshark_ctx, sd);
-	if (!stream)
+	if (!stream || stream->is_text)
 		return false;
 
 	/* No context should exist when we initialize the plugin. */
