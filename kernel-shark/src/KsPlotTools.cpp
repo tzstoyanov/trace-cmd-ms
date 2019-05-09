@@ -167,7 +167,7 @@ ColorTable getCPUColorTable()
 	streamIds = kshark_all_streams(kshark_ctx);
 	for (int i = 0; i < kshark_ctx->n_streams; ++i) {
 		stream = kshark_get_data_stream(kshark_ctx, streamIds[i]);
-		nCPUs =  tep_get_cpus(stream->pevent);
+		nCPUs =  stream->n_cpus;
 		if (nCPUMax < nCPUs)
 			nCPUMax = nCPUs;
 	}

@@ -27,7 +27,7 @@ KsProgressBar::KsProgressBar(QString message, QWidget *parent)
 : QWidget(parent),
   _sb(this),
   _pb(&_sb) {
-	resize(KS_BROGBAR_WIDTH, KS_BROGBAR_HEIGHT);
+	resize(KS_PROGBAR_WIDTH, KS_PROGBAR_HEIGHT);
 	setWindowTitle("KernelShark");
 	setLayout(new QVBoxLayout);
 
@@ -798,7 +798,7 @@ KsCPUCheckBoxWidget::KsCPUCheckBoxWidget(int sd, QWidget *parent)
 
 	stream = kshark_get_data_stream(kshark_ctx, sd);
 	if (stream)
-		nCPUs = tep_get_cpus(stream->pevent);
+		nCPUs = stream->n_cpus;
 
 	_id.resize(nCPUs);
 	_cb.resize(nCPUs);
@@ -932,6 +932,7 @@ KsTasksCheckBoxWidget::KsTasksCheckBoxWidget(int sd, bool cond, QWidget *parent)
 	kshark_data_stream *stream;
 	KsPlot::ColorTable colors;
 	QStringList headers;
+	kshark_entry entry;
 	const char *comm;
 	int nTasks, pid;
 
@@ -951,18 +952,20 @@ KsTasksCheckBoxWidget::KsTasksCheckBoxWidget(int sd, bool cond, QWidget *parent)
 	nTasks = _id.count();
 	_initTable(headers, nTasks);
 	colors = KsPlot::getTaskColorTable();
+	entry.stream_id = sd;
 
 	for (int i = 0; i < nTasks; ++i) {
-		pid = _id[i];
-		pidItem	= new QTableWidgetItem(tr("%1").arg(pid));
+		entry.pid = _id[i];
+		pidItem = new QTableWidgetItem(tr("%1").arg(pid));
 		_table.setItem(i, 1, pidItem);
 
-		comm = tep_data_comm_from_pid(stream->pevent, pid);
+		comm = kshark_get_task_easy(&entry);
+
 		comItem = new QTableWidgetItem(tr(comm));
 
-		pidItem->setBackgroundColor(QColor(colors[pid].r(),
-						   colors[pid].g(),
-						   colors[pid].b()));
+		pidItem->setBackgroundColor(QColor(colors[entry.pid].r(),
+						   colors[entry.pid].g(),
+						   colors[entry.pid].b()));
 
 		if (_id[i] == 0)
 			pidItem->setTextColor(Qt::white);

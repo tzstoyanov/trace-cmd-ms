@@ -686,7 +686,7 @@ void KsMainWindow::_showCPUs()
 		cpus_cbd->setStream(sd);
 		cbds.append(cpus_cbd);
 
-		nCPUs = tep_get_cpus(_data.tep(sd));
+		nCPUs = kshark_ctx->stream[sd]->n_cpus;
 		if (!stream->show_cpu_filter ||
 		    !stream->show_cpu_filter->count) {
 			cpus_cbd->setDefault(true);
@@ -729,7 +729,7 @@ void KsMainWindow::_hideCPUs()
 		cpus_cbd->setStream(sd);
 		cbds.append(cpus_cbd);
 
-		nCPUs = tep_get_cpus(_data.tep(sd));
+		nCPUs = kshark_ctx->stream[sd]->n_cpus;
 		if (!stream->hide_cpu_filter ||
 		    !stream->hide_cpu_filter->count) {
 			cpus_cbd->setDefault(false);
@@ -798,7 +798,7 @@ void KsMainWindow::_cpuSelect()
 		cpus_cbd->setStream(sd);
 		cbds.append(cpus_cbd);
 
-		nCPUs = tep_get_cpus(_data.tep(sd));
+		nCPUs = kshark_ctx->stream[sd]->n_cpus;
 		if (nCPUs == _graph.glPtr()->cpuGraphCount(sd)) {
 			cpus_cbd->setDefault(true);
 		} else {
@@ -1003,8 +1003,8 @@ void KsMainWindow::_load(const QString& fileName, bool append)
 	if (append) {
 		bool ok;
 		shift = QInputDialog::getDouble(this, tr("Append Trace file"),
-						   tr("Offset [usec]:"), 0,
-						   INT_MIN, INT_MAX, 1, &ok);
+						      tr("Offset [usec]:"), 0,
+						      INT_MIN, INT_MAX, 1, &ok);
 		if (ok)
 			shift *= 1000.;
 		else
@@ -1041,7 +1041,6 @@ void KsMainWindow::_load(const QString& fileName, bool append)
 	} else {
 		job = std::thread(lamLoadJob, &_data);
 	}
-// 	std::thread job(lamLoadJob, &_data);
 
 	for (int i = 0; i < 160; ++i) {
 		/*
@@ -1114,6 +1113,7 @@ void KsMainWindow::_error(const QString &text, const QString &errCode,
 void KsMainWindow::loadSession(const QString &fileName)
 {
 	kshark_context *kshark_ctx(nullptr);
+	bool loadDone = false;
 	struct stat st;
 	int ret;
 
@@ -1145,10 +1145,30 @@ void KsMainWindow::loadSession(const QString &fileName)
 	}
 
 	_session.loadPlugins(kshark_ctx, &_plugins);
+	_data.clear();
 	pb.setValue(20);
 
-	_data.clear();
-	_session.loadDataStreams(kshark_ctx, &_data);
+	auto lamLoadJob = [&] (KsDataStore *d) {
+		_session.loadDataStreams(kshark_ctx, &_data);
+		loadDone = true;
+	};
+
+	std::thread job = std::thread(lamLoadJob, &_data);
+
+	for (int i = 0; i < 170; ++i) {
+		/*
+		 * TODO: The way this progress bar gets updated here is a pure
+		 * cheat. See if this can be implemented better.
+		*/
+		if (loadDone)
+			break;
+
+		pb.setValue(i);
+		usleep(200000);
+	}
+
+	job.join();
+
 	if (!kshark_ctx->n_streams) {
 		_plugins.unloadAll();
 		return;
@@ -1156,20 +1176,19 @@ void KsMainWindow::loadSession(const QString &fileName)
 
 	_view.loadData(&_data);
 	_graph.loadData(&_data);
-
 	_filterSyncCBoxUpdate(kshark_ctx);
-	pb.setValue(110);
+	pb.setValue(175);
 
 	_session.loadSplitterSize(&_splitter);
 	_session.loadMainWindowSize(this);
 	this->show();
-	pb.setValue(120);
+	pb.setValue(180);
 
 	_session.loadDualMarker(&_mState, &_graph);
 	_session.loadVisModel(_graph.glPtr()->model());
 	_mState.updateMarkers(_data, _graph.glPtr());
 	_session.loadGraphs(kshark_ctx, _graph);
-	pb.setValue(170);
+	pb.setValue(190);
 
 	_session.loadTable(&_view);
 	_colorPhaseSlider.setValue(_session.getColorScheme() * 100);

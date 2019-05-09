@@ -365,7 +365,7 @@ void KsGLWidget::loadData(KsDataStore *data)
 	streamIds = kshark_all_streams(kshark_ctx);
 	for (int i = 0; i < kshark_ctx->n_streams; ++i) {
 		sd = streamIds[i];
-		nCPUs = tep_get_cpus(_data->tep(sd));
+		nCPUs = kshark_ctx->stream[sd]->n_cpus;
 		plotVec.clear();
 		for (int i = 0; i < nCPUs; ++i)
 			plotVec.append(i);

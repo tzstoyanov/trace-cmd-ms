@@ -44,10 +44,10 @@ public:
 #define KS_PROGRESS_BAR_MAX 200
 
 /** The height of the KsProgressBar widget. */
-#define KS_BROGBAR_HEIGHT (FONT_HEIGHT * 5)
+#define KS_PROGBAR_HEIGHT (FONT_HEIGHT * 5)
 
 /** The width of the KsProgressBar widget. */
-#define KS_BROGBAR_WIDTH  (FONT_WIDTH * 50)
+#define KS_PROGBAR_WIDTH  (FONT_WIDTH * 50)
 
 /**
  * The KsMessageDialog class provides a widget showing a message and having

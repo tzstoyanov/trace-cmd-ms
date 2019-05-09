@@ -357,7 +357,6 @@ void KsDataStore::update()
 /** Register a collection of visible entries for each CPU. */
 void KsDataStore::registerCPUCollections()
 {
-	qInfo() << "@ registerCPUCollections";
 	kshark_context *kshark_ctx(nullptr);
 	int *streamIds, nCPUs, sd;
 
@@ -368,7 +367,7 @@ void KsDataStore::registerCPUCollections()
 	for (int i = 0; i < kshark_ctx->n_streams; ++i) {
 		sd = streamIds[i];
 
-		nCPUs = tep_get_cpus(kshark_ctx->stream[sd]->pevent);
+		nCPUs = kshark_ctx->stream[sd]->n_cpus;
 		for (int cpu = 0; cpu < nCPUs; ++cpu) {
 			kshark_register_data_collection(kshark_ctx,
 							_rows, _dataSize,
@@ -385,7 +384,7 @@ void KsDataStore::_unregisterCPUCollections()
 {
 	kshark_context *kshark_ctx(nullptr);
 	int *streamIds, nCPUs, sd;
-	qInfo() << "@@ unregisterCPUCollections";
+
 	if (!kshark_instance(&kshark_ctx))
 		return;
 
@@ -395,7 +394,7 @@ void KsDataStore::_unregisterCPUCollections()
 		if (!kshark_filter_is_set(kshark_ctx, sd))
 			continue;
 
-		nCPUs = tep_get_cpus(kshark_ctx->stream[sd]->pevent);
+		nCPUs = kshark_ctx->stream[sd]->n_cpus;
 		for (int cpu = 0; cpu < nCPUs; ++cpu) {
 			kshark_unregister_data_collection(&kshark_ctx->collections,
 							  KsUtils::matchCPUVisible,
@@ -500,7 +499,6 @@ void KsDataStore::applyPosCPUFilter(int sd, QVector<int> vec)
 {
 	kshark_context *kshark_ctx(nullptr);
 	kshark_data_stream *stream;
-	int nCPUs;
 
 	if (!kshark_instance(&kshark_ctx))
 		return;
@@ -509,8 +507,7 @@ void KsDataStore::applyPosCPUFilter(int sd, QVector<int> vec)
 	if (!stream)
 		return;
 
-	nCPUs = tep_get_cpus(stream->pevent);
-	if (vec.count() == nCPUs)
+	if (vec.count() == stream->n_cpus)
 		return;
 
 	_applyIdFilter(KS_SHOW_CPU_FILTER, vec, sd);
@@ -953,8 +950,10 @@ void KsPluginManager::updatePlugins_hack(int sd, QVector<int> pluginIds)
 	if (!kshark_instance(&kshark_ctx))
 		return;
 
-	for (plugin = kshark_ctx->plugins; plugin; plugin = plugin->next)
+	for (plugin = kshark_ctx->plugins; plugin; plugin = plugin->next) {
+		qInfo() << plugin->file;
 		kshark_plugin_add_stream(plugin, sd);
+	}
 
 	kshark_handle_all_plugins(kshark_ctx, sd, KSHARK_PLUGIN_UPDATE);
 }

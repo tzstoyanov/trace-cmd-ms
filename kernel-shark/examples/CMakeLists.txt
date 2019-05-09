@@ -4,6 +4,10 @@ message(STATUS "dataload")
 add_executable(dload          dataload.c)
 target_link_libraries(dload   kshark)
 
+message(STATUS "ws_dataload")
+add_executable(wsdload          ws_dataload.c)
+target_link_libraries(wsdload   kshark)
+
 message(STATUS "datafilter")
 add_executable(dfilter          datafilter.c)
 target_link_libraries(dfilter   kshark)

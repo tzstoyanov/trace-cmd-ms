@@ -139,6 +139,9 @@ static void kshark_stream_free(struct kshark_data_stream *stream)
 	tracecmd_filter_id_hash_free(stream->show_event_filter);
 	tracecmd_filter_id_hash_free(stream->hide_event_filter);
 
+	tracecmd_filter_id_hash_free(stream->show_cpu_filter);
+	tracecmd_filter_id_hash_free(stream->hide_cpu_filter);
+
 	kshark_free_task_list(stream->tasks);
 
 	free(stream->file);
@@ -208,8 +211,268 @@ int kshark_add_stream(struct kshark_context *kshark_ctx)
 		return -EMFILE;
 
 	kshark_ctx->stream[sd] = kshark_stream_alloc();
+	printf("add stream %i\n", sd);
 
 	return sd;
+}
+
+static const int tep_get_event_id(struct kshark_data_stream *stream,
+				  const struct kshark_entry *entry)
+{
+	int event_id = KS_EMPTY_BIN;
+	struct tep_record *record;
+
+	if (entry->visible & KS_PLUGIN_UNTOUCHED_MASK) {
+		event_id = entry->event_id;
+	} else {
+		/*
+		 * The entry has been touched by a plugin callback function.
+		 * Because of this we do not trust the value of
+		 * "entry->event_id".
+		 *
+		 * Currently the data reading operations are not thread-safe.
+		 * Use a mutex to protect the access.
+		 */
+		pthread_mutex_lock(&stream->input_mutex);
+
+		record = tracecmd_read_at(stream->handle, entry->offset, NULL);
+
+		if (record)
+			event_id = tep_data_type(stream->pevent, record);
+
+		free_record(record);
+
+		pthread_mutex_unlock(&stream->input_mutex);
+	}
+
+	return (event_id == -1)? -EFAULT : event_id;
+}
+
+static const int vm_get_event_id(struct kshark_data_stream *stream,
+				 const struct kshark_entry *entry)
+{
+	return entry->event_id;
+}
+
+static const char* missed_events_dump(struct kshark_data_stream *stream,
+				      const struct kshark_entry *entry,
+				      bool get_info)
+{
+	int size = 0;
+	static char *buffer;
+
+	if (get_info)
+		size = asprintf(&buffer, "missed_events=%i", (int) entry->offset);
+	else
+		size = asprintf(&buffer, "missed_events");
+	if (size > 0)
+		return buffer;
+
+	return NULL;
+}
+
+static const char *tep_get_event_name(struct kshark_data_stream *stream,
+				      const struct kshark_entry *entry)
+{
+	struct tep_event *event;
+
+	int event_id = stream->get_event_id(stream, entry);
+	if (event_id == -EFAULT)
+		return NULL;
+
+	if (event_id < 0) {
+		switch (event_id) {
+		case KS_EVENT_OVERFLOW:
+			return missed_events_dump(stream, entry, false);
+		default:
+			return NULL;
+		}
+	}
+
+	/*
+	 * Currently the data reading operations are not thread-safe.
+	 * Use a mutex to protect the access.
+	 */
+	pthread_mutex_lock(&stream->input_mutex);
+
+	event = tep_data_event_from_type(stream->pevent, event_id);
+
+	pthread_mutex_unlock(&stream->input_mutex);
+
+	if (event)
+		return event->name;
+
+	return "[UNKNOWN EVENT]";
+}
+
+static const char *vm_get_event_name(struct kshark_data_stream *stream,
+				     const struct kshark_entry *entry)
+{
+	const char *event;
+	switch (entry->event_id) {
+	case 0:
+		event = "HV_Resume";
+		break;
+	case 1:
+		event = "HV_Exit";
+		break;
+	default:
+		event = "[UNKNOWN EVENT]";
+		break;
+	}
+	return event;
+}
+
+static const int tep_get_pid(struct kshark_data_stream *stream,
+			     const struct kshark_entry *entry)
+{
+	struct tep_record *record;
+	int pid = KS_EMPTY_BIN;
+
+	if (entry->visible & KS_PLUGIN_UNTOUCHED_MASK) {
+		pid = entry->pid;
+	} else {
+		/*
+		 * The entry has been touched by a plugin callback function.
+		 * Because of this we do not trust the value of "entry->pid".
+		 *
+		 * Currently the data reading operations are not thread-safe.
+		 * Use a mutex to protect the access.
+		 */
+		pthread_mutex_lock(&stream->input_mutex);
+
+		record = tracecmd_read_at(stream->handle, entry->offset, NULL);
+
+		if (record)
+			pid = tep_data_pid(stream->pevent, record);
+
+		free_record(record);
+
+		pthread_mutex_unlock(&stream->input_mutex);
+	}
+
+	return pid;
+}
+
+static const int vm_get_pid(struct kshark_data_stream *stream,
+			    const struct kshark_entry *entry)
+{
+	return entry->pid;
+}
+
+static const char *tep_get_comm(struct kshark_data_stream *stream,
+				const struct kshark_entry *entry)
+{
+	int pid = stream->get_pid(stream, entry);
+
+	return tep_data_comm_from_pid(stream->pevent, pid);
+}
+
+static const char *vm_get_comm(struct kshark_data_stream *stream,
+			       const struct kshark_entry *entry)
+{
+	char *comm;
+	int n;
+
+	n = asprintf(&comm, "vCPU%i", entry->pid - 1);
+	if (n > 0)
+		return comm;
+
+	return "<...>";
+}
+
+static const char *tep_get_latency(struct kshark_data_stream *stream,
+				   const struct kshark_entry *entry)
+{
+	struct tep_record *record;
+
+	/* Check if this is a "Missed event". */
+	if (entry->event_id < 0)
+		return NULL;
+
+	/*
+	 * Currently the data reading operations are not thread-safe.
+	 * Use a mutex to protect the access.
+	 */
+	pthread_mutex_lock(&stream->input_mutex);
+
+	record = tracecmd_read_at(stream->handle, entry->offset, NULL);
+
+	if (!record)
+		return NULL;
+
+	trace_seq_reset(&seq);
+	tep_data_lat_fmt(stream->pevent, &seq, record);
+
+	free_record(record);
+
+	pthread_mutex_unlock(&stream->input_mutex);
+
+	return seq.buffer;
+}
+
+static const char *vm_get_latency(struct kshark_data_stream *stream,
+				  const struct kshark_entry *entry)
+{
+	return "";
+}
+
+static const char *get_info_str(struct tep_record *record,
+				struct tep_event *event)
+{
+	char *pos;
+
+	if (!record || !event)
+		return NULL;
+
+	trace_seq_reset(&seq);
+	tep_event_info(&seq, event, record);
+
+	/*
+	 * The event info string contains a trailing newline.
+	 * Remove this newline.
+	 */
+	if ((pos = strchr(seq.buffer, '\n')) != NULL)
+		*pos = '\0';
+
+	return seq.buffer;
+}
+
+static const char *tep_get_info(struct kshark_data_stream *stream,
+				const struct kshark_entry *entry)
+{
+	struct tep_record *record;
+	struct tep_event *event;
+	const char *info = NULL;
+	int event_id;
+
+	/*
+	 * Currently the data reading operations are not thread-safe.
+	 * Use a mutex to protect the access.
+	 */
+	pthread_mutex_lock(&stream->input_mutex);
+
+	record = tracecmd_read_at(stream->handle, entry->offset, NULL);
+	if (!record)
+		return NULL;
+
+	event_id = tep_data_type(stream->pevent, record);
+	event = tep_data_event_from_type(stream->pevent, event_id);
+
+	if (event)
+		info = get_info_str(record, event);
+
+	free_record(record);
+
+	pthread_mutex_unlock(&stream->input_mutex);
+
+	return info;
+}
+
+static const char *vm_get_info(struct kshark_data_stream *stream,
+			       const struct kshark_entry *entry)
+{
+	return "";
 }
 
 static bool is_text(const char *filename)
@@ -230,7 +493,7 @@ static bool is_text(const char *filename)
 int kshark_stream_open(struct kshark_data_stream *stream, const char *file)
 {
 	struct tracecmd_input *handle;
-
+	printf("stream_open\n");
 	if (!stream)
 		return -EFAULT;
 
@@ -241,6 +504,18 @@ int kshark_stream_open(struct kshark_data_stream *stream, const char *file)
 		stream->file = strdup(file);
 		stream->is_text = true;
 		stream->fp = fopen(file, "r");
+
+		stream->advanced_event_filter = NULL;
+		stream->handle = NULL;
+		stream->pevent = NULL;
+
+		stream->get_pid = vm_get_pid;
+		stream->get_comm = vm_get_comm;
+		stream->get_event_id = vm_get_event_id;
+		stream->get_event_name = vm_get_event_name;
+		stream->get_latency = vm_get_latency;
+		stream->get_info = vm_get_info;
+
 		return 0;
 	}
 
@@ -250,6 +525,14 @@ int kshark_stream_open(struct kshark_data_stream *stream, const char *file)
 
 	stream->handle = handle;
 	stream->pevent = tracecmd_get_pevent(handle);
+	stream->n_cpus = tep_get_cpus(stream->pevent);
+
+	stream->get_pid = tep_get_pid;
+	stream->get_comm = tep_get_comm;
+	stream->get_event_id = tep_get_event_id;
+	stream->get_event_name = tep_get_event_name;
+	stream->get_latency = tep_get_latency;
+	stream->get_info = tep_get_info;
 
 	if (!asprintf(&stream->file, "%s", file))
 		return -ENOMEM;
@@ -317,7 +600,7 @@ int kshark_open(struct kshark_context *kshark_ctx, const char *file)
 
 static void kshark_stream_close(struct kshark_data_stream *stream)
 {
-	if (!stream || !stream->handle)
+	if (!stream)
 		return;
 
 	/*
@@ -337,7 +620,9 @@ static void kshark_stream_close(struct kshark_data_stream *stream)
 		stream->advanced_event_filter = NULL;
 	}
 
-	tracecmd_close(stream->handle);
+	if (stream->handle)
+		tracecmd_close(stream->handle);
+
 	stream->handle = NULL;
 	stream->pevent = NULL;
 
@@ -890,23 +1175,6 @@ static void missed_events_action(struct kshark_context *kshark_ctx,
 	entry->pid = tep_data_pid(stream->pevent, record);
 }
 
-static const char* missed_events_dump(struct kshark_context *kshark_ctx,
-				      const struct kshark_entry *entry,
-				      bool get_info)
-{
-	int size = 0;
-	static char *buffer;
-
-	if (get_info)
-		size = asprintf(&buffer, "missed_events=%i", (int) entry->offset);
-	else
-		size = asprintf(&buffer, "missed_events");
-	if (size > 0)
-		return buffer;
-
-	return NULL;
-}
-
 /**
  * rec_list is used to pass the data to the load functions.
  * The rec_list will contain the list of entries from the source,
@@ -959,18 +1227,16 @@ static size_t get_records(struct kshark_context *kshark_ctx, int sd,
 	struct tep_event_filter *adv_filter;
 	struct kshark_data_stream *stream;
 	struct kshark_task_list *task;
-	struct tep_record *rec;
 	struct rec_list **temp_next;
 	struct rec_list **cpu_list;
 	struct rec_list *temp_rec;
+	struct tep_record *rec;
 	size_t count, total = 0;
-	int n_cpus;
-	int pid;
-	int cpu;
+	int n_cpus, pid, cpu;
 
 	stream = kshark_get_data_stream(kshark_ctx, sd);
+	n_cpus = stream->n_cpus;
 
-	n_cpus = tracecmd_cpus(stream->handle);
 	cpu_list = calloc(n_cpus, sizeof(*cpu_list));
 	if (!cpu_list)
 		return -ENOMEM;
@@ -1127,13 +1393,13 @@ static long stol(char *s, int beg, int end)
 	return ret;
 }
 
-static void fixup_entries_next(struct kshark_entry **events, size_t nr_events, int nr_cpus)
+static void fixup_entries_next(struct kshark_entry **events, size_t nr_events, int n_cpus)
 {
 	struct kshark_entry **last;
 	int i;
 
-	last = calloc(nr_cpus, sizeof(*last));
-	for (i = 0; i < nr_cpus; i++) {
+	last = calloc(n_cpus, sizeof(*last));
+	for (i = 0; i < n_cpus; i++) {
 		int cpu = events[i]->cpu;
 		if (last[cpu])
 			last[cpu]->next = events[i];
@@ -1148,16 +1414,17 @@ static ssize_t load_text_entries(struct kshark_context *kshark_ctx, int sd,
 	const char *regex = "^(\\w+)\\s*\t(\\w+)\\s*\t(\\w+)\\s*\t(\\w+)\\s*\t(\\w+)\\s*$";
 	struct kshark_data_stream *stream;
 	struct kshark_entry **rows = NULL;
-	struct kshark_entry *entries = NULL;
 	long header_offset, last_offset;
+	struct kshark_task_list *task;
 	regmatch_t groups[20];
 	size_t line_len = 0;
 	char *line = NULL;
 	size_t total = 0;
 	ssize_t ret = 0;
-	int nr_cpus = 0;
+	int n_cpus = 0;
 	regex_t comp;
-	size_t i;
+	size_t i = 0;
+	size_t j = 0;
 
 	stream = kshark_get_data_stream(kshark_ctx, sd);
 	if (!stream)
@@ -1184,16 +1451,14 @@ static ssize_t load_text_entries(struct kshark_context *kshark_ctx, int sd,
 		total++;
 	}
 
-	/* Allocate entries */
+	/* Allocate memory. */
 	rows = calloc(total, sizeof(*rows));
-	entries = calloc(total, sizeof(*entries));
-	if (!rows || !entries) {
+	if (!rows) {
 		ret = -ENOMEM;
 		goto error;
 	}
 
-	/* Load the events into `rows` */
-	i = 0;
+	/* Load the events into `rows. */
 	last_offset = header_offset;
 	fseek(stream->fp, header_offset, SEEK_SET);
 	while (getline(&line, &line_len, stream->fp) > 0) {
@@ -1202,18 +1467,27 @@ static ssize_t load_text_entries(struct kshark_context *kshark_ctx, int sd,
 		if (regexec(&comp, line, 20, groups, 0) != 0)
 			goto next;
 
-		entry = rows[i] = &entries[i];
-		i++;
+		entry = rows[i] = calloc(1, sizeof(*entry));
+		if (!entry)
+			goto error;
 
 		/* groups[1-5] are [tsc, probe, vcpu, pcpu, tid] */
 		entry->stream_id = sd;
 		entry->cpu = stol(line, groups[4].rm_so, groups[4].rm_eo); /* pcpu */
-		entry->pid = stol(line, groups[3].rm_so, groups[3].rm_eo); /* vcpu */
+		entry->pid = stol(line, groups[3].rm_so, groups[3].rm_eo) + 1 ; /* vcpu */
+
+		task = kshark_add_task(stream, entry->pid);
+		if (!task)
+			goto error;
+
+		i++;
+
 		entry->event_id = strncmp(line + groups[2].rm_so, "HV_Resume", 9) == 0 ? 0 : 1;
 		entry->offset = last_offset;
 		entry->ts = stol(line, groups[1].rm_so, groups[1].rm_eo);
-		if (entry->cpu >= nr_cpus)
-			nr_cpus = entry->cpu + 1;
+		entry->visible = 0xFF;
+		if (entry->cpu >= n_cpus)
+			n_cpus = entry->cpu + 1;
 
 next:
 		last_offset = ftell(stream->fp);
@@ -1222,16 +1496,18 @@ next:
 	regfree(&comp);
 
 	/* Compute entries[i]->next */
-	fixup_entries_next(rows, total, nr_cpus);
+	fixup_entries_next(rows, total, n_cpus);
 
-	stream->nr_cpus = nr_cpus;
+	stream->n_cpus = n_cpus;
 	*data_rows = rows;
 
 	return total;
 
 error:
+	for (j = 0; j <= i; ++i)
+		free(rows[i]);
 	free(rows);
-	free(entries);
+
 	free(line);
 	regfree(&comp);
 	return ret;
@@ -1282,7 +1558,7 @@ ssize_t kshark_load_data_entries(struct kshark_context *kshark_ctx, int sd,
 	if (total < 0)
 		goto fail;
 
-	n_cpus = tracecmd_cpus(stream->handle);
+	n_cpus = stream->n_cpus;
 
 	rows = calloc(total, sizeof(struct kshark_entry *));
 	if (!rows)
@@ -1331,7 +1607,7 @@ ssize_t kshark_load_data_entries(struct kshark_context *kshark_ctx, int sd,
  *	    negative error code on failure.
  */
 ssize_t kshark_load_data_records(struct kshark_context *kshark_ctx, int sd,
-				struct tep_record ***data_rows)
+				 struct tep_record ***data_rows)
 {
 	struct kshark_data_stream *stream;
 	struct tep_record **rows;
@@ -1357,7 +1633,7 @@ ssize_t kshark_load_data_records(struct kshark_context *kshark_ctx, int sd,
 	if (!rows)
 		goto fail;
 
-	n_cpus = tracecmd_cpus(stream->handle);
+	n_cpus = stream->n_cpus;
 
 	for (count = 0; count < total; count++) {
 		int next_cpu;
@@ -1448,39 +1724,6 @@ struct tep_record *kshark_read_at(struct kshark_context *kshark_ctx, int sd,
 	return data;
 }
 
-static const char *kshark_get_latency(struct tep_handle *pe,
-				      struct tep_record *record)
-{
-	if (!record)
-		return NULL;
-
-	trace_seq_reset(&seq);
-	tep_data_lat_fmt(pe, &seq, record);
-	return seq.buffer;
-}
-
-static const char *kshark_get_info(struct tep_handle *pe,
-				   struct tep_record *record,
-				   struct tep_event *event)
-{
-	char *pos;
-
-	if (!record || !event)
-		return NULL;
-
-	trace_seq_reset(&seq);
-	tep_event_info(&seq, event, record);
-
-	/*
-	 * The event info string contains a trailing newline.
-	 * Remove this newline.
-	 */
-	if ((pos = strchr(seq.buffer, '\n')) != NULL)
-		*pos = '\0';
-
-	return seq.buffer;
-}
-
 /**
  * @brief This function allows for an easy access to the original value of the
  *	  Process Id as recorded in the tep_record object. The record is read
@@ -1498,38 +1741,16 @@ int kshark_get_pid_easy(struct kshark_entry *entry)
 {
 	struct kshark_context *kshark_ctx = NULL;
 	struct kshark_data_stream *stream;
-	struct tep_record *data;
-	int pid = KS_EMPTY_BIN;
 
 	if (!kshark_instance(&kshark_ctx))
 		return -ENODEV;
 
 	if (entry->visible & KS_PLUGIN_UNTOUCHED_MASK) {
-		pid = entry->pid;
+		return entry->pid;
 	} else {
 		stream = kshark_get_data_stream(kshark_ctx, entry->stream_id);
-
-		/*
-		 * The entry has been touched by a plugin callback function.
-		 * Because of this we do not trust the value of "entry->pid".
-		 *
-		 * Currently the data reading operations are not thread-safe.
-		 * Use a mutex to protect the access.
-		 */
-		pthread_mutex_lock(&stream->input_mutex);
-
-		data = kshark_read_at(kshark_ctx, entry->stream_id,
-				      entry->offset);
-
-		if (data)
-			pid = tep_data_pid(stream->pevent, data);
-
-		free_record(data);
-
-		pthread_mutex_unlock(&stream->input_mutex);
+		return stream->get_pid(stream, entry);
 	}
-
-	return pid;
 }
 
 /**
@@ -1548,16 +1769,13 @@ int kshark_get_pid_easy(struct kshark_entry *entry)
 const char *kshark_get_task_easy(struct kshark_entry *entry)
 {
 	struct kshark_context *kshark_ctx = NULL;
-	int pid = kshark_get_pid_easy(entry);
 	struct kshark_data_stream *stream;
 
-	if (pid < 0)
+	if (!kshark_instance(&kshark_ctx))
 		return NULL;
 
-	kshark_instance(&kshark_ctx);
 	stream = kshark_get_data_stream(kshark_ctx, entry->stream_id);
-
-	return tep_data_comm_from_pid(stream->pevent, pid);
+	return stream->get_comm(stream, entry);
 }
 
 /**
@@ -1578,27 +1796,12 @@ const char *kshark_get_latency_easy(struct kshark_entry *entry)
 {
 	struct kshark_context *kshark_ctx = NULL;
 	struct kshark_data_stream *stream;
-	struct tep_record *data;
-	const char *lat;
 
 	if (!kshark_instance(&kshark_ctx) || entry->event_id < 0)
 		return NULL;
 
 	stream = kshark_get_data_stream(kshark_ctx, entry->stream_id);
-
-	/*
-	 * Currently the data reading operations are not thread-safe.
-	 * Use a mutex to protect the access.
-	 */
-	pthread_mutex_lock(&stream->input_mutex);
-
-	data = kshark_read_at(kshark_ctx, entry->stream_id, entry->offset);
-	lat = kshark_get_latency(stream->pevent, data);
-	free_record(data);
-
-	pthread_mutex_unlock(&stream->input_mutex);
-
-	return lat;
+	return stream->get_latency(stream, entry);
 }
 
 /**
@@ -1618,39 +1821,16 @@ int kshark_get_event_id_easy(struct kshark_entry *entry)
 {
 	struct kshark_context *kshark_ctx = NULL;
 	struct kshark_data_stream *stream;
-	struct tep_record *data;
-	int event_id = KS_EMPTY_BIN;
 
 	if (!kshark_instance(&kshark_ctx))
 		return -ENODEV;
 
 	if (entry->visible & KS_PLUGIN_UNTOUCHED_MASK) {
-		event_id = entry->event_id;
+		return entry->event_id;
 	} else {
 		stream = kshark_get_data_stream(kshark_ctx, entry->stream_id);
-
-		/*
-		 * The entry has been touched by a plugin callback function.
-		 * Because of this we do not trust the value of
-		 * "entry->event_id".
-		 *
-		 * Currently the data reading operations are not thread-safe.
-		 * Use a mutex to protect the access.
-		 */
-		pthread_mutex_lock(&stream->input_mutex);
-
-		data = kshark_read_at(kshark_ctx, entry->stream_id,
-				      entry->offset);
-
-		if (data)
-			event_id = tep_data_type(stream->pevent, data);
-
-		free_record(data);
-
-		pthread_mutex_unlock(&stream->input_mutex);
+		return stream->get_event_id(stream, entry);
 	}
-
-	return (event_id == -1)? -EFAULT : event_id;
 }
 
 /**
@@ -1670,39 +1850,29 @@ const char *kshark_get_event_name_easy(struct kshark_entry *entry)
 {
 	struct kshark_context *kshark_ctx = NULL;
 	struct kshark_data_stream *stream;
-	struct tep_event *event;
+	int event_id;
 
-	int event_id = kshark_get_event_id_easy(entry);
-	if (event_id == -EFAULT)
+	if (!kshark_instance(&kshark_ctx))
 		return NULL;
 
-	kshark_instance(&kshark_ctx);
+	stream = kshark_get_data_stream(kshark_ctx, entry->stream_id);
+	if (!stream)
+		return NULL;
+
+	event_id = stream->get_event_id(stream, entry);
+	if (event_id == -EFAULT)
+		return NULL;
 
 	if (event_id < 0) {
 		switch (event_id) {
 		case KS_EVENT_OVERFLOW:
-			return missed_events_dump(kshark_ctx, entry, false);
+			return missed_events_dump(stream, entry, false);
 		default:
 			return NULL;
 		}
 	}
 
-	stream = kshark_get_data_stream(kshark_ctx, entry->stream_id);
-
-	/*
-	 * Currently the data reading operations are not thread-safe.
-	 * Use a mutex to protect the access.
-	 */
-	pthread_mutex_lock(&stream->input_mutex);
-
-	event = tep_data_event_from_type(stream->pevent, event_id);
-
-	pthread_mutex_unlock(&stream->input_mutex);
-
-	if (event)
-		return event->name;
-
-	return "[UNKNOWN EVENT]";
+	return stream->get_event_name(stream, entry);
 }
 
 /**
@@ -1721,48 +1891,29 @@ const char *kshark_get_info_easy(struct kshark_entry *entry)
 {
 	struct kshark_context *kshark_ctx = NULL;
 	struct kshark_data_stream *stream;
-	struct tep_event *event;
-	struct tep_record *data;
-	const char *info = NULL;
 	int event_id;
 
 	if (!kshark_instance(&kshark_ctx))
 		return NULL;
 
+	stream = kshark_get_data_stream(kshark_ctx, entry->stream_id);
+	if (!stream)
+		return NULL;
+
+	event_id = stream->get_event_id(stream, entry);
+	if (event_id == -EFAULT)
+		return NULL;
+
 	if (entry->event_id < 0) {
 		switch (entry->event_id) {
 		case KS_EVENT_OVERFLOW:
-			return missed_events_dump(kshark_ctx, entry, true);
+			return missed_events_dump(stream, entry, true);
 		default:
 			return NULL;
 		}
 	}
 
-	stream = kshark_get_data_stream(kshark_ctx, entry->stream_id);
-	if (!stream)
-		return NULL;
-
-	/*
-	 * Currently the data reading operations are not thread-safe.
-	 * Use a mutex to protect the access.
-	 */
-	pthread_mutex_lock(&stream->input_mutex);
-
-	data = kshark_read_at(kshark_ctx, entry->stream_id, entry->offset);
-	if (!data)
-		return NULL;
-
-	event_id = tep_data_type(stream->pevent, data);
-	event = tep_data_event_from_type(stream->pevent, event_id);
-
-	if (event)
-		info = kshark_get_info(stream->pevent, data, event);
-
-	free_record(data);
-
-	pthread_mutex_unlock(&stream->input_mutex);
-
-	return info;
+	return stream->get_info(stream, entry);
 }
 
 /**
@@ -1785,30 +1936,26 @@ void kshark_convert_nano(uint64_t time, uint64_t *sec, uint64_t *usec)
  * @brief Dump into a string the content a custom entry. The function allocates
  *	  a null terminated string and returns a pointer to this string.
  *
- * @param kshark_ctx: Input location for the session context pointer.
+ * @param stream: Input location for a Trace data stream pointer.
  * @param entry: A Kernel Shark entry to be printed.
- * @param info_func:
+ * @param info_func: Callback function to be used for printing the info field
+ * 		     of the custom entry.
  *
  * @returns The returned string contains a semicolon-separated list of data
  *	    fields. The user has to free the returned string.
  */
-char* kshark_dump_custom_entry(struct kshark_context *kshark_ctx,
+char* kshark_dump_custom_entry(struct kshark_data_stream *stream,
 			       const struct kshark_entry *entry,
 			       kshark_custom_info_func info_func)
 {
 	const char *event_name, *task, *info;
-	struct kshark_data_stream *stream;
 	char *entry_str;
 	int size = 0;
 
-	stream = kshark_get_data_stream(kshark_ctx, entry->stream_id);
-	if (!stream)
-		return NULL;
-
 	task = tep_data_comm_from_pid(stream->pevent, entry->pid);
 
-	event_name = info_func(kshark_ctx, entry, false);
-	info = info_func(kshark_ctx, entry, true);
+	event_name = info_func(stream, entry, false);
+	info = info_func(stream, entry, true);
 
 	size = asprintf(&entry_str, "%li; %s-%i; CPU %i; ; %s; %s",
 			entry->ts,
@@ -1850,21 +1997,22 @@ char* kshark_dump_entry(const struct kshark_entry *entry)
 	if (!stream)
 		return NULL;
 
-	task = tep_data_comm_from_pid(stream->pevent, entry->pid);
-
 	if (entry->event_id >= 0) {
-		struct tep_event *event;
-		struct tep_record *data;
-		int event_id;
+		struct tep_record *data = NULL;
 
-		data = kshark_read_at(kshark_ctx, entry->stream_id, entry->offset);
+		if (stream->pevent) {
+			data = kshark_read_at(kshark_ctx, entry->stream_id, entry->offset);
 
-		event_id = tep_data_type(stream->pevent, data);
-		event = tep_data_event_from_type(stream->pevent, event_id);
-
-		event_name = event? event->name : "[UNKNOWN EVENT]";
-		task = tep_data_comm_from_pid(stream->pevent, entry->pid);
-		lat = kshark_get_latency(stream->pevent, data);
+			event_name = stream->get_event_name(stream, entry);
+			task = stream->get_comm(stream, entry);
+			lat = stream->get_latency(stream, entry);
+			info = stream->get_info(stream, entry);
+		} else {
+			task = "[UNKNOWN TASK]";
+			event_name = "[UNKNOWN EVENT]";
+			lat = "";
+			info = "[NO INFO]";
+		}
 
 		size = asprintf(&temp_str, "%li; %s-%i; CPU %i; %s;",
 				entry->ts,
@@ -1872,8 +2020,6 @@ char* kshark_dump_entry(const struct kshark_entry *entry)
 				entry->pid,
 				entry->cpu,
 				lat);
-
-		info = kshark_get_info(stream->pevent, data, event);
 
 		if (size > 0) {
 			size = asprintf(&entry_str, "%s %s; %s; 0x%x",
@@ -1891,7 +2037,7 @@ char* kshark_dump_entry(const struct kshark_entry *entry)
 	} else {
 		switch (entry->event_id) {
 		case KS_EVENT_OVERFLOW:
-			entry_str = kshark_dump_custom_entry(kshark_ctx, entry,
+			entry_str = kshark_dump_custom_entry(stream, entry,
 							     missed_events_dump);
 		default:
 			entry_str = NULL;
@@ -2205,9 +2351,9 @@ kshark_get_entry_back(const struct kshark_entry_request *req,
 	return get_entry(req, data, index, req->first, end, -1);
 }
 
-void kshark_offset_calib(struct kshark_entry *e, int64_t *atgv)
+void kshark_offset_calib(struct kshark_entry *e, int64_t *argv)
 {
-	e->ts += atgv[0];
+	e->ts += argv[0];
 }
 
 void kshark_linear_clock_calib(struct kshark_entry *e, int64_t *atgv)

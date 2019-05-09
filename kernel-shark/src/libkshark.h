@@ -92,6 +92,14 @@ struct kshark_task_list {
  */
 typedef void (*time_calib_func) (struct kshark_entry *, int64_t *);
 
+struct kshark_data_stream;
+
+typedef const char *(*stream_get_str_func) (struct kshark_data_stream *,
+					    const struct kshark_entry *);
+
+typedef const int (*stream_get_int_func) (struct kshark_data_stream *,
+					  const struct kshark_entry *);
+
 /** tructure representing a stream of trace data. */
 struct kshark_data_stream {
 	/** Input handle for the trace data file. */
@@ -111,6 +119,18 @@ struct kshark_data_stream {
 
 	/** System clock calibration function. */
 	time_calib_func		calib;
+
+	stream_get_int_func	get_pid;
+
+	stream_get_int_func	get_event_id;
+
+	stream_get_str_func	get_event_name;
+
+	stream_get_str_func	get_comm;
+
+	stream_get_str_func	get_latency;
+
+	stream_get_str_func	get_info;
 
 	/** Hash table of task PIDs. */
 	struct kshark_task_list	**tasks;
@@ -143,8 +163,10 @@ struct kshark_data_stream {
 	struct tep_event_filter		*advanced_event_filter;
 
 	bool is_text;
+
 	FILE *fp;
-	int nr_cpus;
+
+	int n_cpus;
 };
 
 /** Hard-coded maximum number of data stream. */
@@ -230,11 +252,11 @@ char* kshark_dump_entry(const struct kshark_entry *entry);
  * Custom entry info function type. To be user for dumping info for custom
  * KernelShark entryes.
  */
-typedef const char *(kshark_custom_info_func)(struct kshark_context *,
+typedef const char *(kshark_custom_info_func)(struct kshark_data_stream *,
 					      const struct kshark_entry *,
 					      bool);
 
-char* kshark_dump_custom_entry(struct kshark_context *kshark_ctx,
+char* kshark_dump_custom_entry(struct kshark_data_stream *stream,
 			       const struct kshark_entry *entry,
 			       kshark_custom_info_func info_func);
 

@@ -273,9 +273,14 @@ void KsTraceGraph::_stopUpdating()
 
 void KsTraceGraph::_resetPointer(uint64_t ts, int sd, int cpu, int pid)
 {
-	struct kshark_data_stream *stream;
+	kshark_data_stream *stream;
+	kshark_entry entry;
 	uint64_t sec, usec;
 	QString pointer;
+
+	entry.cpu = cpu;
+	entry.pid = pid;
+	entry.stream_id = sd;
 
 	kshark_convert_nano(ts, &sec, &usec);
 	pointer.sprintf("%lu.%06lu", sec, usec);
@@ -291,7 +296,7 @@ void KsTraceGraph::_resetPointer(uint64_t ts, int sd, int cpu, int pid)
 		if (!stream)
 			return;
 
-		QString comm(tep_data_comm_from_pid(stream->pevent, pid));
+		QString comm(kshark_get_task_easy(&entry));
 		comm.append("-");
 		comm.append(QString("%1").arg(pid));
 		_labelI1.setText(comm);
@@ -552,6 +557,7 @@ void KsTraceGraph::_updateGraphLegends()
 {
 	QString graphLegends, graphName;
 	QVBoxLayout *layout;
+	kshark_entry entry;
 	int sd, width = 0;
 
 	if (_legendWindow.layout()) {
@@ -600,8 +606,11 @@ void KsTraceGraph::_updateGraphLegends()
 		}
 
 		for (auto const &pid: _glWindow._streamPlots[sd]._taskList) {
+			entry.stream_id = sd;
+			entry.pid = pid;
 			graphName =
-				QString(tep_data_comm_from_pid(_data->tep(sd), pid));
+				QString(kshark_get_task_easy(&entry));
+
 			graphName.append(QString("-%1 ").arg(pid));
 			lamMakeName();
 		}
