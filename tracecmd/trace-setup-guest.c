@@ -19,13 +19,15 @@
 
 static int make_dir(const char *path, mode_t mode)
 {
-	char buf[PATH_MAX+1], *end, *p;
+	char buf[PATH_MAX+2], *p;
 
-	end = stpncpy(buf, path, sizeof(buf));
-	for (p = buf; p < end; p++) {
-		for (; p < end && *p == '/'; p++);
-		for (; p < end && *p != '/'; p++);
+	strncpy(buf, path, sizeof(buf));
+	if (buf[PATH_MAX])
+		return -E2BIG;
 
+	for (p = buf; *p; p++) {
+		p += strspn(p, "/");
+		p += strcspn(p, "/");
 		*p = '\0';
 		if (mkdir(buf, mode) < 0 && errno != EEXIST)
 			return -errno;
@@ -38,16 +40,16 @@ static int make_dir(const char *path, mode_t mode)
 static int make_fifo(const char *path, mode_t mode)
 {
 	struct stat st;
-	int ret;
 
-	ret = stat(path, &st);
-	if (ret == 0) {
+	if (!stat(path, &st)) {
 		if (S_ISFIFO(st.st_mode))
 			return 0;
 		return -EEXIST;
 	}
 
-	return mkfifo(path, mode);
+	if (mkfifo(path, mode))
+		return -errno;
+	return 0;
 }
 
 static int make_guest_dir(const char *guest)

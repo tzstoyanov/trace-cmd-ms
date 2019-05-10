@@ -26,6 +26,7 @@ extern int quiet;
 typedef unsigned long long u64;
 
 struct buffer_instance;
+struct tracecmd_clock_sync;
 
 /* for local shared information with trace-cmd executable */
 
@@ -101,7 +102,7 @@ void trace_usage(int argc, char **argv);
 
 int trace_record_agent(struct tracecmd_msg_handle *msg_handle,
 		       int cpus, int *fds,
-		       int argc, char **argv, bool use_fifos);
+		       int argc, char **argv, bool use_fifos, bool do_tsync);
 
 struct hook_list;
 
@@ -210,10 +211,16 @@ struct buffer_instance {
 	int			argc;
 	char			**argv;
 
-	int			cid;
-	int			port;
+	unsigned int		cid;
+	unsigned int		port;
 	int			*fds;
 	bool			use_fifos;
+	bool			do_tsync;
+
+	struct tracecmd_clock_sync *clock_sync;
+	int			time_sync_count;
+	long long		*time_sync_ts;
+	long long		*time_sync_offsets;
 };
 
 extern struct buffer_instance top_instance;
@@ -236,22 +243,40 @@ void show_instance_file(struct buffer_instance *instance, const char *name);
 
 int count_cpus(void);
 
-struct clock_synch_event_descr {
-	char *file;
-	char *set;
-	char *reset;
+struct tracecmd_time_sync_event {
+	int			id;
+	int			cpu;
+	int			pid;
+	unsigned long long	ts;
 };
-struct buffer_instance *clock_synch_enable(char *clock,
-					   struct clock_synch_event_descr *events);
-void clock_synch_disable(struct buffer_instance *instance,
-			 struct clock_synch_event_descr *events);
-struct tep_handle *clock_synch_get_tep(struct buffer_instance *instance,
-				       char **systems);
-void get_vsocket_params(int fd, unsigned int *lcid, unsigned int *lport,
-			unsigned int *rcid, unsigned int *rport);
-#define VCPUS_MAX	256
-int *get_guest_vcpu_pids(int cid);
 
+int tracecmd_clock_get_peer(struct tracecmd_clock_sync *clock_context,
+			    unsigned int *remote_cid, unsigned int *remote_port);
+bool tracecmd_time_sync_check(void);
+void tracecmd_clock_context_free(struct buffer_instance *instance);
+int tracecmd_clock_find_event(struct tracecmd_clock_sync *clock, int cpu,
+			      struct tracecmd_time_sync_event *event);
+void tracecmd_clock_synch_enable(struct tracecmd_clock_sync *clock_context);
+void tracecmd_clock_synch_disable(struct tracecmd_clock_sync *clock_context);
+void tracecmd_clock_synch_calc_reset(struct tracecmd_clock_sync *clock_context);
+void tracecmd_clock_synch_calc_probe(struct tracecmd_clock_sync *clock_context,
+				     long long ts_local, long long ts_remote);
+int tracecmd_clock_synch_calc(struct tracecmd_clock_sync *clock_context,
+			       long long *offset_ret, long long *time_ret);
+void sync_time_with_host_v3(struct buffer_instance *instance);
+void sync_time_with_guest_v3(struct buffer_instance *instance);
+
+void write_tracing_on(struct buffer_instance *instance, int on);
+char *get_instance_dir(struct buffer_instance *instance);
+int write_instance_file(struct buffer_instance *instance,
+			const char *file, const char *str, const char *type);
+void tracecmd_init_instance(struct buffer_instance *instance);
+void tracecmd_make_instance(struct buffer_instance *instance);
+int tracecmd_local_cpu_count(void);
+void tracecmd_set_clock(struct buffer_instance *instance);
+void tracecmd_remove_instance(struct buffer_instance *instance);
+
+int get_guest_vcpu_pid(unsigned int guest_cid, unsigned int guest_vcpu);
 /* No longer in event-utils.h */
 void __noreturn die(const char *fmt, ...); /* Can be overriden */
 void *malloc_or_die(unsigned int size); /* Can be overridden */

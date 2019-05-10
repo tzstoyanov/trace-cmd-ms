@@ -23,6 +23,23 @@
 #include "trace-local.h"
 #include "trace-msg.h"
 
+#define GET_LOCAL_CID	0x7b9
+
+static int get_local_cid(unsigned int *cid)
+{
+	int fd, ret = 0;
+
+	fd = open("/dev/vsock", O_RDONLY);
+	if (fd < 0)
+		return -errno;
+
+	if (ioctl(fd, GET_LOCAL_CID, cid))
+		ret = -errno;
+
+	close(fd);
+	return ret;
+}
+
 static int make_vsock(unsigned int port)
 {
 	struct sockaddr_vm addr = {
@@ -86,23 +103,22 @@ static void make_vsocks(int nr, int *fds, unsigned int *ports)
 static int open_agent_fifos(int nr_cpus, int *fds)
 {
 	char path[PATH_MAX];
-	int i, fd, ret = 0;
+	int i, fd, ret;
 
 	for (i = 0; i < nr_cpus; i++) {
 		snprintf(path, sizeof(path), VIRTIO_FIFO_FMT, i);
 		fd = open(path, O_WRONLY);
 		if (fd < 0) {
 			ret = -errno;
-			break;
+			goto cleanup;
 		}
 
 		fds[i] = fd;
 	}
 
-	if (!ret)
-		return ret;
+	return 0;
 
-	/* We failed to open all FIFOs so clean up and return error */
+cleanup:
 	while (--i >= 0)
 		close(fds[i]);
 
@@ -116,6 +132,7 @@ static void agent_handle(int sd, int nr_cpus, int page_size)
 	char **argv = NULL;
 	int argc = 0;
 	bool use_fifos;
+	bool do_tsync;
 	int *fds;
 	int ret;
 
@@ -128,7 +145,8 @@ static void agent_handle(int sd, int nr_cpus, int page_size)
 	if (!msg_handle)
 		die("Failed to allocate message handle");
 
-	ret = tracecmd_msg_recv_trace_req(msg_handle, &argc, &argv, &use_fifos);
+	ret = tracecmd_msg_recv_trace_req(msg_handle, &argc, &argv,
+					  &use_fifos, &do_tsync);
 	if (ret < 0)
 		die("Failed to receive trace request");
 
@@ -137,13 +155,18 @@ static void agent_handle(int sd, int nr_cpus, int page_size)
 
 	if (!use_fifos)
 		make_vsocks(nr_cpus, fds, ports);
+	if (do_tsync) {
+		do_tsync = tracecmd_time_sync_check();
+		if (!do_tsync)
+			warning("Failed to negotiate timestamps synchronization with the host");
+	}
 
 	ret = tracecmd_msg_send_trace_resp(msg_handle, nr_cpus, page_size,
-					   ports, use_fifos);
+					   ports, use_fifos, do_tsync);
 	if (ret < 0)
 		die("Failed to send trace response");
 
-	trace_record_agent(msg_handle, nr_cpus, fds, argc, argv, use_fifos);
+	trace_record_agent(msg_handle, nr_cpus, fds, argc, argv, use_fifos, do_tsync);
 
 	free(argv[0]);
 	free(argv);
@@ -170,9 +193,19 @@ static void handle_sigchld(int sig)
 	}
 }
 
+static pid_t do_fork()
+{
+	/* in debug mode, we do not fork off children */
+	if (debug)
+		return 0;
+
+	return fork();
+}
+
 static void agent_serve(unsigned int port)
 {
 	int sd, cd, nr_cpus;
+	unsigned int cid;
 	pid_t pid;
 
 	signal(SIGCHLD, handle_sigchld);
@@ -183,6 +216,9 @@ static void agent_serve(unsigned int port)
 	sd = make_vsock(port);
 	if (sd < 0)
 		die("Failed to open vsocket");
+
+	if (!get_local_cid(&cid))
+		printf("listening on @%u:%u\n", cid, port);
 
 	for (;;) {
 		cd = accept(sd, NULL, NULL);
@@ -195,7 +231,7 @@ static void agent_serve(unsigned int port)
 		if (handler_pid)
 			goto busy;
 
-		pid = fork();
+		pid = do_fork();
 		if (pid == 0) {
 			close(sd);
 			signal(SIGCHLD, SIG_DFL);
@@ -208,6 +244,10 @@ busy:
 		close(cd);
 	}
 }
+
+enum {
+	DO_DEBUG	= 255
+};
 
 void trace_agent(int argc, char **argv)
 {
@@ -225,6 +265,7 @@ void trace_agent(int argc, char **argv)
 		static struct option long_options[] = {
 			{"port", required_argument, NULL, 'p'},
 			{"help", no_argument, NULL, '?'},
+			{"debug", no_argument, NULL, DO_DEBUG},
 			{NULL, 0, NULL, 0}
 		};
 
@@ -241,6 +282,9 @@ void trace_agent(int argc, char **argv)
 			break;
 		case 'D':
 			do_daemon = true;
+			break;
+		case DO_DEBUG:
+			debug = true;
 			break;
 		default:
 			usage(argv);
