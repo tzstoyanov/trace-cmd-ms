@@ -5770,6 +5770,8 @@ static bool has_local_instances(void)
 	return false;
 }
 
+#define TSYNC_DEBUG
+
 static void write_guest_time_shift(struct buffer_instance *instance)
 {
 	struct tracecmd_output *handle;

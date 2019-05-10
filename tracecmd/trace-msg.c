@@ -55,7 +55,7 @@ static inline void dprint(const char *fmt, ...)
 unsigned int page_size;
 
 /* Try a few times to get an accurate time sync */
-#define TSYNC_TRIES 300
+#define TSYNC_TRIES 2000
 
 struct tracecmd_msg_tinit {
 	be32 cpus;
@@ -1043,14 +1043,14 @@ int tracecmd_msg_snd_time_sync(struct tracecmd_msg_handle *msg_handle,
 		}
 		tracecmd_clock_synch_calc_probe(clock_context,
 						event.ts,
-						htonll(msg.ts_resp.time));
+						ntohll(msg.ts_resp.time));
 	} while (--sync_loop);
 
 	tracecmd_clock_synch_disable(clock_context);
 	tracecmd_clock_synch_calc(clock_context, offset, timestamp);
 	tracecmd_msg_init(MSG_TSYNC_STOP, &msg);
-	msg.ts_stop.offset = htonll(*offset);
-	msg.ts_stop.timestamp = htonll(*timestamp);
+	msg.ts_stop.offset = ntohll(*offset);
+	msg.ts_stop.timestamp = ntohll(*timestamp);
 	tracecmd_msg_send(msg_handle->fd, &msg);
 
 	msg_free(&msg);
